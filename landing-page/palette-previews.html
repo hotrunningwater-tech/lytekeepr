@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LyteKeepr Palette Previews</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
+  <style>
+    :root {
+      --bg: #f1eee8;
+      --panel: rgba(255, 255, 255, 0.82);
+      --ink: #24313a;
+      --soft: #667784;
+      --line: rgba(36, 49, 58, 0.12);
+      --shadow: 0px 18px 42px rgba(36, 49, 58, 0.10);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #e9e5dd 0%, #f1eee8 100%);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 40px 0 56px;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "General Sans", "Inter", sans-serif;
+      font-size: clamp(34px, 5vw, 52px);
+      line-height: 0.98;
+      letter-spacing: -0.03em;
+    }
+
+    .intro {
+      max-width: 720px;
+      margin: 16px 0 0;
+      color: var(--soft);
+      line-height: 1.65;
+      font-size: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+      margin-top: 32px;
+    }
+
+    .card {
+      padding: 22px;
+      border-radius: 24px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      font-family: "General Sans", "Inter", sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--soft);
+    }
+
+    .card h2 {
+      margin: 12px 0 0;
+      font-family: "General Sans", "Inter", sans-serif;
+      font-size: 24px;
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+    }
+
+    .card p {
+      margin: 12px 0 0;
+      color: var(--soft);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .swatches {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .swatch {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(36, 49, 58, 0.1);
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-family: "General Sans", "Inter", sans-serif;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+
+    .btn-primary {
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      color: var(--ink);
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>LyteKeepr color directions</h1>
+    <p class="intro">
+      Five palette-only variants using the same LyteKeepr landing-page structure and copy. A warm amber
+      stays the signature accent throughout — a small "keeper's light" motif — while the base atmosphere
+      changes in each version. None use red/white flag tones or government-portal styling, per the brand spec.
+    </p>
+
+    <div class="grid">
+      <article class="card">
+        <span class="eyebrow">Option 1</span>
+        <h2>Harbor Slate</h2>
+        <p>Cool navy and steel blue. Calm, structured, and the most "official-adjacent" without tipping into government styling — reads as serious record-keeping software.</p>
+        <div class="swatches">
+          <span class="swatch" style="background:#1F2F45"></span>
+          <span class="swatch" style="background:#6B7C92"></span>
+          <span class="swatch" style="background:#EAEFF3"></span>
+          <span class="swatch" style="background:#D9A441"></span>
+          <span class="swatch" style="background:#93A6BD"></span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="option-1-harbor-slate.html">Open view</a>
+          <a class="btn btn-secondary" href="index.html?theme=harbor-slate">Direct theme URL</a>
+        </div>
+      </article>
+
+      <article class="card">
+        <span class="eyebrow">Option 2</span>
+        <h2>Warm Parchment</h2>
+        <p>Cream and paper tones with a soft taupe support. Archival, document-forward, human — fits a product about keeping years of paperwork straight.</p>
+        <div class="swatches">
+          <span class="swatch" style="background:#362F28"></span>
+          <span class="swatch" style="background:#7C7167"></span>
+          <span class="swatch" style="background:#F6F0E6"></span>
+          <span class="swatch" style="background:#D9A441"></span>
+          <span class="swatch" style="background:#B9A58E"></span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="option-2-warm-parchment.html">Open view</a>
+          <a class="btn btn-secondary" href="index.html?theme=warm-parchment">Direct theme URL</a>
+        </div>
+      </article>
+
+      <article class="card">
+        <span class="eyebrow">Option 3</span>
+        <h2>Sage Ledger</h2>
+        <p>Muted sage and stone. Grounded and reassuring — the calmest option, good for a stressful, high-stakes process like an immigration file.</p>
+        <div class="swatches">
+          <span class="swatch" style="background:#2B3A30"></span>
+          <span class="swatch" style="background:#6F8074"></span>
+          <span class="swatch" style="background:#EEF1EA"></span>
+          <span class="swatch" style="background:#D9A441"></span>
+          <span class="swatch" style="background:#9DB09F"></span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="option-3-sage-ledger.html">Open view</a>
+          <a class="btn btn-secondary" href="index.html?theme=sage-ledger">Direct theme URL</a>
+        </div>
+      </article>
+
+      <article class="card">
+        <span class="eyebrow">Option 4</span>
+        <h2>Dusk Plum</h2>
+        <p>Soft plum and mauve. Warmer and more distinctive than the blues, without reading as playful — a more memorable brand color than a typical productivity tool.</p>
+        <div class="swatches">
+          <span class="swatch" style="background:#372A3A"></span>
+          <span class="swatch" style="background:#85788F"></span>
+          <span class="swatch" style="background:#F4EEF5"></span>
+          <span class="swatch" style="background:#D9A441"></span>
+          <span class="swatch" style="background:#AB9AB5"></span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="option-4-dusk-plum.html">Open view</a>
+          <a class="btn btn-secondary" href="index.html?theme=dusk-plum">Direct theme URL</a>
+        </div>
+      </article>
+
+      <article class="card">
+        <span class="eyebrow">Option 5</span>
+        <h2>Charcoal + Brass</h2>
+        <p>Near-neutral charcoal and stone with brass accents. The most premium and minimal option — light-page, not dark mode, but the sharpest and most confident of the five.</p>
+        <div class="swatches">
+          <span class="swatch" style="background:#22262B"></span>
+          <span class="swatch" style="background:#6C737C"></span>
+          <span class="swatch" style="background:#EEEEEC"></span>
+          <span class="swatch" style="background:#D9A441"></span>
+          <span class="swatch" style="background:#9A9FA8"></span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="option-5-charcoal-brass.html">Open view</a>
+          <a class="btn btn-secondary" href="index.html?theme=charcoal-brass">Direct theme URL</a>
+        </div>
+      </article>
+    </div>
+  </main>
+</body>
+</html>

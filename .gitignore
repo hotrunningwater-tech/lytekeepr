@@ -1,0 +1,24 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+
+# Vendored MCP servers are their own separate git repos — not part of this repo
+mcp-integrations/instagram-mcp/
+mcp-integrations/linkedin-mcp-server/
+mcp-integrations/mcp-gmail/
+mcp-integrations/whatsapp-mcp/
+
+# Real OAuth tokens / per-account state — never commit
+google_oauth/accounts/
+google_oauth/active-account.json
+
+# Per-profile runtime data: live DBs, synced emails/messages, OCR output
+profiles/data/
+
+# Generated/regenerable test & demo state
+demo_state/
+deploy/lytekeepr.xyz/
+
+node_modules/
+.DS_Store

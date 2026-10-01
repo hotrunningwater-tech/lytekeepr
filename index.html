@@ -1,0 +1,1865 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LyteKeepr — Workspace</title>
+<link rel="preconnect" href="https://api.fontshare.com">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
+<link rel="stylesheet" href="styles.css?v=21">
+</head>
+<body>
+
+<div style="position:fixed; bottom:4px; right:6px; z-index:9999; font-size:10px; font-family:monospace; color:#999; background:rgba(255,255,255,0.7); padding:2px 6px; border-radius:4px; pointer-events:none;">rev 6</div>
+
+<div class="workspace">
+
+  <!-- Workspace Header -->
+  <header class="header">
+    <button class="brand brand-button" id="demoStateTriggerBtn" type="button" aria-label="Open demo state manager">
+      <span class="brand-dot"></span>
+      <span class="brand-name">LyteKeepr</span>
+    </button>
+    <div class="case-identity">
+      <span class="case-identity-label" id="shellIdentityLabel">Connected</span>
+      <span class="case-identity-sep">·</span>
+      <span class="case-identity-value" id="shellIdentityValue">LinkedIn, Gmail, HubSpot</span>
+    </div>
+    <div class="actions">
+      <button class="demo-recorder-quick-btn" id="demoRecorderQuickBtn" type="button" aria-label="Start screen recording" title="Start screen recording" hidden></button>
+      <button class="btn btn-primary" id="syncBtn" type="button">Sync</button>
+    </div>
+  </header>
+
+  <!-- Primary Workspace -->
+  <div class="primary">
+
+    <!-- Left Rail (collapsed tabs, far left) -->
+    <div class="left-rail">
+      <div class="rail-tab rail-tab-home" id="homeTab">
+        <span class="rail-tab-label">HOME</span>
+        <span class="rail-tab-badge" id="homeTabBadge" hidden></span>
+      </div>
+      <div class="email-drawer rail-tab-gmail" id="emailTab">
+        <span class="email-drawer-label">GMAIL</span>
+      </div>
+      <div class="rail-tab rail-tab-linkedin" id="linkedinTab">
+        <span class="rail-tab-label">LINKEDIN</span>
+      </div>
+      <div class="rail-tab rail-tab-hubspot" id="crmTab">
+        <span class="rail-tab-label">CRM</span>
+      </div>
+    </div>
+
+    <!-- Case Overview -->
+    <section class="panel case-overview" id="caseOverviewPanel">
+      <div id="caseOverviewContent">
+        <div class="overview-heading">
+          <h1>Needs Your Attention</h1>
+          <p class="overview-sub">What LyteKeepr thinks you should act on now</p>
+        </div>
+
+        <div class="attention-list" id="attentionList"></div>
+
+        <div class="block">
+          <span class="block-label">Waiting / No Action Needed</span>
+          <div class="upcoming-list" id="upcomingList">
+            <div class="attention attention-quiet" id="upcomingEmpty">
+              <span class="attention-flag">Nothing in progress</span>
+              <p class="attention-copy">No follow-up sequences are currently running.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="block">
+          <span class="block-label">Recent Activity</span>
+          <div class="attention-list" id="recentActivityList"></div>
+        </div>
+      </div>
+
+      <div id="documentViewer" class="document-viewer" hidden></div>
+
+      <div id="linkedinPanel" class="document-viewer" hidden>
+        <div class="document-viewer-header">
+          <div class="document-viewer-heading">
+            <span class="block-label">LinkedIn</span>
+            <h1>Messages</h1>
+          </div>
+          <button class="btn btn-remove document-viewer-close" id="closeLinkedinPanelBtn" type="button">Close</button>
+        </div>
+
+        <div class="preview-body">
+          <div class="preview-section">
+            <p id="linkedinStatusText">Checking connection…</p>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-small" type="button" id="linkedinCheckConnectionBtn">Check connection</button>
+            </div>
+          </div>
+          <div class="preview-section" id="linkedinSyncSection" hidden>
+            <span class="block-label">Sync</span>
+            <p id="linkedinSyncStatusText"></p>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-small" type="button" id="linkedinBackfillBtn">Run 7-day backfill</button>
+              <button class="btn btn-secondary btn-small" type="button" id="linkedinSyncNowBtn">Sync now</button>
+              <button class="subtle-link-btn" type="button" id="linkedinResetBtn">Reset test data</button>
+            </div>
+          </div>
+          <div class="preview-section" id="linkedinMessagesSection" hidden>
+            <div class="demo-reset-tabs" role="tablist" aria-label="LinkedIn message views">
+              <button class="demo-reset-tab is-active" type="button" id="linkedinTrustedTabBtn" role="tab" aria-selected="true">Recent conversations</button>
+              <button class="demo-reset-tab" type="button" id="linkedinInboxTabBtn" role="tab" aria-selected="false">Inbox <span id="linkedinInboxCount"></span></button>
+            </div>
+            <div class="attention-list" id="linkedinConversationList"></div>
+            <div class="attention-list" id="linkedinInboxList" hidden></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="crmPanel" class="document-viewer" hidden>
+        <div class="document-viewer-header crm-header-compact">
+          <div class="crm-header-left">
+            <span class="block-label">CRM</span>
+            <div class="demo-reset-tabs crm-tabs-main" role="tablist" aria-label="CRM views">
+              <button class="demo-reset-tab is-active" type="button" id="crmContactsTabBtn" role="tab" aria-selected="true">Contacts</button>
+              <button class="demo-reset-tab" type="button" id="crmFunnelsTabBtn" role="tab" aria-selected="false">Funnels</button>
+            </div>
+          </div>
+          <button class="btn btn-remove document-viewer-close" id="closeCrmPanelBtn" type="button">Close</button>
+        </div>
+
+        <div class="preview-body" id="crmContactsBody">
+          <div class="demo-reset-tabs crm-tabs-sub" role="tablist" aria-label="Contacts views">
+            <button class="demo-reset-tab is-active" type="button" id="crmPeopleSubTabBtn" role="tab" aria-selected="true">People</button>
+            <button class="demo-reset-tab" type="button" id="crmCompaniesSubTabBtn" role="tab" aria-selected="false">Companies</button>
+          </div>
+
+          <div class="card-actions" id="crmPeopleActions">
+            <button class="btn btn-secondary btn-small" type="button" id="crmMergeSelectedBtn" hidden>Merge selected (2)</button>
+            <select class="demo-reset-input" id="crmMoveToFunnelSelect" hidden></select>
+            <button class="btn btn-secondary btn-small" type="button" id="crmMoveToFunnelBtn" hidden>Move to funnel</button>
+          </div>
+          <div class="attention-list crm-full-list" id="crmPeopleList"></div>
+          <div class="attention-list crm-full-list" id="crmCompanyList" hidden></div>
+        </div>
+
+        <div class="preview-body" id="crmFunnelsBody" hidden>
+          <div class="crm-funnel-board-header">
+            <h2 id="crmFunnelBoardTitle">Funnel</h2>
+            <select class="demo-reset-input" id="crmFunnelBoardSelect" hidden></select>
+            <button class="btn btn-remove btn-small" type="button" id="crmDeleteFunnelBtn" hidden>Delete</button>
+            <button class="btn btn-secondary btn-small" type="button" id="crmCreateFunnelBtn">Create new</button>
+          </div>
+          <div id="crmFunnelBoardWrap" class="crm-full-list"></div>
+        </div>
+      </div>
+
+      <div id="crmPersonDetailView" class="document-viewer" hidden>
+        <div class="document-viewer-header">
+          <div class="document-viewer-heading">
+            <span class="block-label">CONTACT</span>
+            <h1 id="crmPersonDetailName">Person</h1>
+            <input type="text" class="demo-reset-input crm-detail-name-input" id="crmPersonDetailNameInput" hidden placeholder="Name">
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-secondary btn-small" type="button" id="crmEditPersonBtn">Edit</button>
+            <button class="btn btn-primary btn-small" type="button" id="crmSavePersonBtn" hidden>Save</button>
+            <button class="btn btn-secondary btn-small" type="button" id="crmCancelEditPersonBtn" hidden>Cancel</button>
+            <button class="btn btn-remove document-viewer-close" id="closeCrmPersonDetailBtn" type="button">Back to CRM</button>
+          </div>
+        </div>
+        <div class="preview-body crm-detail-body">
+          <div class="preview-section crm-detail-card">
+            <span class="block-label">Overview</span>
+            <p class="crm-detail-field">
+              <span class="crm-detail-field-label">Company:</span>
+              <span id="crmPersonDetailCompany"></span>
+              <input type="text" class="demo-reset-input crm-detail-field-input" id="crmPersonDetailCompanyInput" hidden placeholder="Company">
+            </p>
+            <p class="crm-detail-field">
+              <span class="crm-detail-field-label">Job title:</span>
+              <span id="crmPersonDetailJobTitle"></span>
+              <input type="text" class="demo-reset-input crm-detail-field-input" id="crmPersonDetailJobTitleInput" hidden placeholder="Job title">
+            </p>
+            <p class="crm-detail-field" id="crmPersonDetailFunnelLine"></p>
+          </div>
+          <div class="preview-section crm-detail-card">
+            <span class="block-label">Channels</span>
+            <div id="crmPersonDetailChannels"></div>
+          </div>
+          <div class="preview-section crm-detail-card">
+            <span class="block-label">Follow-up</span>
+            <p id="crmPersonDetailFollowup"></p>
+          </div>
+          <div class="preview-section crm-detail-card">
+            <span class="block-label">Notes</span>
+            <p id="crmPersonDetailNotes"></p>
+            <textarea class="demo-reset-input crm-edit-notes-input" id="crmPersonDetailNotesInput" hidden placeholder="Notes" rows="4"></textarea>
+          </div>
+          <div class="preview-section crm-detail-card">
+            <div class="crm-detail-card-header">
+              <span class="block-label">Messages — all channels</span>
+              <button class="subtle-link-btn" type="button" id="crmPersonDetailMessagesToggle" hidden></button>
+            </div>
+            <div id="crmPersonDetailMessages"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="photoCropEditor" class="photo-crop-editor" hidden>
+        <div class="document-viewer-header">
+          <div class="document-viewer-heading">
+            <span class="block-label">Crop photographed page</span>
+            <h1 id="photoCropEditorTitle">Photo page</h1>
+          </div>
+          <div class="photo-crop-editor-actions">
+            <button class="btn btn-primary" id="photoCropConfirmBtn" type="button">Confirm crop</button>
+            <button class="btn btn-remove document-viewer-close" id="photoCropCancelBtn" type="button">Cancel</button>
+          </div>
+        </div>
+        <div class="photo-crop-editor-copy" id="photoCropEditorCopy">Drag the corner dots to frame the page, then confirm the crop.</div>
+        <div class="photo-crop-editor-body">
+          <div class="photo-crop-editor-stage-wrap">
+            <div class="photo-crop-editor-stage" id="photoCropEditorStage">
+              <img id="photoCropEditorImage" class="photo-crop-editor-image" alt="">
+              <div class="photo-crop-overlay">
+                <svg class="photo-crop-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                  <polygon class="photo-crop-polygon" id="photoCropEditorPolygon" points=""></polygon>
+                </svg>
+                <button class="photo-corner-handle" type="button" id="photoCropHandle0" data-corner-index="0" aria-label="Adjust crop corner 1"></button>
+                <button class="photo-corner-handle" type="button" id="photoCropHandle1" data-corner-index="1" aria-label="Adjust crop corner 2"></button>
+                <button class="photo-corner-handle" type="button" id="photoCropHandle2" data-corner-index="2" aria-label="Adjust crop corner 3"></button>
+                <button class="photo-corner-handle" type="button" id="photoCropHandle3" data-corner-index="3" aria-label="Adjust crop corner 4"></button>
+              </div>
+            </div>
+          </div>
+          <div class="photo-crop-editor-note">
+            Use the large image to crop first, then return to the page card to rotate or finalize.
+          </div>
+        </div>
+      </div>
+
+      <div id="documentsBrowser" class="documents-browser" hidden>
+        <div class="document-viewer-header">
+          <div class="document-viewer-heading">
+            <span class="block-label">Documents</span>
+            <h1>All scanned documents</h1>
+          </div>
+          <button class="btn btn-remove document-viewer-close" id="closeAllDocsBtn" type="button">Close</button>
+        </div>
+        <div class="documents-browser-list" id="documentsBrowserList"></div>
+      </div>
+    </section>
+
+    <!-- AI Assistant Workspace -->
+    <section class="panel ai-panel" id="aiPanel">
+      <div class="assistant-heading">
+        <div class="assistant-title-row">
+          <h1>Ask LyteKeepr</h1>
+          <span class="availability"><span class="availability-dot"></span>Assistant online</span>
+          <button class="clear-chat-btn" id="clearChatBtn" type="button">Clear chat</button>
+        </div>
+        <p class="assistant-sub">Whenever you want more context, just ask</p>
+      </div>
+
+      <div class="upload-area" id="uploadArea">
+        <input type="file" id="pdfInput" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp" multiple hidden>
+        <div id="uploadContent">
+          <div class="upload-title">Drop a document here</div>
+          <div class="upload-sub">PDF or image file · I'll ask what you'd like done</div>
+        </div>
+      </div>
+
+      <div class="conversation" id="conversation"></div>
+
+      <div class="chat-error" id="chatError" hidden></div>
+
+      <div class="linkedin-send-draft" id="linkedinSendDraftRow" hidden>
+        <span id="linkedinSendDraftText"></span>
+        <button class="btn btn-primary btn-small" type="button" id="linkedinSendNowBtn">Send now</button>
+      </div>
+
+      <div class="linkedin-send-draft" id="emailSendDraftRow" hidden>
+        <span id="emailSendDraftText"></span>
+        <button class="btn btn-primary btn-small" type="button" id="emailSendNowBtn">Send now</button>
+      </div>
+
+      <div class="chat-input-row">
+        <textarea class="chat-input" id="chatInput" rows="1" placeholder="What did they say about pricing? Brief me before my call. Draft a reply…"></textarea>
+        <button class="btn-send" id="sendBtn" aria-label="Send"></button>
+      </div>
+
+      <p class="guidance">Nothing is sent without your approval.</p>
+    </section>
+
+  </div>
+</div>
+
+<div class="demo-reset-shell" id="demoResetShell" hidden>
+  <div class="demo-reset-panel" id="demoResetPanel" hidden>
+    <div class="demo-reset-header">
+      <div>
+        <span class="block-label">Demo state</span>
+        <h2>Demo State Manager</h2>
+      </div>
+      <button class="btn btn-remove demo-reset-close" id="demoResetCloseBtn" type="button">Close</button>
+    </div>
+    <div class="demo-reset-note">Choose the right local profile first, then save checkpoints or record inside that profile.</div>
+    <div class="demo-reset-tabs" role="tablist" aria-label="Demo manager views">
+      <button class="demo-reset-tab is-active" id="demoProfilesTabBtn" type="button" role="tab" aria-selected="true">Profiles</button>
+      <button class="demo-reset-tab" id="demoStateTabBtn" type="button" role="tab" aria-selected="false">State</button>
+      <button class="demo-reset-tab" id="demoRecorderTabBtn" type="button" role="tab" aria-selected="false">Recorder</button>
+    </div>
+    <div class="demo-reset-status" id="demoResetStatus" hidden></div>
+    <div id="demoProfilesView">
+      <div class="demo-reset-list-label">Local profiles</div>
+      <div class="demo-reset-capture">
+        <input id="demoProfileNameInput" class="demo-reset-input" type="text" placeholder="profile name">
+        <button id="demoCreateProfileBtn" class="btn btn-primary" type="button">Create profile</button>
+      </div>
+      <div class="demo-reset-actions-row">
+        <button id="demoSeedProfilesBtn" class="btn btn-dlyte" type="button">Create 3 test profiles</button>
+      </div>
+      <div class="demo-reset-list" id="demoProfileList"></div>
+    </div>
+    <div id="demoStateView" hidden>
+      <div class="demo-reset-actions-row">
+        <button id="demoSaveBaselineBtn" class="btn btn-dlyte" type="button">Save clean start</button>
+        <button id="demoResetToBaselineBtn" class="btn btn-remove" type="button">Reset to clean start</button>
+      </div>
+      <div class="demo-reset-capture">
+        <input id="demoSnapshotNameInput" class="demo-reset-input" type="text" placeholder="snapshot name">
+        <button id="demoCaptureSnapshotBtn" class="btn btn-primary" type="button">Save current</button>
+      </div>
+      <div class="demo-reset-list-label" id="demoSnapshotListLabel">Saved checkpoints</div>
+      <div class="demo-reset-list" id="demoSnapshotList"></div>
+    </div>
+    <div id="demoRecorderView" hidden>
+      <div class="demo-recorder-card">
+        <div class="demo-recorder-row">
+          <label class="demo-recorder-label" for="demoRecorderPresetSelect">Quality</label>
+          <select id="demoRecorderPresetSelect" class="demo-reset-input demo-recorder-select">
+            <option value="standard">Standard</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="demo-recorder-row">
+          <label class="demo-recorder-label" for="demoRecorderFilenameInput">Base filename</label>
+          <input id="demoRecorderFilenameInput" class="demo-reset-input" type="text" placeholder="dlyte-demo">
+        </div>
+        <div class="demo-recorder-preview" id="demoRecorderFilenamePreview"></div>
+        <div class="demo-recorder-status" id="demoRecorderStatus">Use the subtle circle in the header to start recording.</div>
+        <div class="demo-recorder-status demo-recorder-status-secondary" id="demoRecorderLastSaved">No recording saved yet.</div>
+        <div class="demo-recorder-library">
+          <div class="demo-recorder-library-head">
+            <span class="demo-recorder-label">Saved videos</span>
+            <span class="demo-recorder-library-note">Double-click to play here</span>
+          </div>
+          <div class="demo-recorder-library-list" id="demoRecorderLibraryList"></div>
+        </div>
+        <div class="demo-recorder-editor" id="demoRecorderEditor" hidden>
+          <div class="demo-recorder-editor-head">
+            <span class="demo-recorder-label">Redaction editor</span>
+            <div class="demo-recorder-editor-actions">
+              <button id="demoRecorderToggleEditBtn" class="btn btn-dlyte" type="button">Edit redactions</button>
+              <button id="demoRecorderAddBoxBtn" class="btn btn-primary" type="button" hidden>Add box</button>
+              <button id="demoRecorderSetStartBtn" class="btn btn-dlyte" type="button" hidden>Set start here</button>
+              <button id="demoRecorderSetEndBtn" class="btn btn-dlyte" type="button" hidden>Set end here</button>
+              <button id="demoRecorderDeleteBoxBtn" class="btn btn-remove" type="button" hidden>Delete selected</button>
+              <button id="demoRecorderExportBtn" class="btn btn-primary" type="button" hidden>Export edited MP4</button>
+            </div>
+          </div>
+          <div class="demo-recorder-status demo-recorder-status-secondary" id="demoRecorderEditStatus" hidden></div>
+        </div>
+        <div class="demo-recorder-player-wrap" id="demoRecorderPlayerWrap" hidden>
+          <video id="demoRecorderPlayer" class="demo-recorder-player" controls playsinline preload="metadata"></video>
+          <div id="demoRecorderOverlay" class="demo-recorder-overlay" hidden>
+            <div id="demoRecorderSelectionBox" class="demo-recorder-selection-box" hidden></div>
+          </div>
+        </div>
+        <div class="demo-recorder-redaction-list" id="demoRecorderRedactionList" hidden></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="linkedinSendConfirmBackdrop" hidden>
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="linkedinSendConfirmTitle">
+    <h2 id="linkedinSendConfirmTitle">Send this LinkedIn message?</h2>
+    <p id="linkedinSendConfirmText"></p>
+    <div class="card-actions">
+      <button class="btn btn-primary" id="linkedinSendConfirmBtn" type="button">Confirm &amp; send</button>
+      <button class="btn btn-secondary" id="linkedinSendCancelBtn" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="emailSendConfirmBackdrop" hidden>
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="emailSendConfirmTitle">
+    <h2 id="emailSendConfirmTitle">Send this email?</h2>
+    <p id="emailSendConfirmText"></p>
+    <div class="card-actions">
+      <button class="btn btn-primary" id="emailSendConfirmBtn" type="button">Confirm &amp; send</button>
+      <button class="btn btn-secondary" id="emailSendCancelBtn" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="followupPopupBackdrop" hidden>
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="followupPopupTitle">
+    <h2 id="followupPopupTitle">Follow-up ready to review</h2>
+    <p id="followupPopupText"></p>
+    <div class="card-actions">
+      <button class="btn btn-primary" id="followupPopupReviewBtn" type="button">Review now</button>
+      <button class="btn btn-secondary" id="followupPopupLaterBtn" type="button">Later</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="crmRemoveConfirmBackdrop" hidden>
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="crmRemoveConfirmTitle">
+    <h2 id="crmRemoveConfirmTitle">Remove this contact?</h2>
+    <p id="crmRemoveConfirmText"></p>
+    <div class="card-actions">
+      <button class="btn btn-remove" type="button" id="crmRemoveConfirmBtn">Remove</button>
+      <button class="btn btn-secondary" type="button" id="crmRemoveCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="crmMergeConfirmBackdrop" hidden>
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="crmMergeConfirmTitle">
+    <h2 id="crmMergeConfirmTitle">Merge these two people?</h2>
+    <p>Everything from both gets combined into one contact. Which name should be kept?</p>
+    <div class="card-actions">
+      <button class="btn btn-primary" type="button" id="crmMergeKeepFirstBtn"></button>
+      <button class="btn btn-primary" type="button" id="crmMergeKeepSecondBtn"></button>
+      <button class="btn btn-secondary" type="button" id="crmMergeCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="crmDeleteFunnelBackdrop" hidden>
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="crmDeleteFunnelTitle">
+    <h2 id="crmDeleteFunnelTitle">Delete this funnel?</h2>
+    <p id="crmDeleteFunnelText"></p>
+    <div class="card-actions">
+      <button class="btn btn-remove" type="button" id="crmDeleteFunnelConfirmBtn">Delete</button>
+      <button class="btn btn-secondary" type="button" id="crmDeleteFunnelCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="crmCreateFunnelBackdrop" hidden>
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="crmCreateFunnelTitle">
+    <h2 id="crmCreateFunnelTitle">New funnel</h2>
+    <input type="text" class="demo-reset-input" id="crmFunnelNameInput" placeholder="Funnel name">
+    <div class="card-actions">
+      <button class="btn btn-primary" type="button" id="crmCreateFunnelConfirmBtn">Create</button>
+      <button class="btn btn-secondary" type="button" id="crmCreateFunnelCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="crop-lock.js"></script>
+<script src="chat.js"></script>
+<script type="module" src="email/index.js"></script>
+<script type="module" src="demo/reset.js"></script>
+<script>
+  (function () {
+    var content = document.getElementById('caseOverviewContent');
+    var viewer = document.getElementById('documentViewer');
+
+    var linkedinTab = document.getElementById('linkedinTab');
+    var linkedinPanel = document.getElementById('linkedinPanel');
+    var linkedinStatusText = document.getElementById('linkedinStatusText');
+    var linkedinSyncSection = document.getElementById('linkedinSyncSection');
+    var linkedinSyncStatusText = document.getElementById('linkedinSyncStatusText');
+    var linkedinBackfillBtn = document.getElementById('linkedinBackfillBtn');
+    var linkedinSyncNowBtn = document.getElementById('linkedinSyncNowBtn');
+    var linkedinMessagesSection = document.getElementById('linkedinMessagesSection');
+    var linkedinConversationList = document.getElementById('linkedinConversationList');
+    var closeLinkedinPanelBtn = document.getElementById('closeLinkedinPanelBtn');
+    var linkedinCheckConnectionBtn = document.getElementById('linkedinCheckConnectionBtn');
+    var linkedinLastKnownSyncedAt = null;
+    var linkedinAutoRefreshTimer = null;
+
+    function refreshSyncStatus() {
+      fetch('/api/linkedin/sync/status')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          linkedinSyncSection.hidden = false;
+          if (!data.backfilled) {
+            linkedinSyncStatusText.textContent = 'Not backfilled yet — run the 7-day backfill once to start saving history.';
+            linkedinBackfillBtn.hidden = false;
+            linkedinSyncNowBtn.hidden = true;
+            return;
+          }
+          linkedinBackfillBtn.hidden = true;
+          linkedinSyncNowBtn.hidden = false;
+          linkedinSyncStatusText.textContent =
+            data.conversation_count + ' conversations, ' + data.message_count +
+            ' messages saved. Last synced: ' + (data.last_synced_at || 'never') +
+            '. Auto-sync runs hourly, 8am-9pm.';
+          linkedinLastKnownSyncedAt = data.last_synced_at || null;
+        })
+        .catch(function () {
+          linkedinSyncSection.hidden = true;
+        });
+    }
+
+    function startLinkedinAutoRefresh() {
+      stopLinkedinAutoRefresh();
+      linkedinAutoRefreshTimer = setInterval(function () {
+        fetch('/api/linkedin/sync/status')
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            // Catches the hourly background auto-sync (runs with no
+            // connection to this browser) landing while the panel is open.
+            if (data.last_synced_at && data.last_synced_at !== linkedinLastKnownSyncedAt) {
+              refreshSyncStatus();
+              loadLinkedinMessages();
+            }
+          })
+          .catch(function () {});
+      }, 60000);
+    }
+
+    function stopLinkedinAutoRefresh() {
+      if (linkedinAutoRefreshTimer) {
+        clearInterval(linkedinAutoRefreshTimer);
+        linkedinAutoRefreshTimer = null;
+      }
+    }
+
+    function pollLinkedinActivity(button, fallbackText) {
+      button.textContent = fallbackText;
+      var timer = setInterval(function () {
+        fetch('/api/linkedin/sync/status')
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            button.textContent = data.current_activity || fallbackText;
+          })
+          .catch(function () {});
+      }, 1000);
+      return function () { clearInterval(timer); };
+    }
+
+    if (linkedinBackfillBtn) {
+      linkedinBackfillBtn.addEventListener('click', function () {
+        linkedinBackfillBtn.disabled = true;
+        var stopPolling = pollLinkedinActivity(linkedinBackfillBtn, 'Pulling messages…');
+        fetch('/api/linkedin/backfill', { method: 'POST' })
+          .then(function (res) { return res.json(); })
+          .then(function () {
+            stopPolling();
+            linkedinBackfillBtn.disabled = false;
+            linkedinBackfillBtn.textContent = 'Run 7-day backfill';
+            refreshSyncStatus();
+            loadLinkedinMessages();
+          })
+          .catch(function (err) {
+            stopPolling();
+            linkedinBackfillBtn.disabled = false;
+            linkedinBackfillBtn.textContent = 'Run 7-day backfill';
+            linkedinSyncStatusText.textContent = 'Backfill failed: ' + err.message;
+          });
+      });
+    }
+
+    if (linkedinSyncNowBtn) {
+      linkedinSyncNowBtn.addEventListener('click', function () {
+        linkedinSyncNowBtn.disabled = true;
+        var stopPolling = pollLinkedinActivity(linkedinSyncNowBtn, 'Pulling messages…');
+        fetch('/api/linkedin/sync/run', { method: 'POST' })
+          .then(function (res) { return res.json(); })
+          .then(function () {
+            stopPolling();
+            linkedinSyncNowBtn.disabled = false;
+            linkedinSyncNowBtn.textContent = 'Sync now';
+            refreshSyncStatus();
+            loadLinkedinMessages();
+          })
+          .catch(function (err) {
+            stopPolling();
+            linkedinSyncNowBtn.disabled = false;
+            linkedinSyncNowBtn.textContent = 'Sync now';
+            linkedinSyncStatusText.textContent = 'Sync failed: ' + err.message;
+          });
+      });
+    }
+
+    var linkedinResetBtn = document.getElementById('linkedinResetBtn');
+    if (linkedinResetBtn) {
+      linkedinResetBtn.addEventListener('click', function () {
+        linkedinResetBtn.disabled = true;
+        linkedinResetBtn.textContent = 'Resetting…';
+        fetch('/api/linkedin/reset', { method: 'POST' })
+          .then(function (res) { return res.json(); })
+          .then(function () {
+            linkedinResetBtn.disabled = false;
+            linkedinResetBtn.textContent = 'Reset test data';
+            linkedinConversationList.innerHTML = '';
+            linkedinMessagesSection.hidden = true;
+            refreshSyncStatus();
+          })
+          .catch(function (err) {
+            linkedinResetBtn.disabled = false;
+            linkedinResetBtn.textContent = 'Reset test data';
+            linkedinSyncStatusText.textContent = 'Reset failed: ' + err.message;
+          });
+      });
+    }
+
+    function checkLinkedinStatus() {
+      linkedinStatusText.textContent = 'Checking connection…';
+      linkedinMessagesSection.hidden = true;
+      linkedinSyncSection.hidden = true;
+      fetch('/api/linkedin/status')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data.installed) {
+            linkedinStatusText.textContent = 'LinkedIn is not installed.';
+            return;
+          }
+          if (data.connected) {
+            linkedinStatusText.textContent = 'Connected to LinkedIn.';
+            refreshSyncStatus();
+            loadLinkedinMessages();
+            return;
+          }
+          if (data.login_browser_open) {
+            linkedinStatusText.textContent = 'A LinkedIn login window is open — log in there, then click Refresh.';
+          } else if (data.authentication_state) {
+            linkedinStatusText.textContent = 'Not connected (' + data.authentication_state + '). Click Refresh to try again.';
+          } else {
+            linkedinStatusText.textContent = data.error || 'Not connected.';
+          }
+        })
+        .catch(function (err) {
+          linkedinStatusText.textContent = 'Could not reach the LinkedIn integration: ' + err.message;
+        });
+    }
+
+    function loadLinkedinMessages() {
+      // Reads what's actually saved in the CRM (reflects reset/backfill
+      // state) — not a live LinkedIn re-search, so it won't repopulate
+      // itself after a reset the way the old version did.
+      fetch('/api/linkedin/crm/conversations')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          linkedinMessagesSection.hidden = false;
+          linkedinConversationList.innerHTML = '';
+          if (!data.ok) {
+            var errRow = document.createElement('p');
+            errRow.className = 'attention-copy';
+            errRow.textContent = data.error || 'Could not load conversations.';
+            linkedinConversationList.appendChild(errRow);
+            return;
+          }
+          var conversations = data.conversations || [];
+          if (!conversations.length) {
+            var emptyRow = document.createElement('p');
+            emptyRow.className = 'attention-copy';
+            emptyRow.textContent = 'Nothing saved yet — run the backfill above.';
+            linkedinConversationList.appendChild(emptyRow);
+            return;
+          }
+          conversations.forEach(function (conv) {
+            linkedinConversationList.appendChild(buildConversationCard(conv));
+          });
+        })
+        .catch(function (err) {
+          linkedinMessagesSection.hidden = false;
+          linkedinConversationList.innerHTML = '';
+          var errRow = document.createElement('p');
+          errRow.className = 'attention-copy';
+          errRow.textContent = 'Could not load messages: ' + err.message;
+          linkedinConversationList.appendChild(errRow);
+        });
+      loadLinkedinInbox();
+    }
+
+    var linkedinInboxList = document.getElementById('linkedinInboxList');
+    var linkedinInboxCount = document.getElementById('linkedinInboxCount');
+    var linkedinTrustedTabBtn = document.getElementById('linkedinTrustedTabBtn');
+    var linkedinInboxTabBtn = document.getElementById('linkedinInboxTabBtn');
+
+    function loadLinkedinInbox() {
+      fetch('/api/linkedin/crm/conversations?status=pending_review')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          var conversations = (data.ok && data.conversations) || [];
+          linkedinInboxCount.textContent = conversations.length ? '(' + conversations.length + ')' : '';
+          linkedinInboxList.innerHTML = '';
+          if (!conversations.length) {
+            var emptyRow = document.createElement('p');
+            emptyRow.className = 'attention-copy';
+            emptyRow.textContent = 'Nothing waiting for review.';
+            linkedinInboxList.appendChild(emptyRow);
+            return;
+          }
+          conversations.forEach(function (conv) {
+            linkedinInboxList.appendChild(buildInboxCard(conv));
+          });
+        })
+        .catch(function () {});
+    }
+
+    function buildInboxCard(conv) {
+      var card = document.createElement('div');
+      card.className = 'attention attention-quiet';
+
+      var flag = document.createElement('span');
+      flag.className = 'attention-flag';
+      flag.textContent = conv.participant_name || 'Unknown';
+      card.appendChild(flag);
+
+      var summary = document.createElement('p');
+      summary.className = 'attention-copy';
+      var lastMessageWithSender = conv.last_message_text
+        ? (conv.last_message_direction === 'outgoing' ? 'You' : (conv.participant_name || 'Them')) + ': ' + conv.last_message_text
+        : null;
+      var summaryBits = [lastMessageWithSender, conv.last_message_at ? formatCrmTimestamp(conv.last_message_at) : null].filter(Boolean);
+      summary.textContent = summaryBits.join(' · ') || 'No messages saved.';
+      card.appendChild(summary);
+
+      var actions = document.createElement('div');
+      actions.className = 'attention-actions';
+
+      var approveBtn = document.createElement('button');
+      approveBtn.type = 'button';
+      approveBtn.className = 'btn btn-primary btn-small';
+      approveBtn.textContent = 'Approve';
+      approveBtn.addEventListener('click', function () {
+        fetch('/api/linkedin/crm/contacts/' + conv.account_id + '/approve', { method: 'POST' })
+          .then(function () { loadLinkedinMessages(); });
+      });
+      actions.appendChild(approveBtn);
+
+      var removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'subtle-link-btn';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', function () {
+        openCrmRemoveConfirm(conv.person_id, conv.participant_name || 'this contact', loadLinkedinMessages);
+      });
+      actions.appendChild(removeBtn);
+
+      card.appendChild(actions);
+      return card;
+    }
+
+    if (linkedinTrustedTabBtn) {
+      linkedinTrustedTabBtn.addEventListener('click', function () {
+        linkedinTrustedTabBtn.classList.add('is-active');
+        linkedinTrustedTabBtn.setAttribute('aria-selected', 'true');
+        linkedinInboxTabBtn.classList.remove('is-active');
+        linkedinInboxTabBtn.setAttribute('aria-selected', 'false');
+        linkedinConversationList.hidden = false;
+        linkedinInboxList.hidden = true;
+      });
+    }
+    if (linkedinInboxTabBtn) {
+      linkedinInboxTabBtn.addEventListener('click', function () {
+        linkedinInboxTabBtn.classList.add('is-active');
+        linkedinInboxTabBtn.setAttribute('aria-selected', 'true');
+        linkedinTrustedTabBtn.classList.remove('is-active');
+        linkedinTrustedTabBtn.setAttribute('aria-selected', 'false');
+        linkedinInboxList.hidden = false;
+        linkedinConversationList.hidden = true;
+      });
+    }
+
+    function buildConversationCard(conv) {
+      var card = document.createElement('div');
+      card.className = 'attention attention-quiet';
+
+      var flag = document.createElement('span');
+      flag.className = 'attention-flag';
+      flag.textContent = conv.participant_name || 'Unknown';
+      if (conv.company_name) {
+        flag.textContent += ' · ' + conv.company_name;
+      }
+      card.appendChild(flag);
+
+      var summary = document.createElement('p');
+      summary.className = 'attention-copy';
+      var lastMessageWithSender = conv.last_message_text
+        ? (conv.last_message_direction === 'outgoing' ? 'You' : (conv.participant_name || 'Them')) + ': ' + conv.last_message_text
+        : null;
+      var summaryBits = [lastMessageWithSender, conv.last_message_at ? formatCrmTimestamp(conv.last_message_at) : null].filter(Boolean);
+      summary.textContent = summaryBits.join(' · ') || 'No messages saved.';
+      card.appendChild(summary);
+
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'attention-why attention-why-trigger';
+      toggle.textContent = 'See messages';
+      card.appendChild(toggle);
+
+      var body = document.createElement('div');
+      body.hidden = true;
+      body.className = 'crm-message-window';
+      card.appendChild(body);
+
+      var loaded = false;
+      toggle.addEventListener('click', function () {
+        if (!loaded) {
+          toggle.textContent = 'Loading…';
+          fetch('/api/linkedin/crm/conversation/' + encodeURIComponent(conv.person_id))
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              loaded = true;
+              renderConversationMessages(body, data);
+              body.hidden = false;
+              toggle.textContent = 'Hide messages';
+              body.scrollTop = body.scrollHeight;
+            })
+            .catch(function (err) {
+              body.textContent = 'Could not load messages: ' + err.message;
+              body.hidden = false;
+              toggle.textContent = 'Hide messages';
+            });
+          return;
+        }
+        body.hidden = !body.hidden;
+        toggle.textContent = body.hidden ? 'See messages' : 'Hide messages';
+        if (!body.hidden) body.scrollTop = body.scrollHeight;
+      });
+
+      return card;
+    }
+
+    function renderConversationMessages(container, data) {
+      container.innerHTML = '';
+      if (!data.ok) {
+        var err = document.createElement('p');
+        err.className = 'attention-copy';
+        err.textContent = data.error || 'Could not load messages.';
+        container.appendChild(err);
+        return;
+      }
+      var messages = data.messages || [];
+      if (!messages.length) {
+        var empty = document.createElement('p');
+        empty.className = 'attention-copy';
+        empty.textContent = 'No messages found.';
+        container.appendChild(empty);
+        return;
+      }
+      messages.forEach(function (msg) {
+        var row = document.createElement('p');
+        row.className = 'attention-copy';
+        row.style.marginTop = '6px';
+        var who = msg.direction === 'outgoing' ? 'You' : (msg.sender || 'Them');
+        var when = msg.timestamp ? ' (' + msg.timestamp + ')' : '';
+        row.innerHTML = '<strong>' + who + when + ':</strong> ';
+        row.appendChild(document.createTextNode(msg.message_text || ''));
+        container.appendChild(row);
+      });
+    }
+
+    if (linkedinTab) {
+      linkedinTab.addEventListener('click', function () {
+        closeAllCasePanels();
+        aiPanel.hidden = false;
+        linkedinPanel.hidden = false;
+        checkLinkedinStatus();
+        startLinkedinAutoRefresh();
+      });
+    }
+    if (closeLinkedinPanelBtn) {
+      closeLinkedinPanelBtn.addEventListener('click', function () {
+        linkedinPanel.hidden = true;
+        content.hidden = false;
+        stopLinkedinAutoRefresh();
+      });
+    }
+    if (linkedinCheckConnectionBtn) {
+      linkedinCheckConnectionBtn.addEventListener('click', checkLinkedinStatus);
+    }
+
+    var aiPanel = document.getElementById('aiPanel');
+    var crmTab = document.getElementById('crmTab');
+    var crmPanel = document.getElementById('crmPanel');
+    var closeCrmPanelBtn = document.getElementById('closeCrmPanelBtn');
+    var crmContactsTabBtn = document.getElementById('crmContactsTabBtn');
+    var crmFunnelsTabBtn = document.getElementById('crmFunnelsTabBtn');
+    var crmContactsBody = document.getElementById('crmContactsBody');
+    var crmFunnelsBody = document.getElementById('crmFunnelsBody');
+    var crmPeopleSubTabBtn = document.getElementById('crmPeopleSubTabBtn');
+    var crmCompaniesSubTabBtn = document.getElementById('crmCompaniesSubTabBtn');
+    var crmPeopleActions = document.getElementById('crmPeopleActions');
+    var crmCompanyList = document.getElementById('crmCompanyList');
+    var crmPeopleList = document.getElementById('crmPeopleList');
+    var crmPersonDetailView = document.getElementById('crmPersonDetailView');
+    var crmPersonDetailName = document.getElementById('crmPersonDetailName');
+    var crmPersonDetailNameInput = document.getElementById('crmPersonDetailNameInput');
+    var crmPersonDetailCompany = document.getElementById('crmPersonDetailCompany');
+    var crmPersonDetailCompanyInput = document.getElementById('crmPersonDetailCompanyInput');
+    var crmPersonDetailJobTitle = document.getElementById('crmPersonDetailJobTitle');
+    var crmPersonDetailJobTitleInput = document.getElementById('crmPersonDetailJobTitleInput');
+    var crmPersonDetailFunnelLine = document.getElementById('crmPersonDetailFunnelLine');
+    var crmPersonDetailChannels = document.getElementById('crmPersonDetailChannels');
+    var crmPersonDetailFollowup = document.getElementById('crmPersonDetailFollowup');
+    var crmPersonDetailNotes = document.getElementById('crmPersonDetailNotes');
+    var crmPersonDetailNotesInput = document.getElementById('crmPersonDetailNotesInput');
+    var crmEditPersonBtn = document.getElementById('crmEditPersonBtn');
+    var crmSavePersonBtn = document.getElementById('crmSavePersonBtn');
+    var crmCancelEditPersonBtn = document.getElementById('crmCancelEditPersonBtn');
+    var crmPersonEditFields = [
+      [crmPersonDetailName, crmPersonDetailNameInput],
+      [crmPersonDetailCompany, crmPersonDetailCompanyInput],
+      [crmPersonDetailJobTitle, crmPersonDetailJobTitleInput],
+      [crmPersonDetailNotes, crmPersonDetailNotesInput],
+    ];
+    var crmCurrentPersonId = null;
+    var crmCurrentPersonData = null;
+    var crmPersonDetailMessages = document.getElementById('crmPersonDetailMessages');
+    var crmPersonDetailMessagesToggle = document.getElementById('crmPersonDetailMessagesToggle');
+    var crmPersonDetailAllMessages = [];
+    var crmPersonDetailMessagesExpanded = false;
+    var CRM_DETAIL_MESSAGES_COLLAPSED_COUNT = 5;
+    var closeCrmPersonDetailBtn = document.getElementById('closeCrmPersonDetailBtn');
+    var crmMergeSelectedBtn = document.getElementById('crmMergeSelectedBtn');
+    var crmMergeConfirmBackdrop = document.getElementById('crmMergeConfirmBackdrop');
+    var crmMergeKeepFirstBtn = document.getElementById('crmMergeKeepFirstBtn');
+    var crmMergeKeepSecondBtn = document.getElementById('crmMergeKeepSecondBtn');
+    var crmMergeCancelBtn = document.getElementById('crmMergeCancelBtn');
+    var crmFunnelBoardWrap = document.getElementById('crmFunnelBoardWrap');
+    var crmFunnelBoardTitle = document.getElementById('crmFunnelBoardTitle');
+    var crmFunnelBoardSelect = document.getElementById('crmFunnelBoardSelect');
+    var crmCreateFunnelBtn = document.getElementById('crmCreateFunnelBtn');
+    var crmCreateFunnelBackdrop = document.getElementById('crmCreateFunnelBackdrop');
+    var crmFunnelNameInput = document.getElementById('crmFunnelNameInput');
+    var crmCreateFunnelConfirmBtn = document.getElementById('crmCreateFunnelConfirmBtn');
+    var crmCreateFunnelCancelBtn = document.getElementById('crmCreateFunnelCancelBtn');
+    var crmDeleteFunnelBtn = document.getElementById('crmDeleteFunnelBtn');
+    var crmDeleteFunnelBackdrop = document.getElementById('crmDeleteFunnelBackdrop');
+    var crmDeleteFunnelText = document.getElementById('crmDeleteFunnelText');
+    var crmDeleteFunnelConfirmBtn = document.getElementById('crmDeleteFunnelConfirmBtn');
+    var crmDeleteFunnelCancelBtn = document.getElementById('crmDeleteFunnelCancelBtn');
+    var crmMoveToFunnelSelect = document.getElementById('crmMoveToFunnelSelect');
+    var crmMoveToFunnelBtn = document.getElementById('crmMoveToFunnelBtn');
+    var crmFunnelsData = [];
+    var crmSelectedFunnelId = null;
+    var crmOverviewData = null;
+    var crmSelectedPersonIds = [];
+
+    function formatCrmTimestamp(isoString) {
+      var date = new Date(isoString);
+      if (isNaN(date.getTime())) return isoString;
+      return date.toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      });
+    }
+
+    function renderCrmCompanies(container) {
+      var companies = crmOverviewData.companies || [];
+      container.innerHTML = '';
+      if (!companies.length) {
+        var empty = document.createElement('p');
+        empty.className = 'crm-empty';
+        empty.textContent = 'No companies on file yet — they fill in automatically as contacts are enriched.';
+        container.appendChild(empty);
+        return;
+      }
+      companies.forEach(function (co) {
+        var card = document.createElement('div');
+        card.className = 'attention attention-quiet';
+        var flag = document.createElement('span');
+        flag.className = 'attention-flag';
+        flag.textContent = co.company_name;
+        card.appendChild(flag);
+        var copy = document.createElement('p');
+        copy.className = 'attention-copy';
+        copy.textContent = co.people_count + (co.people_count === 1 ? ' person' : ' people') + ' · ' + co.company_status;
+        card.appendChild(copy);
+        container.appendChild(card);
+      });
+    }
+
+    function renderCrmPeople(container) {
+      var people = crmOverviewData.people || [];
+      container.innerHTML = '';
+      if (!people.length) {
+        var empty = document.createElement('p');
+        empty.className = 'crm-empty';
+        empty.textContent = 'No people on file yet — connect a channel and sync to start populating this.';
+        container.appendChild(empty);
+        return;
+      }
+      people.forEach(function (person) {
+        var card = document.createElement('div');
+        card.className = 'attention attention-quiet crm-person-card';
+        card.addEventListener('click', function () { openCrmPersonDetail(person.person_id); });
+
+        var topRow = document.createElement('div');
+        topRow.className = 'crm-person-top-row';
+
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'crm-person-checkbox';
+        checkbox.checked = crmSelectedPersonIds.indexOf(person.person_id) !== -1;
+        checkbox.addEventListener('click', function (e) { e.stopPropagation(); });
+        checkbox.addEventListener('change', function () {
+          var idx = crmSelectedPersonIds.indexOf(person.person_id);
+          if (checkbox.checked && idx === -1) crmSelectedPersonIds.push(person.person_id);
+          if (!checkbox.checked && idx !== -1) crmSelectedPersonIds.splice(idx, 1);
+          updateCrmMergeButton();
+        });
+        topRow.appendChild(checkbox);
+
+        var flag = document.createElement('span');
+        flag.className = 'attention-flag';
+        flag.textContent = person.name + (person.company_name ? ' · ' + person.company_name : '');
+        topRow.appendChild(flag);
+
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'subtle-link-btn crm-person-remove-btn';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          openCrmRemoveConfirm(person.person_id, person.name);
+        });
+        topRow.appendChild(removeBtn);
+
+        card.appendChild(topRow);
+
+        (person.channels || []).forEach(function (ch) {
+          var tag = document.createElement('span');
+          tag.className = 'crm-channel-tag crm-channel-tag-' + ch.toLowerCase();
+          tag.textContent = ch;
+          card.appendChild(tag);
+        });
+        var copy = document.createElement('p');
+        copy.className = 'attention-copy';
+        var lastMessageBit = person.last_message_text
+          ? 'Last message: "' + person.last_message_text + '"' + (person.last_message_at ? ' (' + formatCrmTimestamp(person.last_message_at) + ')' : '')
+          : null;
+        var bits = [person.job_title, lastMessageBit].filter(Boolean);
+        copy.textContent = bits.length ? bits.join(' · ') : 'No messages yet.';
+        card.appendChild(copy);
+
+        if (person.follow_up) {
+          var fu = person.follow_up;
+          var fuTag = document.createElement('p');
+          fuTag.className = 'attention-copy crm-followup-tag';
+          fuTag.textContent = fu.status === 'awaiting_approval'
+            ? 'Follow-up: stage ' + fu.stage + ' — draft ready for review'
+            : 'Follow-up: stage ' + fu.stage + ' — next check ' + formatCrmTimestamp(fu.next_follow_up_at);
+          card.appendChild(fuTag);
+        }
+        if (person.funnel_name) {
+          var funnelTag = document.createElement('p');
+          funnelTag.className = 'attention-copy crm-followup-tag';
+          funnelTag.textContent = 'Funnel: ' + person.funnel_name + (person.funnel_stage_name ? ' — ' + person.funnel_stage_name : '');
+          card.appendChild(funnelTag);
+        }
+        container.appendChild(card);
+      });
+      updateCrmMergeButton();
+    }
+
+    function updateCrmMergeButton() {
+      var showMerge = crmSelectedPersonIds.length === 2;
+      crmMergeSelectedBtn.hidden = !showMerge;
+      var showMoveControls = crmSelectedPersonIds.length >= 1 && crmFunnelsData.length > 0;
+      crmMoveToFunnelSelect.hidden = !showMoveControls;
+      crmMoveToFunnelBtn.hidden = !showMoveControls;
+      // An empty .card-actions still eats flex-gap space as an empty row
+      // even with all its buttons hidden — collapse the whole wrapper too.
+      crmPeopleActions.hidden = !showMerge && !showMoveControls;
+    }
+
+    function updateCrmFunnelBoardTitle() {
+      var selectedFunnel = crmFunnelsData.find(function (f) { return f.funnel_id === crmSelectedFunnelId; });
+      crmFunnelBoardTitle.textContent = selectedFunnel ? selectedFunnel.name : 'No funnels yet';
+      crmDeleteFunnelBtn.hidden = !selectedFunnel;
+    }
+
+    function loadCrmFunnels() {
+      fetch('/api/crm/funnels')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          crmFunnelsData = data.funnels || [];
+
+          crmFunnelBoardSelect.hidden = crmFunnelsData.length < 2;
+          crmFunnelBoardSelect.innerHTML = '';
+          crmFunnelsData.forEach(function (f) {
+            var opt = document.createElement('option');
+            opt.value = f.funnel_id;
+            opt.textContent = f.name;
+            crmFunnelBoardSelect.appendChild(opt);
+          });
+
+          if (!crmFunnelsData.length) {
+            crmSelectedFunnelId = null;
+          } else if (!crmFunnelsData.some(function (f) { return f.funnel_id === crmSelectedFunnelId; })) {
+            crmSelectedFunnelId = crmFunnelsData[0].funnel_id;
+          }
+          if (crmSelectedFunnelId != null) crmFunnelBoardSelect.value = crmSelectedFunnelId;
+
+          updateCrmFunnelBoardTitle();
+
+          crmMoveToFunnelSelect.innerHTML = '';
+          crmFunnelsData.forEach(function (f) {
+            var opt2 = document.createElement('option');
+            opt2.value = f.funnel_id;
+            opt2.textContent = f.name;
+            crmMoveToFunnelSelect.appendChild(opt2);
+          });
+          updateCrmMergeButton();
+          renderCrmFunnelBoard();
+        })
+        .catch(function () {});
+    }
+
+    function renderCrmFunnelBoard() {
+      crmFunnelBoardWrap.innerHTML = '';
+      if (crmSelectedFunnelId == null) {
+        var empty = document.createElement('p');
+        empty.className = 'crm-empty';
+        empty.textContent = 'No funnels yet — create one above.';
+        crmFunnelBoardWrap.appendChild(empty);
+        return;
+      }
+      fetch('/api/crm/funnels/' + crmSelectedFunnelId + '/board')
+        .then(function (res) { return res.json(); })
+        .then(function (board) {
+          if (!board || !board.stages) return;
+          var wrap = document.createElement('div');
+          wrap.className = 'crm-funnel-board';
+
+          function moveCardToStage(personId, stageId) {
+            fetch('/api/crm/funnels/stages/move', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ person_id: personId, stage_id: stageId }),
+            }).then(function () {
+              renderCrmFunnelBoard();
+              loadCrmOverview();
+            });
+          }
+
+          board.stages.forEach(function (stage) {
+            var col = document.createElement('div');
+            col.className = 'crm-funnel-stage';
+            var head = document.createElement('div');
+            head.className = 'crm-funnel-stage-head';
+            head.textContent = stage.name + ' (' + stage.people.length + ')';
+            col.appendChild(head);
+
+            // Native HTML5 drag-and-drop — drop target is the whole column,
+            // dragged data is just the person_id (stage_id comes from
+            // whichever column the drop lands on).
+            col.addEventListener('dragover', function (e) {
+              e.preventDefault();
+              col.classList.add('crm-funnel-stage-dragover');
+            });
+            col.addEventListener('dragleave', function () {
+              col.classList.remove('crm-funnel-stage-dragover');
+            });
+            col.addEventListener('drop', function (e) {
+              e.preventDefault();
+              col.classList.remove('crm-funnel-stage-dragover');
+              var personId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+              if (personId) moveCardToStage(personId, stage.stage_id);
+            });
+
+            stage.people.forEach(function (person) {
+              var card = document.createElement('div');
+              card.className = 'crm-funnel-person-card';
+              card.draggable = true;
+              card.addEventListener('dragstart', function (e) {
+                e.dataTransfer.setData('text/plain', String(person.person_id));
+                e.dataTransfer.effectAllowed = 'move';
+                card.classList.add('crm-funnel-person-card-dragging');
+              });
+              card.addEventListener('dragend', function () {
+                card.classList.remove('crm-funnel-person-card-dragging');
+              });
+
+              var name = document.createElement('div');
+              name.className = 'crm-funnel-person-name';
+              name.textContent = person.name;
+              card.appendChild(name);
+              if (person.company_name) {
+                var company = document.createElement('div');
+                company.className = 'crm-funnel-person-company';
+                company.textContent = person.company_name;
+                card.appendChild(company);
+              }
+              col.appendChild(card);
+            });
+            wrap.appendChild(col);
+          });
+          crmFunnelBoardWrap.appendChild(wrap);
+        })
+        .catch(function () {});
+    }
+
+    if (crmFunnelBoardSelect) {
+      crmFunnelBoardSelect.addEventListener('change', function () {
+        crmSelectedFunnelId = parseInt(crmFunnelBoardSelect.value, 10);
+        updateCrmFunnelBoardTitle();
+        renderCrmFunnelBoard();
+      });
+    }
+
+    if (crmCreateFunnelBtn) {
+      crmCreateFunnelBtn.addEventListener('click', function () {
+        crmFunnelNameInput.value = '';
+        crmCreateFunnelBackdrop.hidden = false;
+        crmFunnelNameInput.focus();
+      });
+    }
+    if (crmCreateFunnelCancelBtn) {
+      crmCreateFunnelCancelBtn.addEventListener('click', function () {
+        crmCreateFunnelBackdrop.hidden = true;
+      });
+    }
+    if (crmCreateFunnelConfirmBtn) {
+      crmCreateFunnelConfirmBtn.addEventListener('click', function () {
+        var name = (crmFunnelNameInput.value || '').trim();
+        if (!name) return;
+        fetch('/api/crm/funnels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name }),
+        }).then(function () {
+          crmCreateFunnelBackdrop.hidden = true;
+          loadCrmFunnels();
+        });
+      });
+    }
+    if (crmDeleteFunnelBtn) {
+      crmDeleteFunnelBtn.addEventListener('click', function () {
+        var selectedFunnel = crmFunnelsData.find(function (f) { return f.funnel_id === crmSelectedFunnelId; });
+        if (!selectedFunnel) return;
+        crmDeleteFunnelText.textContent = 'This deletes "' + selectedFunnel.name + '". Anyone in it stays as a contact, just no longer assigned to a funnel.';
+        crmDeleteFunnelBackdrop.hidden = false;
+      });
+    }
+    if (crmDeleteFunnelCancelBtn) {
+      crmDeleteFunnelCancelBtn.addEventListener('click', function () {
+        crmDeleteFunnelBackdrop.hidden = true;
+      });
+    }
+    if (crmDeleteFunnelConfirmBtn) {
+      crmDeleteFunnelConfirmBtn.addEventListener('click', function () {
+        if (crmSelectedFunnelId == null) return;
+        fetch('/api/crm/funnels/' + crmSelectedFunnelId + '/delete', { method: 'POST' })
+          .then(function () {
+            crmDeleteFunnelBackdrop.hidden = true;
+            crmSelectedFunnelId = null;
+            loadCrmFunnels();
+            loadCrmOverview();
+          });
+      });
+    }
+    if (crmMoveToFunnelBtn) {
+      crmMoveToFunnelBtn.addEventListener('click', function () {
+        if (!crmSelectedPersonIds.length || !crmMoveToFunnelSelect.value) return;
+        fetch('/api/crm/funnels/move', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ person_ids: crmSelectedPersonIds, funnel_id: parseInt(crmMoveToFunnelSelect.value, 10) }),
+        }).then(function () {
+          crmSelectedPersonIds = [];
+          loadCrmOverview();
+        });
+      });
+    }
+
+    var crmRemoveConfirmBackdrop = document.getElementById('crmRemoveConfirmBackdrop');
+    var crmRemoveConfirmText = document.getElementById('crmRemoveConfirmText');
+    var crmRemoveConfirmBtn = document.getElementById('crmRemoveConfirmBtn');
+    var crmRemoveCancelBtn = document.getElementById('crmRemoveCancelBtn');
+
+    function openCrmRemoveConfirm(personId, personName, onRemoved) {
+      crmRemoveConfirmText.textContent = 'This permanently deletes ' + personName + ' and all their messages. This cannot be undone.';
+      crmRemoveConfirmBtn.onclick = function () {
+        fetch('/api/crm/people/' + personId + '/delete', { method: 'POST' })
+          .then(function () {
+            crmRemoveConfirmBackdrop.hidden = true;
+            var idx = crmSelectedPersonIds.indexOf(personId);
+            if (idx !== -1) crmSelectedPersonIds.splice(idx, 1);
+            (onRemoved || loadCrmOverview)();
+          });
+      };
+      crmRemoveConfirmBackdrop.hidden = false;
+    }
+    if (crmRemoveCancelBtn) {
+      crmRemoveCancelBtn.addEventListener('click', function () {
+        crmRemoveConfirmBackdrop.hidden = true;
+      });
+    }
+
+    // --- Follow-up notifications: Home card + popup ---------------------
+    var attentionList = document.getElementById('attentionList');
+    var upcomingList = document.getElementById('upcomingList');
+    var upcomingEmpty = document.getElementById('upcomingEmpty');
+    var followupPopupBackdrop = document.getElementById('followupPopupBackdrop');
+    var followupPopupText = document.getElementById('followupPopupText');
+    var followupPopupReviewBtn = document.getElementById('followupPopupReviewBtn');
+    var followupPopupLaterBtn = document.getElementById('followupPopupLaterBtn');
+    var followupSeenIds = new Set();
+
+    function followupCardText(f) {
+      if (f.status === 'awaiting_approval') return f.person_name + ' — a follow-up draft is ready for your review.';
+      if (f.status === 'needs_review') return f.person_name + ' — replied, but it needs a real human reply, not an automated one.';
+      return f.person_name + ' — next follow-up check at ' + formatCrmTimestamp(f.next_follow_up_at) + '.';
+    }
+
+    // Real reveal text for "See Proposed Follow-up": the actual staged
+    // draft (awaiting_approval) or the actual reply that needs a human
+    // look (needs_review) — never placeholder copy.
+    function followupRevealText(f, pendingDraft) {
+      if (f.status === 'awaiting_approval' && pendingDraft && pendingDraft.person_name === f.person_name) {
+        return pendingDraft.message_text;
+      }
+      if (f.status === 'needs_review' && f.status_reason) {
+        return f.status_reason;
+      }
+      return null;
+    }
+
+    function stopFollowup(followUpId) {
+      fetch('/api/followups/' + followUpId + '/stop', { method: 'POST' })
+        .then(function () { pollFollowups(); })
+        .catch(function () {});
+    }
+
+    function renderFollowupCards(followUps, pendingDraft) {
+      attentionList.innerHTML = '';
+      upcomingList.querySelectorAll('.followup-live-card').forEach(function (el) { el.remove(); });
+
+      var actionable = followUps.filter(function (f) { return f.status === 'awaiting_approval' || f.status === 'needs_review'; });
+      var waiting = followUps.filter(function (f) { return f.status !== 'awaiting_approval' && f.status !== 'needs_review'; });
+
+      if (!actionable.length) {
+        var allClear = document.createElement('div');
+        allClear.className = 'attention attention-clear';
+        var clearFlag = document.createElement('span');
+        clearFlag.className = 'attention-flag';
+        clearFlag.textContent = 'All caught up';
+        allClear.appendChild(clearFlag);
+        var clearCopy = document.createElement('p');
+        clearCopy.className = 'attention-copy';
+        clearCopy.textContent = 'Nothing needs your attention right now.';
+        allClear.appendChild(clearCopy);
+        attentionList.appendChild(allClear);
+      }
+
+      actionable.forEach(function (f) {
+        var card = document.createElement('div');
+        card.className = 'attention followup-live-card';
+
+        var flag = document.createElement('span');
+        flag.className = 'attention-flag';
+        flag.textContent = f.person_name + ' · ' + (f.status === 'awaiting_approval' ? 'Follow-up ready' : 'Needs your reply');
+        card.appendChild(flag);
+
+        var copy = document.createElement('p');
+        copy.className = 'attention-copy';
+        copy.textContent = followupCardText(f);
+        card.appendChild(copy);
+
+        var revealText = followupRevealText(f, pendingDraft);
+        if (revealText) {
+          var toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'attention-why attention-why-trigger';
+          toggle.textContent = 'See Proposed Follow-up';
+          var revealBody = document.createElement('p');
+          revealBody.className = 'attention-copy followup-reveal-text';
+          revealBody.textContent = revealText;
+          revealBody.hidden = true;
+          toggle.addEventListener('click', function () {
+            revealBody.hidden = !revealBody.hidden;
+            toggle.textContent = revealBody.hidden ? 'See Proposed Follow-up' : 'Hide';
+          });
+          card.appendChild(toggle);
+          card.appendChild(revealBody);
+        }
+
+        var actions = document.createElement('div');
+        actions.className = 'attention-actions';
+        var approveBtn = document.createElement('button');
+        approveBtn.type = 'button';
+        approveBtn.className = 'btn btn-primary btn-small approve-send-btn';
+        approveBtn.textContent = f.status === 'awaiting_approval' ? 'Approve & Send' : 'Reply';
+        approveBtn.addEventListener('click', function () { goReviewFollowup(); });
+        actions.appendChild(approveBtn);
+
+        var adjustBtn = document.createElement('button');
+        adjustBtn.type = 'button';
+        adjustBtn.className = 'btn btn-secondary btn-small';
+        adjustBtn.textContent = 'Adjust';
+        actions.appendChild(adjustBtn);
+
+        var skipBtn = document.createElement('button');
+        skipBtn.type = 'button';
+        skipBtn.className = 'subtle-link-btn';
+        skipBtn.textContent = 'Skip';
+        skipBtn.addEventListener('click', function () { stopFollowup(f.follow_up_id); });
+        actions.appendChild(skipBtn);
+
+        card.appendChild(actions);
+        attentionList.appendChild(card);
+      });
+
+      waiting.forEach(function (f) {
+        var card = document.createElement('div');
+        card.className = 'attention attention-quiet followup-live-card';
+        var flag = document.createElement('span');
+        flag.className = 'attention-flag';
+        flag.textContent = f.person_name + ' · Waiting';
+        card.appendChild(flag);
+        var copy = document.createElement('p');
+        copy.className = 'attention-copy';
+        copy.textContent = followupCardText(f);
+        card.appendChild(copy);
+        upcomingList.appendChild(card);
+      });
+      upcomingEmpty.hidden = waiting.length > 0;
+    }
+
+    function goReviewFollowup() {
+      followupPopupBackdrop.hidden = true;
+      if (linkedinTab) linkedinTab.click();
+      setTimeout(function () {
+        if (linkedinSendDraftRow && !linkedinSendDraftRow.hidden) {
+          linkedinSendDraftRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+    }
+
+    function pollFollowups() {
+      Promise.all([
+        fetch('/api/followups').then(function (res) { return res.json(); }),
+        fetch('/api/linkedin/send-pending').then(function (res) { return res.json(); }).catch(function () { return {}; }),
+      ])
+        .then(function (results) {
+          var followUps = results[0].follow_ups || [];
+          var pendingDraft = results[1].pending || null;
+          renderFollowupCards(followUps, pendingDraft);
+          var readyOnes = followUps.filter(function (f) { return f.status === 'awaiting_approval' || f.status === 'needs_review'; });
+          var unseen = readyOnes.find(function (f) { return !followupSeenIds.has(f.follow_up_id); });
+          if (unseen && followupPopupBackdrop.hidden) {
+            followupSeenIds.add(unseen.follow_up_id);
+            followupPopupText.textContent = followupCardText(unseen);
+            followupPopupBackdrop.hidden = false;
+          }
+        })
+        .catch(function () {});
+    }
+    followupPopupReviewBtn.addEventListener('click', goReviewFollowup);
+    followupPopupLaterBtn.addEventListener('click', function () {
+      followupPopupBackdrop.hidden = true;
+      document.dispatchEvent(new CustomEvent('dlyte:dismiss-followup-announcement'));
+    });
+    setInterval(pollFollowups, 30000);
+    pollFollowups();
+
+    function findCrmPersonById(personId) {
+      return (crmOverviewData.people || []).find(function (p) { return p.person_id === personId; });
+    }
+
+    if (crmMergeSelectedBtn) {
+      crmMergeSelectedBtn.addEventListener('click', function () {
+        if (crmSelectedPersonIds.length !== 2) return;
+        var first = findCrmPersonById(crmSelectedPersonIds[0]);
+        var second = findCrmPersonById(crmSelectedPersonIds[1]);
+        if (!first || !second) return;
+        crmMergeKeepFirstBtn.textContent = 'Keep "' + first.name + '"';
+        crmMergeKeepSecondBtn.textContent = 'Keep "' + second.name + '"';
+        crmMergeKeepFirstBtn.onclick = function () { doCrmMerge(first.person_id, second.person_id); };
+        crmMergeKeepSecondBtn.onclick = function () { doCrmMerge(second.person_id, first.person_id); };
+        crmMergeConfirmBackdrop.hidden = false;
+      });
+    }
+    if (crmMergeCancelBtn) {
+      crmMergeCancelBtn.addEventListener('click', function () {
+        crmMergeConfirmBackdrop.hidden = true;
+      });
+    }
+
+    function doCrmMerge(keepPersonId, mergePersonId) {
+      fetch('/api/crm/people/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keep_person_id: keepPersonId, merge_person_id: mergePersonId }),
+      })
+        .then(function () {
+          crmMergeConfirmBackdrop.hidden = true;
+          crmSelectedPersonIds = [];
+          loadCrmOverview();
+        });
+    }
+
+    function loadCrmOverview() {
+      fetch('/api/crm/overview')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          crmOverviewData = data;
+          renderCrmCompanies(crmCompanyList);
+          renderCrmPeople(crmPeopleList);
+          loadCrmFunnels();
+        })
+        .catch(function (err) {
+          crmCompanyList.innerHTML = '';
+          crmPeopleList.innerHTML = '<p class="crm-empty">Could not load CRM data: ' + err.message + '</p>';
+        });
+    }
+
+    // Hides every case-overview child (Home content, the various
+    // document-viewer panels, and the CRM person-detail view) without
+    // touching .ai-panel — callers decide chat visibility themselves,
+    // since CRM stays full-width (chat hidden) throughout its Contacts/
+    // Funnels tabs and the person-detail view, while Home/LinkedIn always
+    // show chat.
+    function closeAllCasePanels() {
+      content.hidden = true;
+      viewer.hidden = true;
+      linkedinPanel.hidden = true;
+      crmPanel.hidden = true;
+      crmPersonDetailView.hidden = true;
+    }
+
+    function openCrmLanding() {
+      closeAllCasePanels();
+      aiPanel.hidden = true;
+      crmPanel.hidden = false;
+      loadCrmOverview();
+    }
+
+    function showCrmContactsTab() {
+      crmContactsTabBtn.classList.add('is-active');
+      crmContactsTabBtn.setAttribute('aria-selected', 'true');
+      crmFunnelsTabBtn.classList.remove('is-active');
+      crmFunnelsTabBtn.setAttribute('aria-selected', 'false');
+      crmContactsBody.hidden = false;
+      crmFunnelsBody.hidden = true;
+    }
+    function showCrmFunnelsTab() {
+      crmFunnelsTabBtn.classList.add('is-active');
+      crmFunnelsTabBtn.setAttribute('aria-selected', 'true');
+      crmContactsTabBtn.classList.remove('is-active');
+      crmContactsTabBtn.setAttribute('aria-selected', 'false');
+      crmFunnelsBody.hidden = false;
+      crmContactsBody.hidden = true;
+    }
+    if (crmContactsTabBtn) crmContactsTabBtn.addEventListener('click', showCrmContactsTab);
+    if (crmFunnelsTabBtn) crmFunnelsTabBtn.addEventListener('click', showCrmFunnelsTab);
+
+    function showCrmPeopleSubTab() {
+      crmPeopleSubTabBtn.classList.add('is-active');
+      crmPeopleSubTabBtn.setAttribute('aria-selected', 'true');
+      crmCompaniesSubTabBtn.classList.remove('is-active');
+      crmCompaniesSubTabBtn.setAttribute('aria-selected', 'false');
+      crmPeopleList.hidden = false;
+      crmPeopleActions.hidden = false;
+      crmCompanyList.hidden = true;
+    }
+    function showCrmCompaniesSubTab() {
+      crmCompaniesSubTabBtn.classList.add('is-active');
+      crmCompaniesSubTabBtn.setAttribute('aria-selected', 'true');
+      crmPeopleSubTabBtn.classList.remove('is-active');
+      crmPeopleSubTabBtn.setAttribute('aria-selected', 'false');
+      crmCompanyList.hidden = false;
+      crmPeopleList.hidden = true;
+      crmPeopleActions.hidden = true;
+    }
+    if (crmPeopleSubTabBtn) crmPeopleSubTabBtn.addEventListener('click', showCrmPeopleSubTab);
+    if (crmCompaniesSubTabBtn) crmCompaniesSubTabBtn.addEventListener('click', showCrmCompaniesSubTab);
+
+    function buildCrmDetailMessageRow(m) {
+      var who = m.direction === 'outgoing' ? 'You' : (m.sender || 'Them');
+      var row = document.createElement('div');
+      row.className = 'crm-detail-message';
+
+      var meta = document.createElement('div');
+      meta.className = 'crm-detail-message-meta';
+      var tag = document.createElement('span');
+      tag.className = 'crm-channel-tag crm-channel-tag-' + (m.channel || '').toLowerCase();
+      tag.textContent = m.channel;
+      meta.appendChild(tag);
+      var senderEl = document.createElement('span');
+      senderEl.className = 'crm-detail-message-sender';
+      senderEl.textContent = who;
+      meta.appendChild(senderEl);
+      if (m.timestamp) {
+        var timeEl = document.createElement('span');
+        timeEl.className = 'crm-detail-message-time';
+        timeEl.textContent = formatCrmTimestamp(m.timestamp);
+        meta.appendChild(timeEl);
+      }
+      row.appendChild(meta);
+
+      var textEl = document.createElement('p');
+      textEl.className = 'crm-detail-message-text';
+      textEl.textContent = m.message_text || '';
+      row.appendChild(textEl);
+
+      return row;
+    }
+
+    function renderCrmPersonDetailMessages() {
+      crmPersonDetailMessages.innerHTML = '';
+      var messages = crmPersonDetailAllMessages;
+      if (!messages.length) {
+        var empty = document.createElement('p');
+        empty.className = 'crm-empty';
+        empty.textContent = 'No messages yet.';
+        crmPersonDetailMessages.appendChild(empty);
+        crmPersonDetailMessagesToggle.hidden = true;
+        return;
+      }
+      var visible = crmPersonDetailMessagesExpanded
+        ? messages
+        : messages.slice(-CRM_DETAIL_MESSAGES_COLLAPSED_COUNT);
+      visible.forEach(function (m) {
+        crmPersonDetailMessages.appendChild(buildCrmDetailMessageRow(m));
+      });
+      if (messages.length > CRM_DETAIL_MESSAGES_COLLAPSED_COUNT) {
+        crmPersonDetailMessagesToggle.hidden = false;
+        crmPersonDetailMessagesToggle.textContent = crmPersonDetailMessagesExpanded
+          ? 'Show only the last ' + CRM_DETAIL_MESSAGES_COLLAPSED_COUNT
+          : 'Show all ' + messages.length + ' messages';
+      } else {
+        crmPersonDetailMessagesToggle.hidden = true;
+      }
+    }
+    if (crmPersonDetailMessagesToggle) {
+      crmPersonDetailMessagesToggle.addEventListener('click', function () {
+        crmPersonDetailMessagesExpanded = !crmPersonDetailMessagesExpanded;
+        renderCrmPersonDetailMessages();
+      });
+    }
+
+    function openCrmPersonDetail(personId) {
+      fetch('/api/crm/people/' + personId)
+        .then(function (res) { return res.json(); })
+        .then(function (person) {
+          if (!person || person.error) return;
+          closeAllCasePanels();
+          aiPanel.hidden = true;
+          crmPersonDetailView.hidden = false;
+          crmCurrentPersonId = personId;
+          crmCurrentPersonData = person;
+
+          crmPersonDetailName.textContent = person.name;
+          crmPersonDetailNotes.textContent = person.notes || 'No notes yet.';
+          crmPersonDetailCompany.textContent = person.company_name || '—';
+          crmPersonDetailJobTitle.textContent = person.job_title || '—';
+          crmPersonDetailFunnelLine.textContent = person.funnel_name
+            ? 'Funnel: ' + person.funnel_name + (person.funnel_stage_name ? ' — ' + person.funnel_stage_name : '')
+            : 'Not in a funnel.';
+          exitCrmPersonEditMode();
+
+          crmPersonDetailChannels.innerHTML = '';
+          (person.channels || []).forEach(function (ch) {
+            var row = document.createElement('div');
+            row.className = 'crm-channel-row';
+
+            var tag = document.createElement('span');
+            tag.className = 'crm-channel-tag crm-channel-tag-' + ch.channel.toLowerCase();
+            tag.textContent = ch.channel + (ch.display_name ? ' · ' + ch.display_name : '');
+            row.appendChild(tag);
+
+            var identifierLine = document.createElement('p');
+            identifierLine.className = 'attention-copy crm-channel-identifier';
+            var idValue = ch.channel_identifier || '';
+            if (idValue.indexOf('name:') === 0) {
+              // Not a real address/URL — just the name-based fallback used
+              // when LinkedIn never gave us a real profile slug for this
+              // contact (see get_or_create_person_for_channel).
+              identifierLine.textContent = 'No LinkedIn profile link captured — matched by name only.';
+            } else {
+              // A real LinkedIn identifier is just the bare slug — turn it
+              // into the actual URL so it's directly copy-pasteable/usable,
+              // not just an opaque string. Other channels (email) already
+              // are a real, usable value as-is.
+              var displayValue = ch.channel.toLowerCase() === 'linkedin'
+                ? 'https://www.linkedin.com/in/' + idValue + '/'
+                : idValue;
+              identifierLine.textContent = displayValue;
+              identifierLine.title = 'Click to select, then copy';
+              identifierLine.style.userSelect = 'all';
+              identifierLine.style.cursor = 'text';
+            }
+            row.appendChild(identifierLine);
+
+            crmPersonDetailChannels.appendChild(row);
+          });
+          if (!(person.channels || []).length) {
+            crmPersonDetailChannels.textContent = 'No channels linked.';
+          }
+
+          var activeFollowUp = (person.follow_ups || []).find(function (f) {
+            return f.status === 'active' || f.status === 'awaiting_approval' || f.status === 'needs_review';
+          });
+          crmPersonDetailFollowup.textContent = activeFollowUp
+            ? 'Stage ' + activeFollowUp.stage + ' — ' + activeFollowUp.status + (activeFollowUp.next_follow_up_at ? ' — next check ' + formatCrmTimestamp(activeFollowUp.next_follow_up_at) : '')
+            : 'No active follow-up sequence.';
+
+          crmPersonDetailAllMessages = person.messages || [];
+          crmPersonDetailMessagesExpanded = false;
+          renderCrmPersonDetailMessages();
+        })
+        .catch(function () {});
+    }
+    if (closeCrmPersonDetailBtn) closeCrmPersonDetailBtn.addEventListener('click', openCrmLanding);
+
+    // The whole detail page toggles into an editable state in place —
+    // no popup. Each editable field is a (display span, hidden input)
+    // pair in crmPersonEditFields; entering edit mode just swaps which
+    // one of each pair is visible and copies the current display text in
+    // as the input's starting value.
+    function enterCrmPersonEditMode() {
+      crmPersonEditFields.forEach(function (pair) {
+        var display = pair[0], input = pair[1];
+        var value = display.textContent;
+        input.value = (value === '—' || value === 'No notes yet.') ? '' : value;
+        display.hidden = true;
+        input.hidden = false;
+      });
+      crmEditPersonBtn.hidden = true;
+      crmSavePersonBtn.hidden = false;
+      crmCancelEditPersonBtn.hidden = false;
+      crmPersonDetailNameInput.focus();
+    }
+    function exitCrmPersonEditMode() {
+      crmPersonEditFields.forEach(function (pair) {
+        pair[0].hidden = false;
+        pair[1].hidden = true;
+      });
+      crmEditPersonBtn.hidden = false;
+      crmSavePersonBtn.hidden = true;
+      crmCancelEditPersonBtn.hidden = true;
+    }
+    if (crmEditPersonBtn) crmEditPersonBtn.addEventListener('click', enterCrmPersonEditMode);
+    if (crmCancelEditPersonBtn) crmCancelEditPersonBtn.addEventListener('click', exitCrmPersonEditMode);
+    if (crmSavePersonBtn) {
+      crmSavePersonBtn.addEventListener('click', function () {
+        var name = (crmPersonDetailNameInput.value || '').trim();
+        if (!name || crmCurrentPersonId == null) return;
+        fetch('/api/crm/people/' + crmCurrentPersonId + '/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name,
+            company_name: crmPersonDetailCompanyInput.value,
+            job_title: crmPersonDetailJobTitleInput.value,
+            notes: crmPersonDetailNotesInput.value,
+          }),
+        }).then(function () {
+          openCrmPersonDetail(crmCurrentPersonId);
+          loadCrmOverview();
+        });
+      });
+    }
+
+    if (crmTab) {
+      crmTab.addEventListener('click', function () {
+        stopLinkedinAutoRefresh();
+        openCrmLanding();
+      });
+    }
+
+    var homeTab = document.getElementById('homeTab');
+    var homeTabBadge = document.getElementById('homeTabBadge');
+    var recentActivityList = document.getElementById('recentActivityList');
+    if (homeTab) {
+      homeTab.addEventListener('click', function () {
+        stopLinkedinAutoRefresh();
+        closeAllCasePanels();
+        aiPanel.hidden = false;
+        content.hidden = false;
+      });
+    }
+
+    // Cross-contact triage: the N most recently active contacts (one row
+    // per person, not per message — see crm_db.list_recent_activity).
+    // Dedicated endpoint rather than /api/crm/overview: Home doesn't need
+    // the full companies+people payload just to pick a handful of rows.
+    function loadRecentActivity() {
+      fetch('/api/crm/recent-activity?limit=5')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          var activity = data.activity || [];
+          recentActivityList.innerHTML = '';
+          if (!activity.length) {
+            var empty = document.createElement('p');
+            empty.className = 'crm-empty';
+            empty.textContent = 'No message activity yet.';
+            recentActivityList.appendChild(empty);
+            return;
+          }
+          activity.forEach(function (item) {
+            var card = document.createElement('div');
+            card.className = 'attention attention-quiet';
+            card.addEventListener('click', function () { openCrmPersonDetail(item.person_id); });
+
+            var flag = document.createElement('span');
+            flag.className = 'attention-flag';
+            flag.textContent = item.name + (item.company_name ? ' · ' + item.company_name : '');
+            card.appendChild(flag);
+
+            if (item.last_channel) {
+              var tag = document.createElement('span');
+              tag.className = 'crm-channel-tag crm-channel-tag-' + item.last_channel.toLowerCase();
+              tag.textContent = item.last_channel;
+              card.appendChild(tag);
+            }
+
+            var copy = document.createElement('p');
+            copy.className = 'attention-copy';
+            var who = item.last_message_direction === 'outgoing' ? 'You' : item.name;
+            copy.textContent = who + ': "' + item.last_message_text + '"' + (item.last_message_at ? ' (' + formatCrmTimestamp(item.last_message_at) + ')' : '');
+            card.appendChild(copy);
+
+            if (item.funnel_name) {
+              var funnelTag = document.createElement('p');
+              funnelTag.className = 'attention-copy crm-followup-tag';
+              funnelTag.textContent = 'Funnel: ' + item.funnel_name + (item.funnel_stage_name ? ' — ' + item.funnel_stage_name : '');
+              card.appendChild(funnelTag);
+            }
+
+            recentActivityList.appendChild(card);
+          });
+        })
+        .catch(function () {});
+    }
+    setInterval(loadRecentActivity, 30000);
+    loadRecentActivity();
+    function pollNotificationCount() {
+      fetch('/api/notifications/count')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data.total > 0) {
+            homeTabBadge.textContent = data.total;
+            homeTabBadge.hidden = false;
+          } else {
+            homeTabBadge.hidden = true;
+          }
+        })
+        .catch(function () {});
+    }
+    setInterval(pollNotificationCount, 30000);
+    pollNotificationCount();
+    if (closeCrmPanelBtn) {
+      closeCrmPanelBtn.addEventListener('click', function () {
+        closeAllCasePanels();
+        aiPanel.hidden = false;
+        content.hidden = false;
+      });
+    }
+  })();
+</script>
+</body>
+</html>
