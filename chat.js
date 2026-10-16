@@ -179,7 +179,11 @@
 
   sendBtn.addEventListener('click', sendMessage);
   // Used by the contact page chat: hand a request over to this chat as if the user had typed it.
-  window.lkHomeChat = { send: (text) => { input.value = text; resizeInput(); sendMessage(); } };
+  window.lkHomeChat = {
+    send: (text) => { input.value = text; resizeInput(); sendMessage(); },
+    // A draft made elsewhere (e.g. a call's follow-up): say so in the chat and bring the draft card up now.
+    showDraft: (note) => { messages.push({ role: 'assistant', content: note }); saveMessages(); render(); pollEmailSendPending(); },
+  };
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();

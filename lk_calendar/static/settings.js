@@ -659,7 +659,11 @@
       h('a', { class: 'btn btn-secondary', href: (window.LK_PREFIX || '') + '/logout' }, 'Sign out')])]));
   }
   function loadMe() {                                  // who is signed in; the Team section is only for the admin
-    return api('GET', '/api/me').then(function (r) { me = r; showChip(r); var tb = nav.querySelector('[data-view=team]'); if (tb) tb.hidden = r.role !== 'admin'; return r; }).catch(function () { return null; });
+    return api('GET', '/api/me').then(function (r) {
+      me = r; showChip(r);
+      ['team', 'calls'].forEach(function (v) { var b = nav.querySelector('[data-view=' + v + ']'); if (b) b.hidden = r.role !== 'admin'; });   // admin only
+      return r;
+    }).catch(function () { return null; });
   }
   setTimeout(loadMe, 300);
   function openPanel() {
@@ -703,7 +707,7 @@
   function showSettings(view) {
     currentSettingsView = view;
     nav.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.view === view); });
-    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else detailsView();
+    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else detailsView();
   }
   nav.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { showSettings(b.dataset.view); }); });
 
@@ -807,6 +811,42 @@
       h('div', { class: 'lks-hint' }, ['No password. They open LyteKeepr, press ', h('b', {}, 'Sign in with Google'), ' and choose this email. Anyone whose email is not on this list is refused.']), err,
       h('div', { class: 'lks-row' }, [add, h('button', { class: 'btn lks-soft', type: 'button', onclick: function () { closeModal(true); } }, 'Cancel')])]));
     email.focus();
+  }
+
+  /* Calls: the admin pastes their own Fathom API key once; recorded calls then appear on the contacts who were on them. */
+  function callsView() {
+    main.replaceChildren();
+    var card = h('div', { class: 'lks-card' }, [h('h2', {}, 'Calls (Fathom)'), h('p', {}, 'Loading…')]);
+    main.appendChild(card);
+    api('GET', '/api/calls/settings').then(function (s) {
+      var input = h('input', { type: 'text', placeholder: s.connected ? 'Saved (ends in ' + s.key_end + '). Paste a new key to replace it.' : 'Paste your Fathom API key', autocomplete: 'off' });
+      var msg = h('span', { class: 'lks-note' });
+      var save = h('button', { class: 'btn btn-primary', type: 'button' }, 'Save key');
+      save.addEventListener('click', function () {
+        save.disabled = true; msg.textContent = 'Checking the key with Fathom…';
+        api('PUT', '/api/calls/settings', { api_key: input.value }).then(function (r) {
+          msg.textContent = 'Saved. ' + (r.sync && r.sync.added != null ? r.sync.added + ' call' + (r.sync.added === 1 ? '' : 's') + ' fetched.' : '');
+          setTimeout(callsView, 1500);
+        }).catch(function (e) { save.disabled = false; msg.textContent = e.message; });
+      });
+      var kids = [h('h2', {}, 'Calls (Fathom)'),
+        h('p', {}, 'LyteKeepr picks up the transcript of every call Fathom records and puts it on the contacts who were on it, in date order with their emails.'),
+        h('div', { class: 'lks-row' }, [h('span', { class: 'lks-badge ' + (s.connected ? 'on' : 'wait') }, s.connected ? 'Connected' : 'Not connected'),
+          s.last_sync ? h('span', { class: 'lks-note' }, 'Last checked ' + new Date(s.last_sync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) : null,
+          s.last_error ? h('span', { class: 'lks-err' }, s.last_error) : null]),
+        h('div', { class: 'lks-opt' }, [h('label', {}, 'Your Fathom API key'), input]),
+        h('div', { class: 'lks-row' }, [save,
+          s.connected ? h('button', { class: 'btn lks-soft', type: 'button', onclick: function (e) {
+            var b = e.target; b.disabled = true; msg.textContent = 'Checking Fathom for new calls…';
+            api('POST', '/api/calls/sync').then(function (r) { msg.textContent = (r.added || 0) + ' new call' + (r.added === 1 ? '' : 's') + '.'; b.disabled = false; }).catch(function (err) { msg.textContent = err.message; b.disabled = false; });
+          } }, 'Check for new calls now') : null,
+          s.connected ? h('button', { class: 'btn lks-soft', type: 'button', onclick: function () {
+            askConfirm('Disconnect Fathom? Calls already saved stay on the contacts; new calls stop arriving.', 'Disconnect').then(function (yes) { if (yes) api('DELETE', '/api/calls/settings').then(callsView); });
+          } }, 'Disconnect') : null, msg]),
+        h('div', { class: 'lks-hint' }, [h('b', {}, 'One-time setup: '), 'in Fathom open Settings → API Access → Generate API key, copy it and paste it above. ',
+          'Recording itself is set in Fathom (auto-record your calls there); LyteKeepr cannot switch Fathom\'s recording on or off. New calls are fetched every hour.'])];
+      card.replaceChildren.apply(card, kids);
+    }).catch(function (e) { card.replaceChildren(h('h2', {}, 'Calls (Fathom)'), h('p', {}, e.message)); });
   }
 
   function mappingsView() {

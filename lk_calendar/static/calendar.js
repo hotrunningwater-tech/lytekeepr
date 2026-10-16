@@ -97,6 +97,7 @@
 
   /* ---------- data ---------- */
   function load() {
+    callCache = {};              // a recording may have arrived since: look again when the calendar reloads
     var start = state.weekStart, end = addDays(start, 6);
     return Promise.all([
       api('GET', '/api/calendar/events?start=' + start + '&end=' + end),
@@ -377,6 +378,53 @@
     ]);
   }
 
+  // The recording of a meeting (Fathom), fetched once per meeting when its details open.
+  var callCache = {};
+  var callOpen = {};
+  function recordingBlock(e) {
+    if (!(e.has_call || e.kind === 'meeting' || e.expect_recording)) return null;
+    if (!(e.id in callCache)) {
+      callCache[e.id] = 'loading';
+      api('GET', '/api/calls/event/' + e.id).then(function (r) { callCache[e.id] = r.call || null; render(); })
+        .catch(function () { callCache[e.id] = null; render(); });
+    }
+    var c = callCache[e.id];
+    if (c === 'loading') return null;
+    if (!c) return h('div', { class: 'lkc-call' }, [h('span', { class: 'lkc-lbl' }, 'Recording (Fathom)'),
+      h('p', { class: 'lkc-empty', style: 'margin:0' }, 'No recording from Fathom for this meeting yet. If it did not happen, mark it No-show below.')]);
+    function post(url, body, btn, busy, after) {
+      btn.disabled = true; btn.textContent = busy;
+      api('POST', url, body || {}).then(after).catch(function (err) { showError(err.message); btn.disabled = false; });
+    }
+    var people = [h('span', { class: 'lkc-lbl' }, 'Who was on it')].concat((c.contacts || []).map(function (p) {
+      return h('div', { class: 'lkc-member' }, [h('div', { class: 'lkc-member-main' }, [h('b', {}, p.name || 'Contact'), h('span', { class: 'lkc-leadmeta' }, 'Contact')]),
+        h('div', { class: 'lkc-actions' }, [h('button', { class: 'btn', type: 'button', onclick: function () { if (window.lkOpenPerson) window.lkOpenPerson(p.person_id); } }, 'Open')])]);
+    }));
+    if ((c.invitees || []).length) people.push(h('p', { class: 'lkc-empty', style: 'margin:0' }, 'Invited: ' + c.invitees.map(function (i) { return i.name || i.email; }).join(', ')));
+    var transcript = callOpen[c.call_id] ? h('div', { class: 'crm-call-transcript' }, (c.transcript || []).map(function (t) {
+      return h('p', {}, [h('i', {}, t.at), h('b', {}, (t.speaker || 'Someone') + ': '), t.text]);
+    })) : null;
+    var buttons = [];
+    if (c.has_transcript && !c.summary) buttons.push(h('button', { class: 'btn primary', type: 'button', onclick: function (ev) {
+      post('/api/calls/' + c.call_id + '/summarize', {}, ev.target, 'Summarizing…', function () { delete callCache[e.id]; load(); });
+    } }, 'Summarize'));
+    if (c.has_transcript) buttons.push(h('button', { class: 'btn', type: 'button', onclick: function (ev) {
+      post('/api/calls/' + c.call_id + '/draft-followup', {}, ev.target, 'Writing…', function (d) {
+        ev.target.disabled = false; ev.target.textContent = 'Draft follow-up';
+        if (window.lkHomeChat && window.lkHomeChat.showDraft) window.lkHomeChat.showDraft('Your follow-up email to ' + (d.person_name || 'them') + ' after "' + c.title + '" is ready below. Edit it, then press Send now.');
+        var home = document.getElementById('homeTab'); if (home) home.click();
+      });
+    } }, 'Draft follow-up'));
+    if (c.has_transcript) buttons.push(h('button', { class: 'btn', type: 'button', onclick: function () { callOpen[c.call_id] = !callOpen[c.call_id]; render(); } }, callOpen[c.call_id] ? 'Hide transcript' : 'Show transcript'));
+    return h('div', { class: 'lkc-call' }, people.concat([
+      h('span', { class: 'lkc-lbl', style: 'margin-top:6px' }, 'Recording (Fathom)'),
+      h('p', { class: 'lkc-empty', style: 'margin:0' }, (c.summary ? 'Summarized' : 'Transcript ready') + (c.duration_min ? ' · ' + c.duration_min + ' min' : '') + '. It also shows on the contact\'s page.'),
+      c.summary ? h('div', { class: 'crm-call-summary' }, c.summary) : null,
+      transcript,
+      buttons.length ? h('div', { class: 'lkc-actions' }, buttons) : null
+    ]));
+  }
+
   function renderDetail() {
     var e = findSelected();
     if (!e) { state.mode = 'agenda'; return renderAgenda(); }
@@ -421,6 +469,7 @@
       h('h2', { class: 'lkc-title' }, e.title), grid,
       e.lead ? leadCard(e.lead) : null,
       e.notes ? h('div', { class: 'lkc-notes' }, [google ? h('span', { class: 'lkc-lbl' }, 'From Google') : null, e.notes]) : null,
+      recordingBlock(e),
       google || e.kind === 'meeting' ? meetingBlock(e) : null,
       actions.length ? h('div', { class: 'lkc-actions' }, actions) : null
     ])];

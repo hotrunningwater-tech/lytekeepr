@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
 <link rel="stylesheet" href="styles.css?v=24">
-<link rel="stylesheet" href="lk-calendar/calendar.css">
+<link rel="stylesheet" href="lk-calendar/calendar.css?v=calls1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
 <body>
@@ -84,6 +84,7 @@
           <p class="overview-sub">What LyteKeepr thinks you should act on now</p>
         </div>
 
+        <div class="attention-list" id="callsAttentionList"></div>
         <div class="attention-list" id="attentionList"></div>
 
         <div class="block">
@@ -375,6 +376,7 @@
           <button type="button" class="on" data-view="details">Profile</button>
           <button type="button" data-view="mappings">Saved mappings</button>
           <button type="button" data-view="team" hidden>Team</button>
+          <button type="button" data-view="calls" hidden>Calls (Fathom)</button>
         </nav>
         <div class="lks-main" id="lksMain"></div>
       </div>
@@ -561,8 +563,8 @@
 </div>
 
 <script src="chat.js"></script>
-<script src="lk-calendar/calendar.js?v=email1"></script>
-<script src="lk-calendar/settings.js?v=ws4"></script>
+<script src="lk-calendar/calendar.js?v=calls1"></script>
+<script src="lk-calendar/settings.js?v=calls1"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
 <script>
@@ -1763,6 +1765,60 @@
         .catch(function () {});
     }
 
+    // Calls (Fathom): a recorded call waiting to be summarized, or a call meeting that passed with no recording (no-show?).
+    var callsAttentionList = document.getElementById('callsAttentionList');
+    var homeCallsCount = 0;
+    function callRow(flagText, copyText, buttons, quiet) {
+      var card = document.createElement('div');
+      card.className = 'attention' + (quiet ? ' attention-quiet' : '');
+      var flag = document.createElement('span'); flag.className = 'attention-flag'; flag.textContent = flagText; card.appendChild(flag);
+      var copy = document.createElement('p'); copy.className = 'attention-copy'; copy.textContent = copyText; card.appendChild(copy);
+      var actions = document.createElement('div'); actions.className = 'attention-actions';
+      buttons.forEach(function (b) {
+        var el = document.createElement('button'); el.type = 'button'; el.className = b[1]; el.textContent = b[0];
+        el.addEventListener('click', function () { b[2](el); }); actions.appendChild(el);
+      });
+      card.appendChild(actions);
+      return card;
+    }
+    function callPost(url, body, el, busy) {
+      var old = el.textContent; el.disabled = true; el.textContent = busy;
+      return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+        .then(function (res) { return res.json().then(function (d) { if (!res.ok) throw new Error(d.error || 'Something went wrong'); return d; }); })
+        .catch(function (e) { el.disabled = false; el.textContent = old; alert(e.message); throw e; });
+    }
+    function loadCallsAttention() {
+      if (!callsAttentionList) return;
+      fetch('/api/calls/attention').then(function (res) { return res.ok ? res.json() : null; }).then(function (data) {
+        callsAttentionList.innerHTML = '';
+        homeCallsCount = data ? data.ready.length + data.missing.length : 0;
+        var clear = attentionList.querySelector('.attention-clear'); if (clear) clear.hidden = homeCallsCount > 0;
+        if (!data) return;
+        data.ready.forEach(function (c) {
+          var who = (c.contacts || []).map(function (p) { return p.name; }).join(', ');
+          callsAttentionList.appendChild(callRow('Call' + (who ? ' with ' + who : '') + ' — transcript ready',
+            [c.title, formatCrmTimestamp(c.started_at), c.duration_min ? c.duration_min + ' min' : ''].filter(Boolean).join(' · '), [
+              ['Summarize', 'btn btn-primary btn-small', function (el) { callPost('/api/calls/' + c.call_id + '/summarize', {}, el, 'Summarizing…').then(loadCallsAttention); }],
+              ['Draft follow-up', 'btn btn-secondary btn-small', function (el) {
+                callPost('/api/calls/' + c.call_id + '/draft-followup', {}, el, 'Writing…').then(function (d) {
+                  el.disabled = false; el.textContent = 'Draft follow-up';
+                  if (window.lkHomeChat && window.lkHomeChat.showDraft) window.lkHomeChat.showDraft('Your follow-up email to ' + (d.person_name || 'them') + ' after "' + c.title + '" is ready below. Edit it, then press Send now.');
+                });
+              }],
+              ['Open', 'subtle-link-btn', function () { if (c.contacts && c.contacts[0]) openCrmPersonDetail(c.contacts[0].person_id); }]
+            ]));
+        });
+        data.missing.forEach(function (m) {
+          callsAttentionList.appendChild(callRow('No recording for "' + m.title + '"', m.date + ' · ' + m.time + ' · was it a no-show?', [
+            ['No-show', 'btn btn-secondary btn-small', function (el) { callPost('/api/calls/missing/' + m.event_id, { status: 'no_show' }, el, 'Saving…').then(loadCallsAttention); }],
+            ['It happened', 'subtle-link-btn', function (el) { callPost('/api/calls/missing/' + m.event_id, { status: 'completed' }, el, 'Saving…').then(loadCallsAttention); }]
+          ], true));
+        });
+      }).catch(function () {});
+    }
+    loadCallsAttention();
+    setInterval(loadCallsAttention, 60000);
+
     function renderFollowupCards(followUps, pendingDraft) {
       attentionList.innerHTML = '';
       upcomingList.querySelectorAll('.followup-live-card').forEach(function (el) { el.remove(); });
@@ -1773,6 +1829,7 @@
       if (!actionable.length) {
         var allClear = document.createElement('div');
         allClear.className = 'attention attention-clear';
+        allClear.hidden = homeCallsCount > 0;           // calls waiting below the heading count as attention too
         var clearFlag = document.createElement('span');
         clearFlag.className = 'attention-flag';
         clearFlag.textContent = 'All caught up';
@@ -2114,7 +2171,88 @@
     if (crmPeopleSubTabBtn) crmPeopleSubTabBtn.addEventListener('click', function () { showCrmPeopleSubTab(); loadCrmOverview(); });
     if (crmCompaniesSubTabBtn) crmCompaniesSubTabBtn.addEventListener('click', function () { showCrmCompaniesSubTab(); loadCrmOverview(); });
 
+    // Recorded calls (Fathom) sit in the same timeline as the messages, in date order, collapsed until opened.
+    var crmCallOpen = {};
+    function crmWhen(ts) { var d = new Date(ts || 0); return isNaN(d) ? 0 : d.getTime(); }
+    function loadCrmPersonCalls(personId, messages) {
+      fetch('/api/calls/person/' + personId).then(function (res) { return res.ok ? res.json() : null; }).then(function (data) {
+        if (!data || crmCurrentPersonId !== personId) return;
+        var items = messages.filter(function (m) { return m.channel !== 'call'; }).concat(data.calls.map(function (c) { return { channel: 'call', timestamp: c.started_at, call: c }; }));
+        items.sort(function (a, b) { return crmWhen(a.timestamp) - crmWhen(b.timestamp); });
+        crmPersonDetailAllMessages = items;
+        renderCrmPersonDetailMessages();
+      }).catch(function () {});
+    }
+    function crmCallAction(url, body, button, busyText) {
+      var old = button.textContent; button.disabled = true; button.textContent = busyText;
+      return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+        .then(function (res) { return res.json().then(function (d) { if (!res.ok) throw new Error(d.error || 'Something went wrong'); return d; }); })
+        .catch(function (e) { button.disabled = false; button.textContent = old; alert(e.message); throw e; });
+    }
+    function buildCrmCallRow(c) {
+      var row = document.createElement('div');
+      row.className = 'crm-call';
+      var line = document.createElement('div');
+      line.className = 'crm-call-line';
+      var tag = document.createElement('span'); tag.className = 'crm-channel-tag crm-channel-tag-call'; tag.textContent = 'call';
+      var title = document.createElement('b'); title.textContent = c.title || 'Call';
+      var pill = document.createElement('span');
+      pill.className = 'crm-call-pill ' + (c.status === 'done' ? 'done' : c.status === 'no_show' ? 'miss' : 'ready');
+      pill.textContent = c.status === 'done' ? (c.summary ? 'Done · summarized' : 'Done') : c.status === 'no_show' ? 'No-show' : 'Transcript ready';
+      var when = document.createElement('span'); when.className = 'crm-detail-message-time';
+      when.textContent = [formatCrmTimestamp(c.started_at), c.platform, c.duration_min ? c.duration_min + ' min' : ''].filter(Boolean).join(' · ');
+      line.append(tag, title, pill, when);
+      row.appendChild(line);
+      var who = document.createElement('p'); who.className = 'crm-call-who';
+      var names = (c.contacts || []).map(function (p) { return p.name; });
+      who.textContent = 'With ' + ((c.invitees || []).map(function (i) { return i.name || i.email; }).join(', ') || names.join(', ') || 'unknown');
+      row.appendChild(who);
+      if (c.summary) {
+        var sum = document.createElement('div'); sum.className = 'crm-call-summary'; sum.textContent = c.summary; row.appendChild(sum);
+      }
+      var open = !!crmCallOpen[c.call_id];
+      if (c.has_transcript) {
+        var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'crm-call-toggle';
+        toggle.textContent = open ? '▾ Hide transcript' : '▸ Show transcript';
+        toggle.addEventListener('click', function () { crmCallOpen[c.call_id] = !open; renderCrmPersonDetailMessages(); });
+        row.appendChild(toggle);
+        if (open) {
+          var box = document.createElement('div'); box.className = 'crm-call-transcript';
+          (c.transcript || []).forEach(function (t) {
+            var p = document.createElement('p');
+            var at = document.createElement('i'); at.textContent = t.at;
+            var sp = document.createElement('b'); sp.textContent = (t.speaker || 'Someone') + ': ';
+            p.append(at, sp, document.createTextNode(t.text)); box.appendChild(p);
+          });
+          row.appendChild(box);
+        }
+      }
+      var actions = document.createElement('div'); actions.className = 'crm-call-actions';
+      function btn(label, cls, onClick) { var b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-small ' + cls; b.textContent = label; b.addEventListener('click', function () { onClick(b); }); actions.appendChild(b); return b; }
+      var personId = crmCurrentPersonId;
+      if (c.has_transcript && !c.summary) btn('Summarize', 'btn-primary', function (b) {
+        crmCallAction('/api/calls/' + c.call_id + '/summarize', {}, b, 'Summarizing…').then(function () { loadCrmPersonCalls(personId, crmPersonDetailAllMessages); });
+      });
+      if (c.has_transcript) btn('Draft follow-up', c.summary ? 'btn-primary' : 'btn-secondary', function (b) {
+        crmCallAction('/api/calls/' + c.call_id + '/draft-followup', { person_id: personId }, b, 'Writing…').then(function (d) {
+          b.disabled = false; b.textContent = 'Draft follow-up';
+          if (window.lkHomeChat && window.lkHomeChat.showDraft) window.lkHomeChat.showDraft('Your follow-up email to ' + (d.person_name || 'them') + ' after "' + c.title + '" is ready below. Edit it, then press Send now.');
+          var home = document.getElementById('homeTab'); if (home) home.click();
+        }).catch(function () {});
+      });
+      if (c.status === 'ready') btn('Mark done', 'btn-secondary', function (b) {
+        crmCallAction('/api/calls/' + c.call_id + '/status', { status: 'done' }, b, 'Saving…').then(function () { loadCrmPersonCalls(personId, crmPersonDetailAllMessages); });
+      });
+      if (c.share_url) {
+        var a = document.createElement('a'); a.className = 'btn btn-remove btn-small'; a.href = c.share_url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Open in Fathom';
+        actions.appendChild(a);
+      }
+      row.appendChild(actions);
+      return row;
+    }
+
     function buildCrmDetailMessageRow(m) {
+      if (m.channel === 'call' && m.call) return buildCrmCallRow(m.call);
       var contactName = crmCurrentPersonData ? crmCurrentPersonData.name : null;
       var who = m.direction === 'outgoing' ? 'You' : (contactName || m.sender || 'Them');
       var row = document.createElement('div');
@@ -2314,6 +2452,7 @@
           crmPersonDetailAllMessages = person.messages || [];
           crmPersonDetailMessagesExpanded = false;
           renderCrmPersonDetailMessages();
+          loadCrmPersonCalls(personId, person.messages || []);
         })
         .catch(function () {});
     }

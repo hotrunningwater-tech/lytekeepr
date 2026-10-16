@@ -2670,3 +2670,18 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .lk-waiting-card p { margin: 0; font-size: 14.5px; color: var(--ink); line-height: 1.55; }
 .lk-waiting-card .lk-waiting-small { font-size: 13px; color: var(--ink-soft); }
 .lk-waiting-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--coral); }
+
+/* Calls (Fathom) in the contact's timeline: one collapsed entry per call, in date order with the messages */
+.crm-channel-tag-call { background: #ece6fb; color: #5b45a8; }
+.crm-call { width: 100%; box-sizing: border-box; background: #fff; border: 1px solid rgba(155,135,224,.35); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+.crm-call-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.crm-call-line b { font-size: 13.5px; color: var(--ink); }
+.crm-call-who { font-size: 12px; color: var(--ink-soft); margin: 4px 0 0; }
+.crm-call-toggle { border: none; background: transparent; font-family: var(--font-heading); font-size: 12px; font-weight: 600; color: var(--teal); cursor: pointer; padding: 6px 0 0; }
+.crm-call-summary { margin-top: 8px; background: #f3f7f9; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; }
+.crm-call-transcript { margin-top: 8px; background: #fbfcfd; border: 1px solid rgba(127,168,184,.25); border-radius: 10px; padding: 10px 12px; max-height: 260px; overflow-y: auto; font-size: 13px; line-height: 1.55; }
+.crm-call-transcript p { margin: 0 0 6px; } .crm-call-transcript i { font-style: normal; color: var(--ink-soft); font-size: 11.5px; margin-right: 6px; }
+.crm-call-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.crm-call-actions a.btn { text-decoration: none; }
+.crm-call-pill { font-family: var(--font-heading); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 3px 9px; }
+.crm-call-pill.ready { background: #ece6fb; color: #5b45a8; } .crm-call-pill.done { background: #d8eee2; color: #1f6b46; } .crm-call-pill.miss { background: #f7d9d2; color: #a3412b; }
