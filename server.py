@@ -16,23 +16,16 @@ import io
 import json
 import os
 import logging
-import subprocess
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, redirect, request, send_file, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_file, send_from_directory
 
-from assistant.delete_flow import confirm_pending_delete, delete_scanned_document
 from assistant.linkedin_send_flow import clear_pending_send, confirm_pending_send, load_pending_send
 from assistant import email_send_flow
 from assistant import followup_engine
 from assistant.service import OpenAIServiceError, get_reply
-from demo_state import SnapshotError, capture_snapshot, get_snapshot_manager_status, list_snapshots, reset_to_baseline, restore_snapshot
-from demo_state.recordings import list_demo_recordings, save_demo_recording
-from demo_state.redactions import render_redacted_recording
-from services.ocr.photo_review import finalize_photo_review, get_asset_path, regenerate_preview, start_photo_review
-from services.ocr.adapter import get_original_file_path, list_recent_scans, rename_saved_document, scan_upload
 from google_oauth.errors import GoogleOAuthError
 from google_oauth.flow import build_authorization_url, exchange_code_for_tokens, login_identity
 from google_oauth.store import (
@@ -44,11 +37,10 @@ from google_oauth.store import (
 )
 from gmail import client as gmail_client
 from gmail.config import GmailSyncConfig
-from gmail.attachment_rules import is_photo_reviewable_attachment
 from gmail.drawer_format import get_message_detail, list_drawer_records
 from gmail.errors import GmailSyncError
 from gmail.message_access import load_full_message
-from gmail.storage import load_message as load_saved_message, load_sync_state
+from gmail.storage import load_sync_state
 from gmail.sync import get_active_account_id, get_pending_candidates, save_candidates, scan_for_candidates, set_active_account_id
 from integrations.linkedin import client as linkedin_client
 from integrations.linkedin import sync as linkedin_sync
@@ -56,28 +48,13 @@ from integrations.linkedin import storage as linkedin_sync_storage
 from crm import db as crm_db
 from linkedin_leads import importer as leads_importer
 from linkedin_leads.csv_writeback import write_lead_to_csv
-from doc_registry.registry import compute_counts, dismiss_entries
-from doc_registry.photo_review_state import set_pending_review
-from doc_registry.scheduler import maybe_run_daily_check, run_check_now
-from doc_registry import queue_storage
-from doc_registry.scan_runner import run_queued_scans
-from assistant.chronology_extractor import extract_events_from_document, extract_events_from_email_batch
-from chronology import storage as chronology_storage
-from chronology.pipeline import run_extraction
 from gmail import storage as gmail_storage
-from doc_registry.case_documents import read_case_document
 from profiles import (
-    create_profile,
     ensure_profile_bootstrap,
     get_active_profile,
     get_active_profile_id,
     get_attached_gmail_account_ids,
-    list_profiles as list_local_profiles,
     profile_counts,
-    rename_profile,
-    reset_profile_local_state,
-    seed_default_profiles,
-    set_active_profile_id,
 )
 
 APP_DIR = Path(__file__).resolve().parent
@@ -137,11 +114,6 @@ def chat_js():
     return send_from_directory(APP_DIR, "chat.js")
 
 
-@app.get("/crop-lock.js")
-def crop_lock_js():
-    return send_from_directory(APP_DIR, "crop-lock.js", mimetype="text/javascript")
-
-
 @app.get("/email/<path:subpath>")
 def email_assets(subpath):
     # Static ES modules for the email feature (see experiment DLYTE/email/).
@@ -150,17 +122,6 @@ def email_assets(subpath):
     mimetype = "text/javascript" if subpath.endswith(".js") else None
     return send_from_directory(APP_DIR / "email", subpath, mimetype=mimetype)
 
-
-@app.get("/case-overview/<path:subpath>")
-def case_overview_assets(subpath):
-    mimetype = "text/javascript" if subpath.endswith(".js") else None
-    return send_from_directory(APP_DIR / "case-overview", subpath, mimetype=mimetype)
-
-
-@app.get("/demo/<path:subpath>")
-def demo_assets(subpath):
-    mimetype = "text/javascript" if subpath.endswith(".js") else None
-    return send_from_directory(APP_DIR / "demo", subpath, mimetype=mimetype)
 
 
 def _validate_messages(payload) -> list[dict] | None:
@@ -209,42 +170,7 @@ def _build_photo_naming_response(result: dict) -> dict:
     }
 
 
-def _normalize_saved_document_for_chat(document: dict | None) -> dict | None:
-    if not isinstance(document, dict):
-        return None
-    return {
-        "filename": document.get("filename") or "saved document",
-        "page_count": int(document.get("pageCount") or 0),
-        "full_text": document.get("fullText") or "",
-        "pages": [
-            {
-                "page_number": page.get("pageNumber"),
-                "text": page.get("text", "") or "",
-            }
-            for page in (document.get("pages") or [])
-            if isinstance(page, dict)
-        ],
-    }
 
-
-def _load_saved_preview_chat_document(job_id: str | None) -> dict | None:
-    if not isinstance(job_id, str) or not job_id.strip():
-        return None
-    try:
-        saved_document = read_case_document(job_id=job_id.strip())
-    except FileNotFoundError:
-        logger.warning("Could not load saved preview document for chat context: %s", job_id)
-        return None
-    return _normalize_saved_document_for_chat(saved_document)
-
-
-def _resolve_chat_document(upload_document: dict | None, active_preview_job_id: str | None) -> dict | None:
-    preview_document = _load_saved_preview_chat_document(active_preview_job_id)
-    if preview_document:
-        return preview_document
-    if isinstance(upload_document, dict):
-        return upload_document
-    return None
 
 
 def _gmail_account_summaries(active_account_id: str | None) -> list[dict]:
@@ -267,36 +193,6 @@ def _gmail_account_summaries(active_account_id: str | None) -> list[dict]:
     return summaries
 
 
-def _decorate_chronology_event(event: dict) -> dict:
-    decorated = dict(event)
-    sources = []
-    primary_email_source = None
-
-    account_id = get_active_account_id()
-    for source in event.get("sources") or []:
-        source_copy = dict(source)
-        if source_copy.get("sourceType") == "email" and account_id:
-            message = load_saved_message(account_id, source_copy.get("sourceId", ""))
-            if message:
-                from_obj = message.get("from") or {}
-                sender_name = from_obj.get("name") or from_obj.get("email") or "Unknown sender"
-                sender_email = from_obj.get("email", "")
-                source_copy["senderName"] = sender_name
-                source_copy["senderEmail"] = sender_email
-                source_copy["receivedAt"] = message.get("receivedAt", "")
-                if primary_email_source is None:
-                    primary_email_source = {
-                        "senderName": sender_name,
-                        "senderEmail": sender_email,
-                        "receivedAt": message.get("receivedAt", ""),
-                        "subject": message.get("subject", ""),
-                    }
-        sources.append(source_copy)
-
-    decorated["sources"] = sources
-    decorated["primaryEmailSource"] = primary_email_source
-    return decorated
-
 
 @app.post("/api/chat")
 def api_chat():
@@ -305,21 +201,11 @@ def api_chat():
     if messages is None:
         return jsonify({"error": "Request must include a non-empty 'messages' list of {role, content}."}), 400
 
-    latest_message = messages[-1]["content"].strip()
-    if latest_message == "CONFIRM":
-        result = confirm_pending_delete()
-        return jsonify({"reply": result.get("message", "Delete request processed."), "deleteResult": result})
-
-    document = _resolve_chat_document(
-        body.get("document"),
-        body.get("active_preview_job_id"),
-    )
-
     account_id = get_active_account_id()
     pending_email_count = len(get_pending_candidates(account_id)) if account_id else 0
 
     try:
-        reply = get_reply(messages, document=document, pending_email_count=pending_email_count, pending_draft=email_send_flow.load_pending_send())
+        reply = get_reply(messages, pending_email_count=pending_email_count, pending_draft=email_send_flow.load_pending_send())
     except OpenAIServiceError as exc:
         return jsonify({"error": str(exc)}), 502
 
@@ -1173,80 +1059,6 @@ def _profile_summary(profile: dict) -> dict:
     }
 
 
-@app.get("/api/demo/profiles")
-def demo_profiles_list():
-    if not _is_local_demo_request():
-        abort(404)
-    ensure_profile_bootstrap()
-    return jsonify(
-        {
-            "active_profile_id": get_active_profile_id(),
-            "profiles": [_profile_summary(profile) for profile in list_local_profiles()],
-        }
-    )
-
-
-@app.post("/api/demo/profiles")
-def demo_profiles_create():
-    if not _is_local_demo_request():
-        abort(404)
-    body = request.get_json(silent=True) or {}
-    display_name = body.get("display_name")
-    if not isinstance(display_name, str) or not display_name.strip():
-        return jsonify({"error": "display_name is required."}), 400
-    profile_id = body.get("profile_id")
-    try:
-        profile = create_profile(display_name.strip(), profile_id=profile_id if isinstance(profile_id, str) else None, is_demo_profile=True)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    return jsonify({"profile": _profile_summary(profile)})
-
-
-@app.post("/api/demo/profiles/seed-defaults")
-def demo_profiles_seed_defaults():
-    if not _is_local_demo_request():
-        abort(404)
-    profiles = seed_default_profiles()
-    return jsonify({"profiles": [_profile_summary(profile) for profile in profiles]})
-
-
-@app.post("/api/demo/profiles/<profile_id>/activate")
-def demo_profiles_activate(profile_id):
-    if not _is_local_demo_request():
-        abort(404)
-    try:
-        profile = set_active_profile_id(profile_id)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 404
-    return jsonify({"profile": _profile_summary(profile), "active_profile_id": profile.get("profile_id")})
-
-
-@app.post("/api/demo/profiles/<profile_id>/rename")
-def demo_profiles_rename(profile_id):
-    if not _is_local_demo_request():
-        abort(404)
-    body = request.get_json(silent=True) or {}
-    display_name = body.get("display_name")
-    if not isinstance(display_name, str) or not display_name.strip():
-        return jsonify({"error": "display_name is required."}), 400
-    try:
-        profile = rename_profile(profile_id, display_name.strip())
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 404
-    return jsonify({"profile": _profile_summary(profile)})
-
-
-@app.post("/api/demo/profiles/<profile_id>/reset")
-def demo_profiles_reset(profile_id):
-    if not _is_local_demo_request():
-        abort(404)
-    try:
-        profile = reset_profile_local_state(profile_id)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 404
-    return jsonify({"profile": _profile_summary(profile), "reset": True})
-
-
 @app.get("/api/gmail/messages")
 def gmail_messages():
     return jsonify({"messages": list_drawer_records()})
@@ -1382,348 +1194,6 @@ def gmail_save_candidates():
     return jsonify(result)
 
 
-@app.get("/api/documents/registry")
-def documents_registry():
-    # Runs the daily cross-reference check if >=24h have passed since the
-    # last one (see doc_registry.scheduler); otherwise returns the existing
-    # registry as-is. Full rebuild each run, keyed by stable ids — re-running
-    # never creates duplicates.
-    entries = maybe_run_daily_check()
-    return jsonify({"entries": list(entries.values()), "counts": compute_counts(entries)})
-
-
-@app.post("/api/documents/recheck")
-def documents_recheck():
-    entries = run_check_now()
-    return jsonify({"entries": list(entries.values()), "counts": compute_counts(entries)})
-
-
-@app.post("/api/documents/dismiss")
-def documents_dismiss():
-    body = request.get_json(silent=True) or {}
-    ids = body.get("ids")
-    if not isinstance(ids, list) or not ids:
-        return jsonify({"error": "Request must include a non-empty 'ids' list."}), 400
-    entries = dismiss_entries(ids)
-    return jsonify({"entries": list(entries.values()), "counts": compute_counts(entries)})
-
-
-@app.get("/api/documents/queue")
-def documents_queue_get():
-    return jsonify({"queue": queue_storage.load_queue()})
-
-
-@app.post("/api/documents/queue")
-def documents_queue_add():
-    # Confirms specific registry entries for scanning — this is the only
-    # step that requires the user's explicit action; nothing is downloaded
-    # yet, just queued.
-    body = request.get_json(silent=True) or {}
-    ids = body.get("ids")
-    if not isinstance(ids, list):
-        return jsonify({"error": "Request must include an 'ids' list."}), 400
-
-    entries = maybe_run_daily_check()
-    selected = [entries[entry_id] for entry_id in ids if entry_id in entries]
-    queue = queue_storage.add_to_queue(selected)
-    return jsonify({"queue": queue})
-
-
-@app.post("/api/documents/run-scan")
-def documents_run_scan():
-    # The only route that actually downloads attachment bytes from Gmail —
-    # only ever runs against what the user explicitly queued.
-    result = run_queued_scans()
-    return jsonify(result)
-
-
-@app.get("/api/documents/ocr-text/<job_id>")
-def documents_ocr_text(job_id):
-    from doc_registry.config import get_ocr_storage_root
-
-    path = get_ocr_storage_root() / "jobs" / job_id / "results" / "extracted-text.txt"
-    if not path.is_file():
-        return jsonify({"error": "Not found."}), 404
-    return jsonify({"text": path.read_text()})
-
-
-@app.post("/api/chronology/extract")
-def chronology_extract():
-    # Only processes sources not already in extraction-state.json — see
-    # chronology.pipeline.run_extraction. Safe to call repeatedly.
-    result = run_extraction(extract_events_from_email_batch, extract_events_from_document)
-    return jsonify(result)
-
-
-@app.get("/api/chronology/events")
-def chronology_events():
-    events = chronology_storage.load_events()
-    return jsonify({"events": [_decorate_chronology_event(event) for event in events.values()]})
-
-
-@app.get("/api/chronology/review-queue")
-def chronology_review_queue_get():
-    queue = chronology_storage.load_review_queue()
-    return jsonify({"queue": [_decorate_chronology_event(event) for event in queue.values()]})
-
-
-@app.post("/api/chronology/review/<event_id>/approve")
-def chronology_approve(event_id):
-    queue = chronology_storage.load_review_queue()
-    event = queue.pop(event_id, None)
-    if not event:
-        return jsonify({"error": "Not found."}), 404
-    event["status"] = "confirmed"
-    event["reviewReason"] = ""
-    events = chronology_storage.load_events()
-    events[event_id] = event
-    chronology_storage.save_events(events)
-    chronology_storage.save_review_queue(queue)
-    return jsonify({"event": event})
-
-
-@app.post("/api/chronology/review/<event_id>/reject")
-def chronology_reject(event_id):
-    queue = chronology_storage.load_review_queue()
-    if event_id not in queue:
-        return jsonify({"error": "Not found."}), 404
-    del queue[event_id]
-    chronology_storage.save_review_queue(queue)
-    return jsonify({"status": "rejected"})
-
-
-@app.post("/api/chronology/review/<event_id>/edit")
-def chronology_edit(event_id):
-    body = request.get_json(silent=True) or {}
-    queue = chronology_storage.load_review_queue()
-    event = queue.get(event_id)
-    if not event:
-        return jsonify({"error": "Not found."}), 404
-
-    editable_fields = {
-        "title", "description", "category", "eventDate", "dateRangeFrom",
-        "dateRangeTo", "recordedAt", "involvedParties", "natureOfClaim", "importance",
-    }
-    for key, value in body.items():
-        if key in editable_fields:
-            event[key] = value
-    chronology_storage.save_review_queue(queue)
-    return jsonify({"event": event})
-
-
-@app.post("/api/chronology/<event_id>/edit")
-def chronology_edit_any(event_id):
-    body = request.get_json(silent=True) or {}
-    editable_fields = {
-        "title", "description", "category", "eventDate", "dateRangeFrom",
-        "dateRangeTo", "recordedAt", "involvedParties", "natureOfClaim", "importance",
-    }
-
-    events = chronology_storage.load_events()
-    event = events.get(event_id)
-    if event is not None:
-        for key, value in body.items():
-            if key in editable_fields:
-                event[key] = value
-        event["updatedAt"] = datetime.now(timezone.utc).isoformat()
-        chronology_storage.save_events(events)
-        return jsonify({"event": event})
-
-    queue = chronology_storage.load_review_queue()
-    event = queue.get(event_id)
-    if event is not None:
-        for key, value in body.items():
-            if key in editable_fields:
-                event[key] = value
-        event["updatedAt"] = datetime.now(timezone.utc).isoformat()
-        chronology_storage.save_review_queue(queue)
-        return jsonify({"event": event})
-
-    return jsonify({"error": "Not found."}), 404
-
-
-@app.post("/api/chronology/<event_id>/delete")
-def chronology_delete_any(event_id):
-    events = chronology_storage.load_events()
-    if event_id in events:
-        del events[event_id]
-        chronology_storage.save_events(events)
-        return jsonify({"status": "deleted", "scope": "confirmed"})
-
-    queue = chronology_storage.load_review_queue()
-    if event_id in queue:
-        del queue[event_id]
-        chronology_storage.save_review_queue(queue)
-        return jsonify({"status": "deleted", "scope": "review"})
-
-    return jsonify({"error": "Not found."}), 404
-
-
-@app.post("/api/chronology/review/<event_id>/merge")
-def chronology_merge(event_id):
-    body = request.get_json(silent=True) or {}
-    target_id = body.get("mergeIntoId")
-    queue = chronology_storage.load_review_queue()
-    event = queue.get(event_id)
-    if not event or not target_id:
-        return jsonify({"error": "Missing event or target."}), 400
-
-    events = chronology_storage.load_events()
-    target = events.get(target_id) or queue.get(target_id)
-    if not target:
-        return jsonify({"error": "Merge target not found."}), 404
-
-    existing_source_keys = {(s["sourceType"], s["sourceId"]) for s in target["sources"]}
-    for s in event["sources"]:
-        if (s["sourceType"], s["sourceId"]) not in existing_source_keys:
-            target["sources"].append(s)
-
-    del queue[event_id]
-    chronology_storage.save_events(events)
-    chronology_storage.save_review_queue(queue)
-    return jsonify({"event": target})
-
-
-@app.get("/api/chronology/overview")
-def chronology_overview():
-    events = list(chronology_storage.load_events().values())
-    queue = chronology_storage.load_review_queue()
-    today = datetime.now(timezone.utc).date().isoformat()
-
-    upcoming = sorted(
-        (e for e in events if e.get("eventDate") and e["eventDate"][:10] >= today and e["category"] == "court_procedural"),
-        key=lambda e: e["eventDate"],
-    )[:5]
-    deadlines = sorted(
-        (e for e in events if e.get("eventDate") and e["eventDate"][:10] >= today and e["category"] == "deadline_request"),
-        key=lambda e: e["eventDate"],
-    )[:5]
-    recent = sorted(events, key=lambda e: e.get("createdAt", ""), reverse=True)[:5]
-
-    return jsonify({"upcoming": upcoming, "deadlines": deadlines, "recent": recent, "reviewCount": len(queue)})
-
-
-@app.get("/api/demo/snapshots")
-def demo_snapshot_list():
-    if not _is_local_demo_request():
-        abort(404)
-    return jsonify({"snapshots": list_snapshots(), "manager": get_snapshot_manager_status()})
-
-
-@app.post("/api/demo/snapshots")
-def demo_snapshot_capture():
-    if not _is_local_demo_request():
-        abort(404)
-    body = request.get_json(silent=True) or {}
-    try:
-        snapshot = capture_snapshot(
-            body.get("name"),
-            body.get("description", ""),
-            is_baseline=bool(body.get("isBaseline")),
-        )
-    except SnapshotError as exc:
-        return jsonify({"error": str(exc)}), 400
-    return jsonify({"snapshot": snapshot})
-
-
-@app.post("/api/demo/snapshots/<name>/restore")
-def demo_snapshot_restore(name):
-    if not _is_local_demo_request():
-        abort(404)
-    try:
-        result = restore_snapshot(name)
-    except SnapshotError as exc:
-        return jsonify({"error": str(exc)}), 400
-    return jsonify(result)
-
-
-@app.post("/api/demo/reset")
-def demo_reset_to_baseline():
-    if not _is_local_demo_request():
-        abort(404)
-    try:
-        result = reset_to_baseline()
-    except SnapshotError as exc:
-        return jsonify({"error": str(exc)}), 400
-    return jsonify(result)
-
-
-@app.post("/api/demo/recordings")
-def demo_recording_save():
-    if not _is_local_demo_request():
-        abort(404)
-
-    upload = request.files.get("recording")
-    if not upload:
-        return jsonify({"error": "recording file is required."}), 400
-
-    filename = request.form.get("filename", "")
-    try:
-        saved = save_demo_recording(filename, upload.read())
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    return jsonify(saved)
-
-
-@app.get("/api/demo/recordings")
-def demo_recording_list():
-    if not _is_local_demo_request():
-        abort(404)
-    return jsonify({"recordings": list_demo_recordings()})
-
-
-@app.post("/api/demo/recordings/redact")
-def demo_recording_redact():
-    if not _is_local_demo_request():
-        abort(404)
-
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return jsonify({"error": "JSON payload is required."}), 400
-
-    try:
-        saved = render_redacted_recording(payload)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    except subprocess.CalledProcessError as exc:
-        logger.exception("ffmpeg redaction export failed")
-        message = exc.stderr.decode("utf-8", errors="ignore").strip() if exc.stderr else "ffmpeg export failed."
-        return jsonify({"error": message or "ffmpeg export failed."}), 500
-    return jsonify(saved)
-
-
-@app.get("/api/demo/recordings/<path:filename>")
-def demo_recording_open(filename):
-    if not _is_local_browser_request():
-        abort(404)
-    safe_name = Path(filename).name
-    path = APP_DIR / "demo_state" / "recordings" / safe_name
-    if not path.is_file():
-        abort(404)
-    mime_type = "video/mp4" if path.suffix.lower() == ".mp4" else "video/webm"
-    return send_file(path, mimetype=mime_type, download_name=safe_name)
-
-
-@app.get("/api/files")
-def api_files():
-    raw_limit = request.args.get("limit")
-    limit = 5
-    if raw_limit:
-      try:
-          limit = None if raw_limit == "all" else max(1, int(raw_limit))
-      except ValueError:
-          limit = 5
-    return jsonify({"files": list_recent_scans(limit=limit)})
-
-
-@app.get("/api/files/<job_id>/original")
-def api_file_original(job_id):
-    path = get_original_file_path(job_id)
-    if not path or not path.is_file():
-        abort(404)
-    return send_file(path, download_name=path.name)
-
-
 @app.get("/api/gmail/messages/<message_id>/attachments/<attachment_id>/raw")
 def gmail_attachment_raw(message_id, attachment_id):
     # Read-only preview of a raw, not-yet-scanned attachment — deliberately
@@ -1754,112 +1224,6 @@ def gmail_attachment_raw(message_id, attachment_id):
         mimetype=attachment.get("mimeType") or "application/octet-stream",
         download_name=attachment.get("filename") or "attachment",
     )
-
-
-@app.post("/api/files/<job_id>/rename")
-def api_file_rename(job_id):
-    body = request.get_json(silent=True) or {}
-    filename = body.get("filename")
-    if not isinstance(filename, str) or not filename.strip():
-        return jsonify({"error": "filename is required."}), 400
-
-    result = rename_saved_document(job_id, filename)
-    if result.get("status") == "failed":
-        return jsonify({"error": "; ".join(result.get("errors") or ["Could not rename saved document."])}), 400
-
-    return jsonify(
-        {
-            "job_id": result.get("job_id", job_id),
-            "filename": result.get("original_filename", filename.strip()),
-            "page_count": result.get("page_count", 0),
-            "status": result.get("status", "unknown"),
-            "full_text": result.get("full_text", ""),
-            "pages": [{"page_number": p["page_number"], "text": p["text"]} for p in result.get("pages", [])],
-            "warnings": result.get("warnings", []),
-        }
-    )
-
-
-@app.post("/api/files/<job_id>/delete")
-def api_file_delete(job_id):
-    result = delete_scanned_document(job_id)
-    if result.get("status") == "not_found":
-        return jsonify(result), 404
-    return jsonify(result)
-
-
-@app.post("/api/photo-review/start")
-def api_photo_review_start():
-    files = request.files.getlist("files")
-    if not files:
-        return jsonify({"error": "No image files provided."}), 400
-
-    payload = [(upload.filename or f"image-{index}.png", upload.read()) for index, upload in enumerate(files, start=1)]
-    result = start_photo_review(payload)
-    if result.get("status") != "ready":
-        return jsonify({"error": "; ".join(result.get("errors") or ["Could not prepare photographed pages."])}), 400
-    return jsonify(result)
-
-
-@app.post("/api/photo-review/from-email")
-def api_photo_review_from_email():
-    body = request.get_json(silent=True) or {}
-    message_id = body.get("messageId")
-    attachment_ids = body.get("attachmentIds")
-    if not isinstance(message_id, str) or not message_id:
-        return jsonify({"error": "messageId is required."}), 400
-    if attachment_ids is not None and not isinstance(attachment_ids, list):
-        return jsonify({"error": "attachmentIds must be a list when provided."}), 400
-
-    message = load_full_message(message_id)
-    if not message:
-        return jsonify({"error": "Could not load that email."}), 404
-
-    attachments = message.get("attachments") or []
-    allowed_ids = {str(a.get("attachmentId", "")) for a in attachments}
-    if attachment_ids is not None and any(str(aid) not in allowed_ids for aid in attachment_ids):
-        return jsonify({"error": "One or more attachmentIds do not belong to that email."}), 400
-
-    selected = [
-        attachment
-        for attachment in attachments
-        if is_photo_reviewable_attachment(attachment)
-        and (attachment_ids is None or attachment.get("attachmentId") in attachment_ids)
-    ]
-    if not selected:
-        return jsonify({"error": "No reviewable image attachments were found on that email."}), 400
-
-    try:
-        payload = [
-            (
-                attachment.get("filename") or f"attachment-{index}.png",
-                gmail_client.download_attachment_bytes(message_id, attachment["attachmentId"]),
-            )
-            for index, attachment in enumerate(selected, start=1)
-        ]
-    except GmailSyncError as exc:
-        return jsonify({"error": str(exc)}), 502
-
-    source = {
-        "kind": "email",
-        "messageId": message_id,
-        "subject": message.get("subject") or "(no subject)",
-        "attachments": [
-            {
-                "messageId": message_id,
-                "attachmentId": attachment.get("attachmentId"),
-                "filename": attachment.get("filename") or "",
-            }
-            for attachment in selected
-        ],
-    }
-    result = start_photo_review(payload, source=source)
-    if result.get("status") != "ready":
-        return jsonify({"error": "; ".join(result.get("errors") or ["Could not prepare photographed pages."])}), 400
-    for attachment in selected:
-        if attachment.get("attachmentId"):
-            set_pending_review(message_id, attachment["attachmentId"], result["review"]["job_id"])
-    return jsonify(result)
 
 
 def _email_contact_info(message: dict) -> tuple[str, str, str] | None:
@@ -1985,76 +1349,6 @@ def gmail_save_message():
     if failed_ids:
         payload["failed_ids"] = failed_ids
     return jsonify(payload)
-
-
-@app.get("/api/photo-review/<job_id>/assets/<asset_kind>/<path:filename>")
-def api_photo_review_asset(job_id, asset_kind, filename):
-    path = get_asset_path(job_id, asset_kind, filename)
-    if not path:
-        abort(404)
-    return send_file(path)
-
-
-@app.post("/api/photo-review/<job_id>/preview")
-def api_photo_review_preview(job_id):
-    body = request.get_json(silent=True) or {}
-    try:
-        result = regenerate_preview(
-            job_id,
-            body.get("pageId"),
-            body.get("corners") or [],
-            body.get("rotationTurns") or 0,
-        )
-    except (TypeError, ValueError) as exc:
-        return jsonify({"error": str(exc)}), 400
-    if result.get("status") != "updated":
-        return jsonify({"error": result.get("message", "Could not refresh preview.")}), 404
-    return jsonify(result)
-
-
-@app.post("/api/photo-review/<job_id>/finalize")
-def api_photo_review_finalize(job_id):
-    body = request.get_json(silent=True) or {}
-    result = finalize_photo_review(job_id, body.get("pages"), body.get("outputFilename"))
-    if result.get("status") == "failed":
-        return jsonify({"error": "; ".join(result.get("errors") or ["Could not finalize photographed pages."])}), 400
-    response_payload = _build_photo_naming_response(result)
-    logger.warning(
-        "photo_review_finalize_response job_id=%s keys=%s naming_source=%s suggested_filename=%s",
-        response_payload["job_id"],
-        sorted(response_payload.keys()),
-        response_payload.get("naming_source"),
-        response_payload.get("suggested_filename"),
-    )
-    return jsonify(response_payload)
-
-
-@app.post("/api/ocr")
-def api_ocr():
-    if "file" not in request.files:
-        return jsonify({"error": "No file provided."}), 400
-
-    upload = request.files["file"]
-    filename = upload.filename or "upload.pdf"
-    file_bytes = upload.read()
-
-    result = scan_upload(file_bytes, filename)
-
-    if result["status"] == "failed":
-        message = "; ".join(result.get("errors") or ["OCR failed for an unknown reason."])
-        return jsonify({"error": message}), 502
-
-    return jsonify(
-        {
-            "job_id": result["job_id"],
-            "status": result["status"],
-            "filename": result["original_filename"],
-            "page_count": result["page_count"],
-            "full_text": result["full_text"],
-            "pages": [{"page_number": p["page_number"], "text": p["text"]} for p in result["pages"]],
-            "warnings": result.get("warnings", []),
-        }
-    )
 
 
 # ---- Daily Gmail sync ----------------------------------------------------------------------------------------

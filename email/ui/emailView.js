@@ -12,7 +12,6 @@ export function renderEmailView(container, email) {
   if (!email) return;
 
   const isDlyte = email.labels.includes(LABEL_DLYTE);
-  const photoAttachments = email.attachments.filter((attachment) => attachment.isPhotoReviewable);
   const cropLocked = Boolean(cropLock.isActive());
 
   const wrap = document.createElement('div');
@@ -42,15 +41,9 @@ export function renderEmailView(container, email) {
                   `<div class="file-row email-attachment-row">
                     <span class="file-icon">${a.isPhotoReviewable ? '🖼️' : '📎'}</span>
                     <span class="file-name">${escapeHtml(a.name)}</span>
-                    ${a.isPhotoReviewable ? `<button class="btn btn-remove email-attachment-review-btn" type="button" data-attachment-id="${escapeHtml(a.attachmentId)}" ${cropLocked ? 'disabled aria-disabled="true"' : ''}>Review as pages</button>` : ''}
                   </div>`
               )
               .join('')}
-            ${
-              photoAttachments.length > 1
-                ? `<button class="btn btn-primary email-review-all-btn" id="reviewAllPhotosBtn" type="button" ${cropLocked ? 'disabled aria-disabled="true"' : ''}>Review all photo pages</button>`
-                : ''
-            }
           </div>`
         : ''
     }
@@ -65,31 +58,6 @@ export function renderEmailView(container, email) {
   wrap.querySelector('#markDlyteBtn')?.addEventListener('click', () => markCaseRelated([email.id]));
   wrap.querySelector('#archiveBtn').addEventListener('click', () => archiveEmails([email.id]));
   wrap.querySelector('#junkBtn').addEventListener('click', () => junkEmails([email.id]));
-
-  for (const button of wrap.querySelectorAll('.email-attachment-review-btn')) {
-    button.addEventListener('click', () => {
-      if (cropLock.guard('email-view-review-attachment')) return;
-      document.dispatchEvent(
-        new CustomEvent('dlyte:start-photo-review-from-email', {
-          detail: { messageId: email.id, attachmentIds: [button.dataset.attachmentId] },
-        })
-      );
-    });
-  }
-  const reviewAllBtn = wrap.querySelector('#reviewAllPhotosBtn');
-  if (reviewAllBtn) {
-    reviewAllBtn.addEventListener('click', () => {
-      if (cropLock.guard('email-view-review-all-attachments')) return;
-      document.dispatchEvent(
-        new CustomEvent('dlyte:start-photo-review-from-email', {
-          detail: {
-            messageId: email.id,
-            attachmentIds: photoAttachments.map((attachment) => attachment.attachmentId),
-          },
-        })
-      );
-    });
-  }
 
   container.appendChild(wrap);
 }

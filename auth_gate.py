@@ -21,10 +21,9 @@ MAX_FAILURES = 8
 LOCKOUT_SECONDS = 15 * 60
 
 
-# Things that still exist once for the whole app (the LinkedIn session, the LinkedIn lead files, the OCR document service, demo
-# and developer tools) belong to the first workspace only; other workspaces are refused until they work per workspace.
-HOME_ONLY_API = ("/api/linkedin", "/api/linkedin-leads", "/api/documents", "/api/files", "/api/ocr", "/api/photo-review",
-                 "/api/demo", "/api/dev", "/api/diagnostics")
+# Things that still exist once for the whole app (the LinkedIn session, the LinkedIn lead files and the LinkedIn developer tools)
+# belong to the first workspace only; other workspaces are refused until they work per workspace.
+HOME_ONLY_API = ("/api/linkedin", "/api/linkedin-leads", "/api/dev", "/api/diagnostics")
 WAITING_ALLOWED_API = ("/api/me",)
 
 

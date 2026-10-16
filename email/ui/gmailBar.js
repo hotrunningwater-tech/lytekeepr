@@ -7,7 +7,6 @@
  */
 
 import { escapeHtml, formatRelative } from '../utils.js';
-import { getMaskedAccountLabel, isDemoModeEnabled, toggleDemoMode } from './demoMode.js';
 
 function formatScanProgress(progress) {
   if (!progress || progress.phase === 'idle') return 'Scanning…';
@@ -20,28 +19,9 @@ function formatScanProgress(progress) {
   }
   if (progress.phase === 'classifying') {
     const total = progress.total || 0;
-    return total ? `Checking ${total} email${total === 1 ? '' : 's'} for case relevance…` : 'Checking for case relevance…';
+    return total ? `Checking ${total} email${total === 1 ? '' : 's'}…` : 'Checking emails…';
   }
   return 'Scanning…';
-}
-
-function buildAccountSwitcher(knownAccounts, activeAccountId, cropLocked, demoModeEnabled) {
-  if (!Array.isArray(knownAccounts) || knownAccounts.length < 2) return '';
-
-  return `
-    <div class="email-gmail-switcher">
-      <select class="email-gmail-select" id="gmailAccountSelect" ${cropLocked ? 'disabled aria-disabled="true"' : ''}>
-        ${knownAccounts
-          .map((account, index) => `
-            <option value="${escapeHtml(account.account_id)}" ${account.account_id === activeAccountId ? 'selected' : ''}>
-              ${escapeHtml(demoModeEnabled ? getMaskedAccountLabel(account.account_id, index) : account.account_id)}
-            </option>
-          `)
-          .join('')}
-      </select>
-      <button class="btn btn-remove" id="switchGmailAccountBtn" type="button" ${cropLocked ? 'disabled aria-disabled="true"' : ''}>Switch</button>
-    </div>
-  `;
 }
 
 export function renderGmailBar(container, gmailState, handlers = {}) {
@@ -51,7 +31,6 @@ export function renderGmailBar(container, gmailState, handlers = {}) {
     guard() { return false; },
   };
   const cropLocked = Boolean(cropLock.isActive());
-  const demoModeEnabled = isDemoModeEnabled();
   container.innerHTML = '';
 
   const bar = document.createElement('div');
@@ -63,15 +42,13 @@ export function renderGmailBar(container, gmailState, handlers = {}) {
       : synced
         ? `${messageCount} saved · scanned ${formatRelative(lastSyncAt)}`
         : 'Not scanned yet';
-    const switcherMarkup = buildAccountSwitcher(knownAccounts, activeAccountId, cropLocked, demoModeEnabled);
 
     bar.innerHTML = `
       <div class="email-gmail-info">
-        <span class="email-gmail-text email-gmail-connected">Gmail connected${accountEmail ? demoModeEnabled ? ' — <span class="email-gmail-mask" aria-hidden="true"></span>' : ` — ${escapeHtml(accountEmail)}` : ''}</span>
+        <span class="email-gmail-text email-gmail-connected">Gmail connected${accountEmail ? ` — ${escapeHtml(accountEmail)}` : ''}</span>
         <span class="email-gmail-meta">${escapeHtml(metaLine)}</span>
       </div>
       <div class="email-gmail-actions">
-        ${switcherMarkup}
         <label class="email-gmail-since" for="gmailSinceDate" title="Only scan mail received on or after this date">
           Since
           <input
@@ -82,23 +59,11 @@ export function renderGmailBar(container, gmailState, handlers = {}) {
             ${(syncing || cropLocked) ? 'disabled aria-disabled="true"' : ''}
           >
         </label>
-        <button
-          class="email-demo-toggle-btn${demoModeEnabled ? ' active' : ''}"
-          id="toggleDemoModeBtn"
-          type="button"
-          aria-label="Toggle account masking"
-          title="Toggle account masking"
-        ><span class="email-demo-toggle-knob" aria-hidden="true"></span></button>
         <button class="btn btn-dlyte" id="scanGmailBtn" type="button" ${(syncing || cropLocked) ? 'disabled aria-disabled="true"' : ''}>
           ${syncing ? 'Scanning…' : synced ? 'Scan for new mail' : 'Scan Gmail'}
         </button>
       </div>
     `;
-    const select = bar.querySelector('#gmailAccountSelect');
-    const switchBtn = bar.querySelector('#switchGmailAccountBtn');
-    if (select && switchBtn && handlers.onActivateAccount) {
-      switchBtn.addEventListener('click', () => handlers.onActivateAccount(select.value));
-    }
     const sinceInput = bar.querySelector('#gmailSinceDate');
     if (sinceInput && handlers.onSinceDateChange) {
       sinceInput.addEventListener('change', () => handlers.onSinceDateChange(sinceInput.value));
@@ -106,13 +71,6 @@ export function renderGmailBar(container, gmailState, handlers = {}) {
     const scanBtn = bar.querySelector('#scanGmailBtn');
     if (scanBtn && handlers.onScanClick) {
       scanBtn.addEventListener('click', handlers.onScanClick);
-    }
-    const demoToggleBtn = bar.querySelector('#toggleDemoModeBtn');
-    if (demoToggleBtn) {
-      demoToggleBtn.addEventListener('click', () => {
-        toggleDemoMode();
-        handlers.onDemoModeChange?.();
-      });
     }
     container.appendChild(bar);
 
@@ -133,37 +91,16 @@ export function renderGmailBar(container, gmailState, handlers = {}) {
     const metaLine = synced
       ? `${messageCount} saved · scanned ${formatRelative(lastSyncAt)}`
       : 'Saved profile ready · connect Gmail to scan live mail';
-    const switcherMarkup = buildAccountSwitcher(knownAccounts, activeAccountId, cropLocked, demoModeEnabled);
 
     bar.innerHTML = `
       <div class="email-gmail-info">
-        <span class="email-gmail-text email-gmail-connected">Saved Gmail profile${accountEmail ? demoModeEnabled ? ' — <span class="email-gmail-mask" aria-hidden="true"></span>' : ` — ${escapeHtml(accountEmail)}` : ''}</span>
+        <span class="email-gmail-text email-gmail-connected">Saved Gmail profile${accountEmail ? ` — ${escapeHtml(accountEmail)}` : ''}</span>
         <span class="email-gmail-meta">${escapeHtml(metaLine)}</span>
       </div>
       <div class="email-gmail-actions">
-        ${switcherMarkup}
-        <button
-          class="email-demo-toggle-btn${demoModeEnabled ? ' active' : ''}"
-          id="toggleDemoModeBtn"
-          type="button"
-          aria-label="Toggle account masking"
-          title="Toggle account masking"
-        ><span class="email-demo-toggle-knob" aria-hidden="true"></span></button>
         <button class="btn btn-dlyte" id="connectGmailBtn" type="button" ${cropLocked ? 'disabled aria-disabled="true"' : ''}>Connect Gmail</button>
       </div>
     `;
-    const select = bar.querySelector('#gmailAccountSelect');
-    const switchBtn = bar.querySelector('#switchGmailAccountBtn');
-    if (select && switchBtn && handlers.onActivateAccount) {
-      switchBtn.addEventListener('click', () => handlers.onActivateAccount(select.value));
-    }
-    const demoToggleBtn = bar.querySelector('#toggleDemoModeBtn');
-    if (demoToggleBtn) {
-      demoToggleBtn.addEventListener('click', () => {
-        toggleDemoMode();
-        handlers.onDemoModeChange?.();
-      });
-    }
     const connectBtn = bar.querySelector('#connectGmailBtn');
     if (connectBtn) {
       connectBtn.addEventListener('click', () => {

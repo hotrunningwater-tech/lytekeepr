@@ -30,7 +30,7 @@
 
   <!-- Workspace Header -->
   <header class="header">
-    <button class="brand brand-button" id="demoStateTriggerBtn" type="button" aria-label="Open demo state manager">
+    <button class="brand brand-button" id="brandBtn" type="button" aria-label="LyteKeepr">
       <span class="brand-dot"></span>
       <span class="brand-name">LyteKeepr</span>
     </button>
@@ -46,7 +46,6 @@
         <span class="user-name" id="userName"></span>
         <span class="user-role" id="userRole" hidden>Admin</span>
       </div>
-      <button class="demo-recorder-quick-btn" id="demoRecorderQuickBtn" type="button" aria-label="Start screen recording" title="Start screen recording" hidden></button>
       <button class="lk-gear" id="settingsBtn" type="button" aria-label="Settings" title="Settings: import contacts, companies">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
       </button>
@@ -194,7 +193,6 @@
         </div>
       </div>
 
-      <div id="documentViewer" class="document-viewer" hidden></div>
 
       <div id="linkedinPanel" class="document-viewer" hidden>
         <div class="document-viewer-header">
@@ -334,49 +332,6 @@
 
       </div>
 
-      <div id="photoCropEditor" class="photo-crop-editor" hidden>
-        <div class="document-viewer-header">
-          <div class="document-viewer-heading">
-            <span class="block-label">Crop photographed page</span>
-            <h1 id="photoCropEditorTitle">Photo page</h1>
-          </div>
-          <div class="photo-crop-editor-actions">
-            <button class="btn btn-primary" id="photoCropConfirmBtn" type="button">Confirm crop</button>
-            <button class="btn btn-remove document-viewer-close" id="photoCropCancelBtn" type="button">Cancel</button>
-          </div>
-        </div>
-        <div class="photo-crop-editor-copy" id="photoCropEditorCopy">Drag the corner dots to frame the page, then confirm the crop.</div>
-        <div class="photo-crop-editor-body">
-          <div class="photo-crop-editor-stage-wrap">
-            <div class="photo-crop-editor-stage" id="photoCropEditorStage">
-              <img id="photoCropEditorImage" class="photo-crop-editor-image" alt="">
-              <div class="photo-crop-overlay">
-                <svg class="photo-crop-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                  <polygon class="photo-crop-polygon" id="photoCropEditorPolygon" points=""></polygon>
-                </svg>
-                <button class="photo-corner-handle" type="button" id="photoCropHandle0" data-corner-index="0" aria-label="Adjust crop corner 1"></button>
-                <button class="photo-corner-handle" type="button" id="photoCropHandle1" data-corner-index="1" aria-label="Adjust crop corner 2"></button>
-                <button class="photo-corner-handle" type="button" id="photoCropHandle2" data-corner-index="2" aria-label="Adjust crop corner 3"></button>
-                <button class="photo-corner-handle" type="button" id="photoCropHandle3" data-corner-index="3" aria-label="Adjust crop corner 4"></button>
-              </div>
-            </div>
-          </div>
-          <div class="photo-crop-editor-note">
-            Use the large image to crop first, then return to the page card to rotate or finalize.
-          </div>
-        </div>
-      </div>
-
-      <div id="documentsBrowser" class="documents-browser" hidden>
-        <div class="document-viewer-header">
-          <div class="document-viewer-heading">
-            <span class="block-label">Documents</span>
-            <h1>All scanned documents</h1>
-          </div>
-          <button class="btn btn-remove document-viewer-close" id="closeAllDocsBtn" type="button">Close</button>
-        </div>
-        <div class="documents-browser-list" id="documentsBrowserList"></div>
-      </div>
     </section>
 
     <!-- Calendar -->
@@ -436,14 +391,6 @@
         <p class="assistant-sub">Whenever you want more context, just ask</p>
       </div>
 
-      <div class="upload-area" id="uploadArea">
-        <input type="file" id="pdfInput" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp" multiple hidden>
-        <div id="uploadContent">
-          <div class="upload-title">Drop a document here</div>
-          <div class="upload-sub">PDF or image file · I'll ask what you'd like done</div>
-        </div>
-      </div>
-
       <div class="conversation" id="conversation"></div>
 
       <div class="chat-error" id="chatError" hidden></div>
@@ -474,95 +421,6 @@
       <p class="guidance">Nothing is sent without your approval.</p>
     </section>
 
-  </div>
-</div>
-
-<div class="demo-reset-shell" id="demoResetShell" hidden>
-  <div class="demo-reset-panel" id="demoResetPanel" hidden>
-    <div class="demo-reset-header">
-      <div>
-        <span class="block-label">Demo state</span>
-        <h2>Demo State Manager</h2>
-      </div>
-      <button class="btn btn-remove demo-reset-close" id="demoResetCloseBtn" type="button">Close</button>
-    </div>
-    <div class="demo-reset-note">Choose the right local profile first, then save checkpoints or record inside that profile.</div>
-    <div class="demo-reset-tabs" role="tablist" aria-label="Demo manager views">
-      <button class="demo-reset-tab is-active" id="demoProfilesTabBtn" type="button" role="tab" aria-selected="true">Profiles</button>
-      <button class="demo-reset-tab" id="demoStateTabBtn" type="button" role="tab" aria-selected="false">State</button>
-      <button class="demo-reset-tab" id="demoRecorderTabBtn" type="button" role="tab" aria-selected="false">Recorder</button>
-    </div>
-    <div class="demo-reset-status" id="demoResetStatus" hidden></div>
-    <div id="demoProfilesView">
-      <div class="demo-reset-list-label">Local profiles</div>
-      <div class="demo-reset-capture">
-        <input id="demoProfileNameInput" class="demo-reset-input" type="text" placeholder="profile name">
-        <button id="demoCreateProfileBtn" class="btn btn-primary" type="button">Create profile</button>
-      </div>
-      <div class="demo-reset-actions-row">
-        <button id="demoSeedProfilesBtn" class="btn btn-dlyte" type="button">Create 3 test profiles</button>
-      </div>
-      <div class="demo-reset-list" id="demoProfileList"></div>
-    </div>
-    <div id="demoStateView" hidden>
-      <div class="demo-reset-actions-row">
-        <button id="demoSaveBaselineBtn" class="btn btn-dlyte" type="button">Save clean start</button>
-        <button id="demoResetToBaselineBtn" class="btn btn-remove" type="button">Reset to clean start</button>
-      </div>
-      <div class="demo-reset-capture">
-        <input id="demoSnapshotNameInput" class="demo-reset-input" type="text" placeholder="snapshot name">
-        <button id="demoCaptureSnapshotBtn" class="btn btn-primary" type="button">Save current</button>
-      </div>
-      <div class="demo-reset-list-label" id="demoSnapshotListLabel">Saved checkpoints</div>
-      <div class="demo-reset-list" id="demoSnapshotList"></div>
-    </div>
-    <div id="demoRecorderView" hidden>
-      <div class="demo-recorder-card">
-        <div class="demo-recorder-row">
-          <label class="demo-recorder-label" for="demoRecorderPresetSelect">Quality</label>
-          <select id="demoRecorderPresetSelect" class="demo-reset-input demo-recorder-select">
-            <option value="standard">Standard</option>
-            <option value="high">High</option>
-          </select>
-        </div>
-        <div class="demo-recorder-row">
-          <label class="demo-recorder-label" for="demoRecorderFilenameInput">Base filename</label>
-          <input id="demoRecorderFilenameInput" class="demo-reset-input" type="text" placeholder="dlyte-demo">
-        </div>
-        <div class="demo-recorder-preview" id="demoRecorderFilenamePreview"></div>
-        <div class="demo-recorder-status" id="demoRecorderStatus">Use the subtle circle in the header to start recording.</div>
-        <div class="demo-recorder-status demo-recorder-status-secondary" id="demoRecorderLastSaved">No recording saved yet.</div>
-        <div class="demo-recorder-library">
-          <div class="demo-recorder-library-head">
-            <span class="demo-recorder-label">Saved videos</span>
-            <span class="demo-recorder-library-note">Double-click to play here</span>
-          </div>
-          <div class="demo-recorder-library-list" id="demoRecorderLibraryList"></div>
-        </div>
-        <div class="demo-recorder-editor" id="demoRecorderEditor" hidden>
-          <div class="demo-recorder-editor-head">
-            <span class="demo-recorder-label">Redaction editor</span>
-            <div class="demo-recorder-editor-actions">
-              <button id="demoRecorderToggleEditBtn" class="btn btn-dlyte" type="button">Edit redactions</button>
-              <button id="demoRecorderAddBoxBtn" class="btn btn-primary" type="button" hidden>Add box</button>
-              <button id="demoRecorderSetStartBtn" class="btn btn-dlyte" type="button" hidden>Set start here</button>
-              <button id="demoRecorderSetEndBtn" class="btn btn-dlyte" type="button" hidden>Set end here</button>
-              <button id="demoRecorderDeleteBoxBtn" class="btn btn-remove" type="button" hidden>Delete selected</button>
-              <button id="demoRecorderExportBtn" class="btn btn-primary" type="button" hidden>Export edited MP4</button>
-            </div>
-          </div>
-          <div class="demo-recorder-status demo-recorder-status-secondary" id="demoRecorderEditStatus" hidden></div>
-        </div>
-        <div class="demo-recorder-player-wrap" id="demoRecorderPlayerWrap" hidden>
-          <video id="demoRecorderPlayer" class="demo-recorder-player" controls playsinline preload="metadata"></video>
-          <div id="demoRecorderOverlay" class="demo-recorder-overlay" hidden>
-            <div id="demoRecorderSelectionBox" class="demo-recorder-selection-box" hidden></div>
-          </div>
-        </div>
-        <div class="demo-recorder-redaction-list" id="demoRecorderRedactionList" hidden></div>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -702,17 +560,14 @@
   </div>
 </div>
 
-<script src="crop-lock.js"></script>
 <script src="chat.js"></script>
 <script src="lk-calendar/calendar.js"></script>
 <script src="lk-calendar/settings.js?v=ws4"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
-<script type="module" src="demo/reset.js"></script>
 <script>
   (function () {
     var content = document.getElementById('caseOverviewContent');
-    var viewer = document.getElementById('documentViewer');
 
     var linkedinTab = document.getElementById('linkedinTab');
     var linkedinPanel = document.getElementById('linkedinPanel');
@@ -2101,7 +1956,6 @@
     // show chat.
     function closeAllCasePanels() {
       content.hidden = true;
-      viewer.hidden = true;
       linkedinPanel.hidden = true;
       crmPanel.hidden = true;
       crmPersonDetailView.hidden = true;

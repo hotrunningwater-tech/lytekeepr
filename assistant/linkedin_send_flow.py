@@ -1,6 +1,6 @@
 """Chat-driven draft + confirm staging for sending a real LinkedIn message.
 
-Mirrors assistant/delete_flow.py's pending-action pattern: a tool call only
+Pending-action pattern: a tool call only
 ever stages a draft (person + conversation_ref + text) to a local JSON file.
 Nothing is actually sent to LinkedIn until confirm_pending_send() is called,
 which only ever happens from an explicit user click in the UI (never from

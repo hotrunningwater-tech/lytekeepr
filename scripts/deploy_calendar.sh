@@ -10,9 +10,6 @@ DEST=/opt/lytekeepr-calendar/app/
 FILTER=$(mktemp)
 trap 'rm -f "$FILTER"' EXIT
 cat > "$FILTER" <<'RULES'
-+ /demo_state/
-+ /demo_state/*.py
-- /demo_state/**
 - .git/
 - .venv/
 - __pycache__/

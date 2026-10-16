@@ -125,11 +125,6 @@ export function renderCandidateReview(container, candidates, handlers = {}) {
                           `<div class="file-row candidate-attachment-row">
                             <span class="file-icon">${attachment.isPhotoReviewable ? '🖼️' : '📎'}</span>
                             <span class="file-name">${escapeHtml(attachment.name || '(unnamed attachment)')}</span>
-                            ${
-                              attachment.isPhotoReviewable
-                                ? `<button class="btn btn-remove candidate-photo-review-btn" type="button" data-message-id="${escapeHtml(c.id)}" data-attachment-id="${escapeHtml(attachment.attachmentId)}">Review as pages</button>`
-                                : ''
-                            }
                           </div>`
                       )
                       .join('')}
@@ -137,17 +132,6 @@ export function renderCandidateReview(container, candidates, handlers = {}) {
                 : ''
             }
           `;
-          for (const button of bodyEl.querySelectorAll('.candidate-photo-review-btn')) {
-            button.addEventListener('click', (e) => {
-              e.stopPropagation();
-              if (cropLock.guard('candidate-review-start-photo-review')) return;
-              document.dispatchEvent(
-                new CustomEvent('dlyte:start-photo-review-from-email', {
-                  detail: { messageId: button.dataset.messageId, attachmentIds: [button.dataset.attachmentId] },
-                })
-              );
-            });
-          }
           loaded = true;
         } catch (err) {
           bodyEl.textContent = 'Could not load this email.';

@@ -127,7 +127,6 @@ function renderGmailStatus() {
     onReviewClick: openCandidateReview,
     onConnectClick: handleConnectGmailClick,
     onActivateAccount: handleActivateAccount,
-    onDemoModeChange: renderGmailStatus,
     onSinceDateChange: handleSinceDateChange,
   });
 }
@@ -399,7 +398,6 @@ function buildDom() {
 }
 
 function wireStaticEvents() {
-  document.addEventListener('dlyte:shell-changed', updateBrandTabLabel);
   const emailTab = document.getElementById('emailTab');
   if (emailTab) {
     emailTab.addEventListener('click', () => {
