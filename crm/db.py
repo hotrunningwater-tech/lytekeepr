@@ -152,7 +152,77 @@ CREATE TABLE IF NOT EXISTS activity_log (
 
 CREATE INDEX IF NOT EXISTS idx_activity_log_run ON activity_log(run_id, step_num);
 CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at);
+
+-- Manual, pre-CRM prospecting leads imported from the weekly Apify
+-- LinkedIn-comments scrape CSV (see linkedin_leads/importer.py). Deliberately
+-- NOT people/channel_accounts rows — these are prospects the user hasn't
+-- necessarily connected with yet, tracked outside the normal sync pipeline.
+-- The CSV file stays the record of truth; every status-changing action here
+-- also writes the same change back into source_csv (see write_lead_to_csv).
+CREATE TABLE IF NOT EXISTS linkedin_leads (
+    lead_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_url TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    company TEXT,
+    connection_note TEXT,
+    dm_after_accept TEXT,
+    sent_date TEXT,
+    accepted TEXT,
+    replied TEXT,
+    notes TEXT,
+    follow_up_date TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    source_csv TEXT NOT NULL,
+    imported_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- Generic due-date reminders. Two creation paths (Home dashboard, AI chat
+-- tool — see assistant/tools.py's set_reminder) write the same rows a
+-- weekly leads import also writes to (source='linkedin_leads'). Deliberately
+-- separate from follow_ups (assistant/followup_engine.py): follow_ups is an
+-- automated, AI-drafting sequence engine for contacts already messaged
+-- in-app; reminders here are always manual-only, never auto-sent.
+CREATE TABLE IF NOT EXISTS reminders (
+    reminder_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    source TEXT NOT NULL DEFAULT 'manual',
+    linked_lead_id INTEGER REFERENCES linkedin_leads(lead_id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_date, status);
+
+-- Tracks which weekly CSV filenames have already been imported, so the
+-- scheduler never re-imports the same file and can tell "no new file
+-- this week" apart from "haven't looked yet".
+CREATE TABLE IF NOT EXISTS linkedin_leads_imports (
+    filename TEXT PRIMARY KEY,
+    imported_at TEXT NOT NULL,
+    row_count INTEGER NOT NULL
+);
 """
+
+
+def _preview_text(text: str | None) -> str | None:
+    """Collapses a stored message into a single-line preview. Saved emails
+    fold "Subject: X" onto the front of message_text (no separate subject
+    column — see _crm_write_email in server.py); the subject is dropped
+    entirely here — it's already shown as its own line in the contact
+    detail view (see buildCrmDetailMessageRow) — and only the body is
+    flattened to one line, so compact card previews (People list, Home
+    recent activity, conversation lists) never cram "Subject: X" and the
+    body together."""
+    if not text:
+        return text
+    if text.startswith("Subject: "):
+        split_at = text.find("\n\n")
+        if split_at != -1:
+            text = text[split_at + 2:]
+    return " ".join(text.split())
 
 
 def _db_path() -> Path:
@@ -192,6 +262,19 @@ def init_db() -> None:
         if "unread" not in existing_ca_columns:
             conn.execute("ALTER TABLE channel_accounts ADD COLUMN unread INTEGER NOT NULL DEFAULT 0")
 
+        # Extra contact fields from the universal import (additive only: nothing existing is touched).
+        for table, cols in (
+            ("companies", {"website": "TEXT", "created_at": "TEXT", "source_file": "TEXT"}),
+            ("people", {"headline": "TEXT", "location": "TEXT", "industry": "TEXT", "audience": "TEXT", "phone": "TEXT", "telegram": "TEXT",
+                        "email": "TEXT", "website": "TEXT", "verified": "TEXT", "date_found": "TEXT", "extras": "TEXT", "source_file": "TEXT",
+                        "batch": "TEXT", "created_at": "TEXT", "raw_notes": "TEXT"}),
+            ("channel_accounts", {"url": "TEXT"}),
+        ):
+            have = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            for col, ddl in cols.items():
+                if col not in have:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+
         # Backfill: funnels created before funnel_stages existed have none —
         # seed them the same as a brand-new funnel, and drop anyone already
         # in that funnel into its first stage.
@@ -223,7 +306,7 @@ def init_db() -> None:
 # rows directly — no stage-editing UI yet, this is just a sane starting
 # pipeline for outreach (not the invoicing-heavy stage set a sales CRM
 # would use).
-DEFAULT_FUNNEL_STAGES = ["New lead", "Contacted", "In conversation", "Decision pending", "Won", "Lost"]
+DEFAULT_FUNNEL_STAGES = ["New lead", "Contacted", "In conversation", "Confirmed", "Onboarding", "Completed", "Lost"]
 
 
 def create_funnel(conn: sqlite3.Connection, name: str) -> int:
@@ -304,6 +387,48 @@ def get_funnel_board(conn: sqlite3.Connection, funnel_id: int) -> dict | None:
             for s in stages
         ],
     }
+
+
+def add_stage(conn: sqlite3.Connection, funnel_id: int, name: str) -> int:
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("A stage needs a name.")
+    pos = conn.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM funnel_stages WHERE funnel_id = ?", (funnel_id,)).fetchone()[0]
+    return conn.execute("INSERT INTO funnel_stages (funnel_id, name, position, created_at) VALUES (?, ?, ?, ?)",
+                        (funnel_id, name[:60], pos, datetime.now().isoformat())).lastrowid
+
+
+def rename_stage(conn: sqlite3.Connection, stage_id: int, name: str) -> str | None:
+    """Returns the old name (None if there is no such stage)."""
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("A stage needs a name.")
+    row = conn.execute("SELECT name FROM funnel_stages WHERE stage_id = ?", (stage_id,)).fetchone()
+    if row is None:
+        return None
+    conn.execute("UPDATE funnel_stages SET name = ? WHERE stage_id = ?", (name[:60], stage_id))
+    return row["name"]
+
+
+def move_stage(conn: sqlite3.Connection, stage_id: int, direction: int) -> None:
+    cur = conn.execute("SELECT funnel_id, position FROM funnel_stages WHERE stage_id = ?", (stage_id,)).fetchone()
+    if cur is None:
+        return
+    order = "DESC" if direction < 0 else "ASC"
+    cmp_ = "<" if direction < 0 else ">"
+    other = conn.execute(f"SELECT stage_id, position FROM funnel_stages WHERE funnel_id = ? AND position {cmp_} ? ORDER BY position {order} LIMIT 1",
+                         (cur["funnel_id"], cur["position"])).fetchone()
+    if other is None:
+        return
+    conn.execute("UPDATE funnel_stages SET position = ? WHERE stage_id = ?", (other["position"], stage_id))
+    conn.execute("UPDATE funnel_stages SET position = ? WHERE stage_id = ?", (cur["position"], other["stage_id"]))
+
+
+def delete_stage(conn: sqlite3.Connection, stage_id: int) -> None:
+    n = conn.execute("SELECT COUNT(*) FROM people WHERE funnel_stage_id = ?", (stage_id,)).fetchone()[0]
+    if n:
+        raise ValueError(f"{n} people are in this stage. Move them first.")
+    conn.execute("DELETE FROM funnel_stages WHERE stage_id = ?", (stage_id,))
 
 
 def delete_funnel(conn: sqlite3.Connection, funnel_id: int) -> None:
@@ -398,6 +523,10 @@ def update_person(
         "UPDATE people SET name = ?, company_id = ?, job_title = ?, notes = ? WHERE person_id = ?",
         (name, company_id, job_title or None, notes, person_id),
     )
+    conn.execute(
+        "UPDATE channel_accounts SET display_name = ? WHERE person_id = ?",
+        (name, person_id),
+    )
 
 
 def upgrade_channel_identifier(conn: sqlite3.Connection, person_id: int, channel: str, real_identifier: str) -> None:
@@ -415,8 +544,8 @@ def upgrade_channel_identifier(conn: sqlite3.Connection, person_id: int, channel
 
 def find_channel_account(conn: sqlite3.Connection, channel: str, channel_identifier: str) -> sqlite3.Row | None:
     return conn.execute(
-        "SELECT * FROM channel_accounts WHERE channel = ? AND channel_identifier = ?",
-        (channel, channel_identifier),
+        "SELECT * FROM channel_accounts WHERE channel = ? AND (channel_identifier = ? OR (channel = 'email' AND lower(channel_identifier) = lower(?)))",
+        (channel, channel_identifier, channel_identifier),
     ).fetchone()
 
 
@@ -532,7 +661,7 @@ def list_conversations(conn: sqlite3.Connection, channel: str, contact_status: s
         """
         SELECT
             p.person_id,
-            p.name AS participant_name,
+            COALESCE(NULLIF(p.name, ''), 'No name') AS participant_name,
             c.company_name,
             ca.account_id,
             ca.contact_status,
@@ -553,7 +682,10 @@ def list_conversations(conn: sqlite3.Connection, channel: str, contact_status: s
         """,
         (channel, contact_status, channel),
     ).fetchall()
-    return [dict(row) for row in rows]
+    result = [dict(row) for row in rows]
+    for row in result:
+        row["last_message_text"] = _preview_text(row["last_message_text"])
+    return result
 
 
 def search_messages(
@@ -569,7 +701,7 @@ def search_messages(
     can answer questions about CRM conversation history regardless of which
     channel a contact was reached on."""
     sql = (
-        "SELECT p.name AS participant_name, c.company_name, m.channel, "
+        "SELECT COALESCE(NULLIF(p.name, ''), 'No name') AS participant_name, c.company_name, m.channel, "
         "m.sender, m.direction, m.message_text, m.timestamp "
         "FROM messages m "
         "JOIN people p ON p.person_id = m.person_id "
@@ -586,8 +718,8 @@ def search_messages(
         sql += " AND m.channel = ?"
         params.append(channel)
     if person_name:
-        sql += " AND p.name LIKE ?"
-        params.append(f"%{person_name}%")
+        sql += " AND (p.name LIKE ? OR c.company_name LIKE ?)"
+        params.extend([f"%{person_name}%", f"%{person_name}%"])
     if query:
         sql += " AND m.message_text LIKE ?"
         params.append(f"%{query}%")
@@ -629,7 +761,8 @@ def get_person_detail(conn: sqlite3.Connection, person_id: int) -> dict | None:
     slightly off around messages sent close together across channels."""
     row = conn.execute(
         """
-        SELECT p.person_id, p.name, p.job_title, p.person_status, p.notes,
+        SELECT p.person_id, p.name, p.job_title, p.person_status, p.notes, p.phone, p.telegram,
+               (SELECT channel_identifier FROM channel_accounts e WHERE e.person_id = p.person_id AND e.channel = 'email' ORDER BY e.account_id LIMIT 1) AS email, p.raw_notes,
                co.company_name,
                fn.funnel_id, fn.name AS funnel_name,
                fs.stage_id AS funnel_stage_id, fs.name AS funnel_stage_name
@@ -970,7 +1103,7 @@ def end_follow_up(conn: sqlite3.Connection, follow_up_id: int, status: str, reas
 
 def list_due_follow_ups(conn: sqlite3.Connection, now_iso: str) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT f.*, p.name AS person_name FROM follow_ups f "
+        "SELECT f.*, COALESCE(NULLIF(p.name, ''), 'No name') AS person_name FROM follow_ups f "
         "JOIN people p ON p.person_id = f.person_id "
         "WHERE f.status = 'active' AND f.next_follow_up_at <= ?",
         (now_iso,),
@@ -983,7 +1116,7 @@ def list_all_follow_ups(conn: sqlite3.Connection) -> list[dict]:
     technically terminal for the sequence itself, but stays visible here
     since it means a real reply is sitting there unanswered by a human."""
     rows = conn.execute(
-        "SELECT f.*, p.name AS person_name FROM follow_ups f "
+        "SELECT f.*, COALESCE(NULLIF(p.name, ''), 'No name') AS person_name FROM follow_ups f "
         "JOIN people p ON p.person_id = f.person_id "
         "WHERE f.status IN ('active', 'awaiting_approval', 'needs_review') "
         "ORDER BY f.next_follow_up_at ASC"
@@ -1024,7 +1157,10 @@ def list_recent_activity(conn: sqlite3.Connection, limit: int = 5) -> list[dict]
         """,
         (limit,),
     ).fetchall()
-    return [dict(row) for row in rows]
+    result = [dict(row) for row in rows]
+    for row in result:
+        row["last_message_text"] = _preview_text(row["last_message_text"])
+    return result
 
 
 def get_overview(conn: sqlite3.Connection) -> dict:
@@ -1044,11 +1180,12 @@ def get_overview(conn: sqlite3.Connection) -> dict:
         dict(row)
         for row in conn.execute(
             """
-            SELECT c.company_id, c.company_name, c.company_status,
+            SELECT c.company_id, c.company_name, c.company_status, c.created_at,
                    COUNT(p.person_id) AS people_count
             FROM companies c
             LEFT JOIN people p ON p.company_id = c.company_id
             GROUP BY c.company_id
+            HAVING COUNT(p.person_id) > 0
             ORDER BY c.company_name COLLATE NOCASE
             """
         ).fetchall()
@@ -1057,7 +1194,8 @@ def get_overview(conn: sqlite3.Connection) -> dict:
     people_rows = conn.execute(
         """
         SELECT
-            p.person_id, p.name, p.job_title, p.person_status,
+            p.person_id, p.name, p.job_title, p.person_status, p.batch, p.created_at,
+            (SELECT channel_identifier FROM channel_accounts e WHERE e.person_id = p.person_id AND e.channel = 'email' ORDER BY e.account_id LIMIT 1) AS email, p.phone, p.telegram, p.location, p.industry, p.website, p.notes,
             co.company_name,
             fn.funnel_id, fn.name AS funnel_name,
             fs.stage_id AS funnel_stage_id, fs.name AS funnel_stage_name,
@@ -1075,8 +1213,8 @@ def get_overview(conn: sqlite3.Connection) -> dict:
         WHERE EXISTS (
             SELECT 1 FROM channel_accounts ca
             WHERE ca.person_id = p.person_id AND ca.contact_status = 'trusted'
-        )
-        ORDER BY m.message_id DESC
+        ) OR NOT EXISTS (SELECT 1 FROM channel_accounts ca2 WHERE ca2.person_id = p.person_id)
+        ORDER BY m.message_id DESC, p.person_id DESC
         """
     ).fetchall()
 
@@ -1097,7 +1235,179 @@ def get_overview(conn: sqlite3.Connection) -> dict:
         ).fetchone()
         person = dict(row)
         person["channels"] = channels
+        # what a search can look for besides the name: Instagram handle, LinkedIn link/slug, email address
+        person["handles"] = " ".join(
+            f"{r['channel_identifier'] or ''} {r['url'] or ''}"
+            for r in conn.execute("SELECT channel_identifier, url FROM channel_accounts WHERE person_id = ?", (row["person_id"],)).fetchall()
+        ).strip()
         person["follow_up"] = dict(follow_up) if follow_up else None
+        person["last_message_text"] = _preview_text(person["last_message_text"])
         people.append(person)
 
     return {"counts": counts, "companies": companies, "people": people}
+
+
+# --- LinkedIn leads (manual prospecting) + reminders --------------------
+
+def upsert_linkedin_lead(conn: sqlite3.Connection, lead: dict, source_csv: str) -> tuple[int, bool]:
+    """Insert a new lead or update an existing one, matched by profile_url
+    (same dedup contract as get_or_create_person_for_channel's
+    channel_identifier matching). Returns (lead_id, was_new)."""
+    now = datetime.now().isoformat()
+    existing = conn.execute(
+        "SELECT lead_id FROM linkedin_leads WHERE profile_url = ?", (lead["profile_url"],)
+    ).fetchone()
+    fields = (
+        lead.get("name"), lead.get("company"), lead.get("connection_note"),
+        lead.get("dm_after_accept"), lead.get("sent_date"), lead.get("accepted"),
+        lead.get("replied"), lead.get("notes"), lead.get("follow_up_date"),
+    )
+    if existing:
+        conn.execute(
+            """
+            UPDATE linkedin_leads SET
+                name = ?, company = ?, connection_note = ?, dm_after_accept = ?,
+                sent_date = ?, accepted = ?, replied = ?, notes = ?, follow_up_date = ?,
+                updated_at = ?
+            WHERE lead_id = ?
+            """,
+            fields + (now, existing["lead_id"]),
+        )
+        return existing["lead_id"], False
+    cur = conn.execute(
+        """
+        INSERT INTO linkedin_leads (
+            profile_url, name, company, connection_note, dm_after_accept,
+            sent_date, accepted, replied, notes, follow_up_date,
+            source_csv, imported_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (lead["profile_url"],) + fields + (source_csv, now, now),
+    )
+    return cur.lastrowid, True
+
+
+def get_linkedin_lead(conn: sqlite3.Connection, lead_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM linkedin_leads WHERE lead_id = ?", (lead_id,)).fetchone()
+
+
+def update_linkedin_lead(
+    conn: sqlite3.Connection,
+    lead_id: int,
+    *,
+    accepted: str | None = None,
+    replied: str | None = None,
+    status: str | None = None,
+    notes: str | None = None,
+    follow_up_date: str | None = None,
+) -> None:
+    """Partial update — only given fields change. Caller (server.py) is
+    responsible for also writing the same change back into the lead's
+    source_csv — the CSV stays the record of truth, this is just the
+    live query engine (same split gmail/storage.py's JSON files vs.
+    crm_db already uses)."""
+    fields, params = [], []
+    for col, val in (
+        ("accepted", accepted), ("replied", replied), ("status", status),
+        ("notes", notes), ("follow_up_date", follow_up_date),
+    ):
+        if val is not None:
+            fields.append(f"{col} = ?")
+            params.append(val)
+    if not fields:
+        return
+    fields.append("updated_at = ?")
+    params.append(datetime.now().isoformat())
+    params.append(lead_id)
+    conn.execute(f"UPDATE linkedin_leads SET {', '.join(fields)} WHERE lead_id = ?", params)
+
+
+def create_reminder(conn: sqlite3.Connection, text: str, due_date: str, source: str = "manual") -> int:
+    now = datetime.now().isoformat()
+    cur = conn.execute(
+        "INSERT INTO reminders (text, due_date, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (text, due_date, source, now, now),
+    )
+    return cur.lastrowid
+
+
+def update_reminder_status(
+    conn: sqlite3.Connection, reminder_id: int, status: str, due_date: str | None = None
+) -> None:
+    now = datetime.now().isoformat()
+    if due_date is not None:
+        conn.execute(
+            "UPDATE reminders SET status = ?, due_date = ?, updated_at = ? WHERE reminder_id = ?",
+            (status, due_date, now, reminder_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE reminders SET status = ?, updated_at = ? WHERE reminder_id = ?",
+            (status, now, reminder_id),
+        )
+
+
+def has_pending_reminder_from(conn: sqlite3.Connection, source: str) -> bool:
+    """Used by the weekly leads-import check to avoid nagging with a new
+    'provide this week's CSV' reminder every single tick once one is
+    already sitting unresolved."""
+    row = conn.execute(
+        "SELECT 1 FROM reminders WHERE source = ? AND status = 'pending' LIMIT 1", (source,)
+    ).fetchone()
+    return row is not None
+
+
+def record_leads_import(conn: sqlite3.Connection, filename: str, row_count: int) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO linkedin_leads_imports (filename, imported_at, row_count) VALUES (?, ?, ?)",
+        (filename, datetime.now().isoformat(), row_count),
+    )
+
+
+def list_imported_lead_filenames(conn: sqlite3.Connection) -> set[str]:
+    return {r["filename"] for r in conn.execute("SELECT filename FROM linkedin_leads_imports").fetchall()}
+
+
+def latest_leads_import(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM linkedin_leads_imports ORDER BY imported_at DESC LIMIT 1"
+    ).fetchone()
+
+
+def get_reminders_overview(conn: sqlite3.Connection) -> dict:
+    """Everything Home's Action-needed/Waiting blocks need in one call.
+    Buckets open linkedin_leads (by their own follow_up_date) and pending
+    custom reminders (by their own due_date) into: action_needed (due
+    today or overdue) vs waiting (future-dated) — and within
+    action_needed, by what's actually blocking action: connection not
+    yet accepted, accepted but no message sent yet, or a plain custom
+    reminder with no lead attached."""
+    today = datetime.now().date().isoformat()
+
+    lead_rows = [
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM linkedin_leads WHERE status = 'open' AND follow_up_date IS NOT NULL "
+            "ORDER BY follow_up_date ASC"
+        ).fetchall()
+    ]
+    reminder_rows = [
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM reminders WHERE status = 'pending' AND linked_lead_id IS NULL "
+            "ORDER BY due_date ASC"
+        ).fetchall()
+    ]
+
+    action = {"connection_requests": [], "accepted_needs_message": [], "custom": []}
+    waiting = {"leads": [], "custom": []}
+
+    for lead in lead_rows:
+        accepted = (lead.get("accepted") or "").strip().lower() == "yes"
+        bucket = action["accepted_needs_message"] if accepted else action["connection_requests"]
+        (bucket if lead["follow_up_date"] <= today else waiting["leads"]).append(lead)
+
+    for r in reminder_rows:
+        (action["custom"] if r["due_date"] <= today else waiting["custom"]).append(r)
+
+    return {"today": today, "action_needed": action, "waiting": waiting}

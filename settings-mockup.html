@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LyteKeepr — Settings & Import mockup</title>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
+<link rel="stylesheet" href="styles.css?v=24">
+<style>
+  /* Mockup-only scaffolding: real colours, fonts and shadows come from styles.css */
+  .mockup-tag { position: fixed; top: 10px; left: 10px; z-index: 9999; background: #1f8a4c; color: #fff; font-family: var(--font-heading);
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 5px 10px; border-radius: 999px; text-transform: uppercase; }
+  .gear { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,.7); background: rgba(230,237,240,.95); color: var(--ink);
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 8px rgba(41,67,78,.14); }
+  .gear:hover, .gear.on { background: var(--ink); color: var(--surface); }
+  .gear svg { width: 19px; height: 19px; }
+  .set-wrap { display: flex; gap: 16px; flex: 1; min-height: 0; }
+  .set-nav { width: 220px; flex: none; display: flex; flex-direction: column; gap: 6px; }
+  .set-nav button { text-align: left; border: none; background: transparent; padding: 11px 14px; border-radius: 14px; font-family: var(--font-heading);
+    font-size: 13px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+  .set-nav button.on { background: rgba(255,255,255,.95); color: var(--ink); box-shadow: 0 2px 10px rgba(17,25,35,.08); }
+  .set-main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+  .steps { display: flex; gap: 8px; flex-wrap: wrap; }
+  .step { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: rgba(230,237,240,.8); font-family: var(--font-heading);
+    font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+  .step b { width: 20px; height: 20px; border-radius: 50%; background: #fff; color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+  .step.on { background: var(--ink); color: var(--surface); } .step.on b { background: var(--coral); color: #fff; }
+  .step.done b { background: var(--teal); color: #fff; }
+  .card { background: rgba(255,255,255,.7); border-radius: 18px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; }
+  .card h2 { font-family: var(--font-heading); font-size: 18px; margin: 0; }
+  .card p { margin: 0; font-size: 13px; color: var(--ink-soft); line-height: 1.55; }
+  .drop { border: 2px dashed rgba(41,67,78,.25); border-radius: 14px; padding: 26px 14px; text-align: center; background: rgba(230,237,240,.5); font-size: 13px; }
+  .drop b { display: block; margin-bottom: 4px; } .drop span { color: var(--ink-soft); font-size: 12px; }
+  .file-pill { display: inline-flex; gap: 8px; align-items: center; background: #fff; border-radius: 999px; padding: 7px 14px; font-size: 12.5px; box-shadow: 0 1px 4px rgba(41,67,78,.15); }
+  table.map { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .map th { text-align: left; font-family: var(--font-heading); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); padding: 8px 10px; }
+  .map td { padding: 9px 10px; border-top: 1px solid rgba(41,67,78,.08); vertical-align: middle; }
+  .map .col { font-weight: 600; } .map .sample { color: var(--ink-soft); max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .map select, .opt select, .opt input { width: 100%; border: none; background: rgba(230,237,240,.9); border-radius: 9px; padding: 8px 10px; font-family: var(--font-body); font-size: 12.5px; color: var(--ink); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; } .dot.ok { background: #3f9d73; } .dot.ask { background: var(--coral); }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .opt label { display: block; font-family: var(--font-heading); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 5px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn-soft { background: rgba(230,237,240,.9); color: var(--ink); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+  .stat { background: #fff; border-radius: 14px; padding: 14px 16px; } .stat b { display: block; font-family: var(--font-heading); font-size: 26px; } .stat span { font-size: 12px; color: var(--ink-soft); }
+  .remember { display: flex; gap: 8px; align-items: center; font-size: 12.5px; }
+  .hide { display: none !important; }
+  .chan { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #fff; border-radius: 12px; padding: 10px 14px; font-size: 13px; }
+  .chan select { width: 160px; border: none; background: rgba(230,237,240,.9); border-radius: 9px; padding: 7px 10px; font-family: var(--font-body); font-size: 12.5px; }
+  .ufields { display: flex; flex-wrap: wrap; gap: 6px; } .ufields span { background: rgba(127,168,184,.18); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 600; }
+  .ugroup { font-family: var(--font-heading); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-uppercase: none; text-transform: uppercase; color: var(--ink-soft); margin: 4px 0 6px; }
+  .note { font-size: 12px; color: var(--ink-soft); }
+  .tpl { display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 12px; padding: 11px 14px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="mockup-tag">Mockup — Settings &amp; Import</div>
+<div class="workspace">
+  <header class="header">
+    <button class="brand brand-button" type="button"><span class="brand-dot"></span><span class="brand-name">LyteKeepr</span></button>
+    <div class="actions">
+      <!-- the old "Sync" button (it does nothing today) is replaced by the settings circle -->
+      <button class="gear on" type="button" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="primary">
+    <div class="left-rail">
+      <div class="rail-tab rail-tab-home"><span class="rail-tab-label">HOME</span></div>
+      <div class="rail-tab" style="background:var(--ink)"><span class="rail-tab-label">GMAIL</span></div>
+      <div class="rail-tab" style="background:var(--ink)"><span class="rail-tab-label">LINKEDIN</span></div>
+      <div class="rail-tab" style="background:var(--ink)"><span class="rail-tab-label">CRM</span></div>
+      <div class="rail-tab" style="background:var(--teal)"><span class="rail-tab-label">CALENDAR</span></div>
+    </div>
+
+    <section class="panel" style="flex:1; display:flex; flex-direction:column; gap:16px; overflow:hidden; min-height:0">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap">
+        <h1>Settings</h1>
+        <span class="note">Opened from the circle at the top right</span>
+      </div>
+      <div class="set-wrap">
+        <nav class="set-nav">
+          <button class="on" type="button">Import contacts</button>
+          <button type="button">Saved mappings</button>
+          <button type="button">Funnels &amp; statuses</button>
+          <button type="button">Connections (Google)</button>
+          <button type="button">Account</button>
+        </nav>
+
+        <div class="set-main">
+          <div class="steps">
+            <div class="step on" data-s="1"><b>1</b>Choose file</div>
+            <div class="step" data-s="2"><b>2</b>Match fields</div>
+            <div class="step" data-s="3"><b>3</b>Done</div>
+          </div>
+
+          <!-- STEP 1 -->
+          <div class="card" id="s1">
+            <h2>Import contacts</h2>
+            <p>Import contacts from a spreadsheet. You'll match its columns to LyteKeepr fields on the next step, and optionally add the people to a funnel.</p>
+            <div class="drop"><b>Drop a file here</b><span>or click to choose · CSV, XLSX, XLS</span></div>
+            <div class="row"><span class="file-pill">📄 leads-2026-10-15.csv · 31 rows</span><span class="note">(example of a chosen file)</span></div>
+            <div class="row"><button class="btn btn-primary" type="button" data-go="2">Scan file and match fields</button></div>
+          </div>
+
+          <!-- STEP 2 -->
+          <div class="card hide" id="s2">
+            <h2>Match the columns</h2>
+            <p>Every file is matched to the <b>same universal fields</b>, so a LinkedIn file and an Instagram file end up in the same contact table. Most columns are already matched from your saved mapping. Check the ones marked in orange.</p>
+            <div class="chan"><span><b>Channel:</b> LinkedIn <span class="note">(detected from the profile links, linkedin.com)</span></span>
+              <select><option selected>LinkedIn</option><option>Instagram</option><option>Other…</option></select></div>
+            <table class="map">
+              <thead><tr><th>Column in your file</th><th>Example</th><th>Goes into</th></tr></thead>
+              <tbody id="maprows"></tbody>
+            </table>
+            <div class="opts">
+              <div class="opt"><label>Source / batch name</label><input value="Week of Oct 12"></div>
+              <div class="opt"><label>Add these people to a funnel</label>
+                <select><option>No, contacts only</option><option selected>LinkedIn funnel</option><option>Instagram funnel</option></select></div>
+              <div class="opt"><label>Starting status</label>
+                <select><option selected>Work it out from the file (sent date, accepted, replied)</option><option>New</option><option>Connection request sent</option></select></div>
+              <div class="opt"><label>If the person already exists</label>
+                <select><option selected>Skip them (keep their history)</option><option>Fill in blank fields only</option></select></div>
+            </div>
+            <label class="remember"><input type="checkbox" checked> Remember this mapping for files with the same columns</label>
+            <div class="row"><button class="btn btn-primary" type="button" data-go="3">Import 31 rows</button><button class="btn btn-soft" type="button" data-go="1">Back</button></div>
+          </div>
+
+          <!-- STEP 3 -->
+          <div class="card hide" id="s3">
+            <h2>Import finished</h2>
+            <div class="stats">
+              <div class="stat"><b>24</b><span>new contacts added</span></div>
+              <div class="stat"><b>6</b><span>already in LyteKeepr, skipped</span></div>
+              <div class="stat"><b>1</b><span>repeat inside the file, merged</span></div>
+              <div class="stat"><b>24</b><span>added to the LinkedIn funnel</span></div>
+            </div>
+            <p>Batch <b>Week of Oct 12</b> · mapping saved as "LinkedIn weekly leads". Follow-up tasks for anyone already contacted were scheduled.</p>
+            <div class="row"><button class="btn btn-primary" type="button" data-go="1">Import another file</button><button class="btn btn-soft" type="button">View these contacts</button></div>
+          </div>
+
+          <div class="card">
+            <h2>Universal contact fields</h2>
+            <p>One list for every channel. A field a channel doesn't have simply stays empty (n/a). Anything that doesn't fit is kept as an extra field on the contact, never lost.</p>
+            <div class="ugroup">Who</div><div class="ufields"><span>Channel</span><span>URL</span><span>Name</span><span>Business name</span><span>Job title</span><span>Headline / bio</span><span>Location</span><span>Industry / type</span></div>
+            <div class="ugroup">How to reach</div><div class="ufields"><span>Phone / WhatsApp</span><span>Telegram</span><span>Email</span><span>Website</span></div>
+            <div class="ugroup">Size &amp; source</div><div class="ufields"><span>Audience size</span><span>Verified</span><span>Date found</span><span>Source file</span><span>Batch (week)</span></div>
+            <div class="ugroup">Outreach</div><div class="ufields"><span>Status</span><span>Status date</span><span>Follow-up date</span><span>Notes</span></div>
+            <div class="ugroup">Extras</div><div class="ufields"><span>Any other column: kept as a named extra field</span></div>
+          </div>
+
+          <div class="card">
+            <h2>Saved mappings</h2>
+            <div class="tpl"><span><b>LinkedIn weekly leads</b> · 13 of 25 columns matched, 12 kept as extras · used 3 times</span><button class="btn btn-soft" type="button" style="padding:6px 12px">Edit</button></div>
+            <div class="tpl"><span><b>Instagram business search</b> · 12 of 12 columns matched · used 2 times</span><button class="btn btn-soft" type="button" style="padding:6px 12px">Edit</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  var FIELDS = ["Name", "URL (profile link)", "Business name", "Job title", "Headline / bio", "Location", "Industry / type", "Audience size", "Phone / WhatsApp", "Telegram", "Email", "Website", "Verified",
+    "Date found", "Notes", "Status", "Status date", "Follow-up date", "Keep as extra field", "Ignore this column"];
+  var ROWS = [
+    ["name", "Dana Roy", "Name", 1], ["profile_url", "linkedin.com/in/dana-roy", "URL (profile link)", 1], ["company", "Acme Ltd", "Business name", 1],
+    ["current_role", "Founder", "Job title", 1], ["headline", "B2B services for founders", "Headline / bio", 1], ["location", "Montreal, Canada", "Location", 1],
+    ["connections", "500+", "Audience size", 1], ["comment", "this made me think about follow ups…", "Notes", 1], ["sent_date", "2026-10-08", "Status date", 1],
+    ["accepted", "yes", "Status", 1], ["replied", "", "Status", 1], ["follow_up_date", "2026-10-11", "Follow-up date", 1],
+    ["tier", "A", "Keep as extra field", 0], ["connection_note", "Hi Dana, saw your post…", "Keep as extra field", 0], ["dm_after_accept", "Thanks for connecting…", "Keep as extra field", 0]
+  ];
+  var tb = document.getElementById("maprows");
+  ROWS.forEach(function (r) {
+    var tr = document.createElement("tr");
+    tr.innerHTML = '<td class="col"><span class="dot ' + (r[3] ? "ok" : "ask") + '"></span>' + r[0] + '</td><td class="sample">' + (r[1] || "(empty)") + '</td><td><select>' +
+      FIELDS.map(function (f) { return "<option" + (f === r[2] ? " selected" : "") + ">" + f + "</option>"; }).join("") + "</select></td>";
+    tb.appendChild(tr);
+  });
+  function go(n) {
+    [1, 2, 3].forEach(function (i) {
+      document.getElementById("s" + i).classList.toggle("hide", i !== n);
+      var st = document.querySelector('.step[data-s="' + i + '"]'); st.classList.toggle("on", i === n); st.classList.toggle("done", i < n);
+    });
+  }
+  document.querySelectorAll("[data-go]").forEach(function (b) { b.addEventListener("click", function () { go(+b.dataset.go); }); });
+</script>
+</body>
+</html>

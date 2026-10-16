@@ -262,6 +262,7 @@ def scan_for_candidates(since_date: str | None = None) -> dict:
             "account_id": account_id,
             "scanned": len(normalized_batch),
             "new_candidates": len(new_pending_ids),
+            "new_candidate_ids": new_pending_ids,
             "total_pending": len(storage.get_pending_review_ids(account_id)),
             "deleted": len(deleted_ids),
             "fell_back_to_full_scan": fell_back_to_full,

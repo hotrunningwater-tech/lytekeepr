@@ -1,0 +1,306 @@
+from pathlib import Path
+
+from flask import Blueprint, jsonify, request, send_from_directory
+
+from . import chat, contact_ai, contacts, google_sync, leads, profile, store
+
+bp = Blueprint("lk_calendar", __name__)
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+def _payload():
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else {}
+
+
+@bp.errorhandler(store.ValidationError)
+def _bad_request(err):
+    return jsonify({"error": str(err)}), 400
+
+
+@bp.get("/api/calendar/events")
+def list_events():
+    start, end = request.args.get("start"), request.args.get("end")
+    if not start or not end:
+        return jsonify({"error": "start and end are required"}), 400
+    return jsonify({"now": store.now_local().strftime("%Y-%m-%dT%H:%M"),
+                    "events": store.occurrences(start, end)})
+
+
+@bp.post("/api/calendar/overdue/move")
+def move_overdue():
+    return jsonify(store.move_overdue(str(_payload().get("to", "today"))))
+
+
+@bp.get("/api/calendar/agenda")
+def agenda():
+    return jsonify(store.agenda())
+
+
+@bp.post("/api/calendar/events")
+def create_event():
+    return jsonify(store.create_event(_payload())), 201
+
+
+@bp.put("/api/calendar/events/<int:event_id>")
+def update_event(event_id):
+    event = store.update_event(event_id, _payload())
+    return (jsonify(event), 200) if event else (jsonify({"error": "not found"}), 404)
+
+
+@bp.delete("/api/calendar/events/<int:event_id>")
+def delete_event(event_id):
+    return (jsonify({"ok": True}), 200) if store.delete_event(event_id) else (jsonify({"error": "not found"}), 404)
+
+
+@bp.post("/api/calendar/events/<int:event_id>/done")
+def mark_done(event_id):
+    data = _payload()
+    if not data.get("date"):
+        return jsonify({"error": "date is required"}), 400
+    ok = store.set_done(event_id, data["date"], bool(data.get("done", True)))
+    return (jsonify({"ok": True}), 200) if ok else (jsonify({"error": "not found"}), 404)
+
+
+@bp.post("/api/calendar/events/done-bulk")
+def done_bulk():
+    data = _payload()
+    items = data.get("items") or []
+    n = 0
+    for it in items[:500]:
+        if store.set_done(int(it["id"]), str(it["date"]), bool(data.get("done", True))):
+            n += 1
+    return jsonify({"ok": True, "updated": n})
+
+
+@bp.post("/api/calendar/followups/move")
+def followups_move():
+    data = _payload()
+    ids = [int(i) for i in (data.get("lead_ids") or [])]
+    return jsonify(leads.reschedule_follow_ups(str(data.get("to_date", "")), ids))
+
+
+@bp.get("/api/calendar/leads")
+def list_leads():
+    return jsonify({"leads": leads.list_leads(request.args.get("channel"))})
+
+
+@bp.post("/api/calendar/leads/import")
+def import_leads():
+    channel = request.form.get("channel", "")
+    if request.form.get("sample"):
+        raw = leads.sample_csv(channel).encode()
+    else:
+        upload = request.files.get("file")
+        if not upload:
+            return jsonify({"error": "choose a CSV file"}), 400
+        raw = upload.read()
+    return jsonify(leads.import_csv(channel, raw))
+
+
+@bp.put("/api/calendar/leads/<int:lead_id>")
+def update_lead(lead_id):
+    lead = leads.set_status(lead_id, str(_payload().get("status", "")))
+    return (jsonify(lead), 200) if lead else (jsonify({"error": "not found"}), 404)
+
+
+@bp.get("/api/calendar/people/<int:person_id>/outreach")
+def person_outreach(person_id):
+    return jsonify(contacts.outreach(person_id))
+
+
+@bp.post("/api/calendar/people/<int:person_id>/outreach")
+def person_outreach_set(person_id):
+    data = _payload()
+    return jsonify(contacts.set_outreach(person_id, str(data.get("channel", "")), str(data.get("status", ""))))
+
+
+@bp.get("/api/calendar/profile")
+def profile_get():
+    return jsonify(profile.current())
+
+
+@bp.put("/api/calendar/profile")
+def profile_put():
+    name = str(_payload().get("name", "")).strip()[:80]
+    store.set_setting("sender_name", name)
+    return jsonify(profile.current())
+
+
+@bp.post("/api/calendar/chat")
+def chat_message():
+    messages = chat.clean_messages(_payload().get("messages"))
+    if messages is None:
+        return jsonify({"error": "Send a non-empty list of {role, content} ending with a user message."}), 400
+    try:
+        out = chat.reply(messages)
+        store.chat_append("user", messages[-1]["content"])      # saved only after a successful answer
+        store.chat_append("assistant", out["reply"])
+        return jsonify(out)
+    except chat.RateLimited as exc:
+        return jsonify({"error": str(exc)}), 429
+    except chat.OpenAIServiceError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@bp.post("/api/calendar/contact-ai")
+def contact_ai_message():
+    data = _payload()
+    messages = chat.clean_messages(data.get("messages"))
+    if messages is None:
+        return jsonify({"error": "Send a non-empty list of {role, content} ending with a user message."}), 400
+    try:
+        if data.get("mode") == "ask" and data.get("person_id"):
+            return jsonify(contact_ai.ask(messages, int(data["person_id"])))
+        return jsonify(contact_ai.reply(messages, data.get("contact") if isinstance(data.get("contact"), dict) else {}, bool(data.get("pending"))))
+    except chat.RateLimited as exc:
+        return jsonify({"error": str(exc)}), 429
+    except chat.OpenAIServiceError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@bp.post("/api/calendar/chat/confirm")
+def chat_confirm():
+    data = _payload()
+    result = chat.resolve_pending(str(data.get("id", "")), bool(data.get("approve")))
+    store.chat_append("assistant", result.get("message", ""))
+    return jsonify(result)
+
+
+@bp.get("/api/calendar/chat/history")
+def chat_history():
+    return jsonify({"messages": store.chat_history()})
+
+
+@bp.delete("/api/calendar/chat/history")
+def chat_history_clear():
+    return jsonify({"cleared": store.chat_clear()})
+
+
+@bp.post("/api/calendar/google/sync")
+def google_sync_now():
+    try:
+        return jsonify(google_sync.sync(trigger="manual"))
+    except google_sync.GoogleAuthError as exc:
+        return jsonify({"error": str(exc), "needs_reconnect": not exc.never_connected}), 502
+    except google_sync.GoogleSyncError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@bp.get("/api/calendar/google/status")
+def google_status():
+    return jsonify(google_sync.status())
+
+
+@bp.put("/api/calendar/events/<int:event_id>/meeting")
+def update_meeting(event_id):
+    data = _payload()
+    event = store.set_meeting(event_id, data.get("meeting_status"), data.get("my_notes"))
+    return (jsonify(event), 200) if event else (jsonify({"error": "not found"}), 404)
+
+
+@bp.post("/api/calendar/import/scan")
+def import_scan():
+    upload = request.files.get("file")
+    if not upload:
+        return jsonify({"error": "choose a file"}), 400
+    return jsonify(contacts.scan(upload.read(), upload.filename or "file"))
+
+
+@bp.post("/api/calendar/import/run")
+def import_run():
+    data = _payload()
+    return jsonify(contacts.import_rows(str(data.get("token", "")), data.get("mapping") or {}, data.get("options") or {}))
+
+
+@bp.get("/api/calendar/import/mappings")
+def import_mappings():
+    return jsonify({"mappings": contacts.list_mappings()})
+
+
+@bp.delete("/api/calendar/import/mappings/<int:mapping_id>")
+def import_mapping_delete(mapping_id):
+    return (jsonify({"ok": True}), 200) if contacts.delete_mapping(mapping_id) else (jsonify({"error": "not found"}), 404)
+
+
+@bp.get("/api/calendar/companies")
+def companies_list():
+    return jsonify(contacts.list_companies(request.args.get("q", "")))
+
+
+@bp.post("/api/calendar/companies")
+def company_create():
+    return jsonify(contacts.save_company(None, _payload())), 201
+
+
+@bp.get("/api/calendar/companies/<int:company_id>")
+def company_get(company_id):
+    c = contacts.get_company(company_id)
+    return (jsonify(c), 200) if c else (jsonify({"error": "not found"}), 404)
+
+
+@bp.put("/api/calendar/companies/<int:company_id>")
+def company_update(company_id):
+    return jsonify(contacts.save_company(company_id, _payload()))
+
+
+@bp.get("/api/calendar/contacts")
+def contacts_list():
+    return jsonify({"contacts": contacts.list_contacts(request.args.get("q", ""), request.args.get("company_id"), request.args.get("limit", 200))})
+
+
+@bp.post("/api/calendar/contacts")
+def contact_create():
+    return jsonify(contacts.create_contact(_payload())), 201
+
+
+@bp.get("/api/calendar/contacts/duplicate")
+def contact_duplicate():
+    exclude = request.args.get("exclude", type=int)
+    return jsonify({"duplicate": contacts.find_duplicate(request.args.get("email", ""), request.args.get("url", ""), exclude, request.args.get("phone", ""))})
+
+
+@bp.get("/api/calendar/duplicates")
+def duplicates_list():
+    return jsonify({"groups": contacts.find_duplicate_groups()})
+
+
+@bp.post("/api/calendar/duplicates/dismiss")
+def duplicates_dismiss():
+    contacts.dismiss_duplicates(_payload().get("ids") or [])
+    return jsonify({"ok": True})
+
+
+@bp.get("/api/calendar/contacts/<int:contact_id>")
+def contact_get(contact_id):
+    c = contacts.get_contact(contact_id)
+    return (jsonify(c), 200) if c else (jsonify({"error": "not found"}), 404)
+
+
+@bp.post("/api/calendar/contacts/<int:contact_id>/raw-notes")
+def contact_raw_notes(contact_id):
+    contacts.append_raw_notes(contact_id, str(_payload().get("text", "")))
+    return jsonify({"ok": True})
+
+
+@bp.delete("/api/calendar/contacts/<int:contact_id>")
+def contact_delete(contact_id):
+    return (jsonify({"ok": True}), 200) if contacts.delete_contact(contact_id) else (jsonify({"error": "not found"}), 404)
+
+
+@bp.put("/api/calendar/contacts/<int:contact_id>")
+def contact_update(contact_id):
+    c = contacts.update_contact(contact_id, _payload())
+    return (jsonify(c), 200) if c else (jsonify({"error": "not found"}), 404)
+
+
+@bp.get("/lk-calendar/<path:subpath>")
+def assets(subpath):
+    mimetype = "text/javascript" if subpath.endswith(".js") else None
+    response = send_from_directory(STATIC_DIR, subpath, mimetype=mimetype)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def register(app):
+    app.register_blueprint(bp)

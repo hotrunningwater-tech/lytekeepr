@@ -1,0 +1,282 @@
+/* Settings panel (import contacts, companies & contacts). All classes prefixed lks-. */
+.lk-gear { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,.7); background: rgba(230,237,240,.95); color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 8px rgba(41,67,78,.14); padding: 0; }
+.lk-gear:hover, .lk-gear.on { background: var(--ink); color: var(--surface); }
+.lk-gear svg { width: 19px; height: 19px; }
+#settingsPanel.lks-panel { flex: 1; display: flex; flex-direction: column; gap: 16px; overflow: hidden; min-height: 0; }
+.lks-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.lks-wrap { display: flex; gap: 16px; flex: 1; min-height: 0; }
+.lks-nav { width: 210px; flex: none; display: flex; flex-direction: column; gap: 6px; }
+.lks-nav button { text-align: left; border: none; background: transparent; padding: 11px 14px; border-radius: 14px; font-family: var(--font-heading);
+  font-size: 13px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+.lks-nav button.on { background: rgba(255,255,255,.95); color: var(--ink); box-shadow: 0 2px 10px rgba(17,25,35,.08); }
+.lks-main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; min-width: 0; padding-bottom: 20px; }
+.lks-steps { display: flex; gap: 8px; flex-wrap: wrap; }
+.lks-step { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: rgba(230,237,240,.8); font-family: var(--font-heading); font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.lks-step b { width: 20px; height: 20px; border-radius: 50%; background: #fff; color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+.lks-step.on { background: var(--ink); color: var(--surface); } .lks-step.on b { background: var(--coral); color: #fff; } .lks-step.done b { background: var(--teal); color: #fff; }
+.lks-card { background: rgba(255,255,255,.7); border-radius: 18px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; }
+.lks-card h2 { font-family: var(--font-heading); font-size: 18px; margin: 0; }
+.lks-card p { margin: 0; font-size: 13px; color: var(--ink-soft); line-height: 1.55; }
+.lks-drop { border: 2px dashed rgba(41,67,78,.25); border-radius: 14px; padding: 28px 14px; text-align: center; background: rgba(230,237,240,.5); font-size: 13px; cursor: pointer; }
+.lks-drop b { display: block; margin-bottom: 4px; } .lks-drop span { color: var(--ink-soft); font-size: 12px; }
+.lks-drop.over, .lks-drop.has { border-color: var(--teal); background: rgba(127,168,184,.18); }
+.lks-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.lks-soft { background: rgba(230,237,240,.9) !important; color: var(--ink) !important; }
+.lks-err { color: #b5503a !important; } .lks-note { font-size: 12px; color: var(--ink-soft); }
+.lks-synced { font-size: 12.5px; color: var(--ink); background: rgba(127,168,184,.16); border-radius: 9px; padding: 8px 10px; margin: 0; }
+.lks-map { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.lks-map th { text-align: left; font-family: var(--font-heading); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); padding: 8px 10px; }
+.lks-map td { padding: 8px 10px; border-top: 1px solid rgba(41,67,78,.08); vertical-align: middle; }
+.lks-map .col { font-weight: 600; } .lks-map .sample { color: var(--ink-soft); max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lks-map select, .lks-opt select, .lks-opt input, .lks-opt textarea, .lks-search { width: 100%; border: none; background: rgba(230,237,240,.9); border-radius: 9px; padding: 8px 10px;
+  font-family: var(--font-body); font-size: 12.5px; color: var(--ink); }
+.lks-opt textarea { resize: vertical; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; } .dot.ok { background: #3f9d73; } .dot.ask { background: var(--coral); }
+.lks-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.lks-opt.wide { grid-column: 1 / -1; }
+.lks-opt label { display: block; font-family: var(--font-heading); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 5px; }
+.lks-check { display: flex; gap: 8px; align-items: center; font-size: 12.5px; cursor: pointer; }
+.lks-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.lks-stat { background: #fff; border-radius: 14px; padding: 14px 16px; } .lks-stat b { display: block; font-family: var(--font-heading); font-size: 26px; } .lks-stat span { font-size: 12px; color: var(--ink-soft); }
+.lks-errs span { display: block; font-size: 12.5px; color: #b5503a; }
+.lks-tpl { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #fff; border-radius: 12px; padding: 11px 14px; font-size: 13px; }
+.lks-split { display: flex; gap: 16px; align-items: flex-start; flex: 1; }
+.lks-side { width: 240px; flex: none; display: flex; flex-direction: column; gap: 8px; }
+.lks-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: left; border: none; background: rgba(230,237,240,.7); border-radius: 12px;
+  padding: 9px 12px; font-family: var(--font-body); font-size: 12.5px; color: var(--ink); cursor: pointer; margin-bottom: 4px; }
+.lks-item.on { background: #fff; box-shadow: 0 2px 8px rgba(17,25,35,.1); font-weight: 600; } .lks-item i { font-style: normal; color: var(--ink-soft); font-size: 11.5px; }
+.lks-detail { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.lks-cohead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; } .lks-cohead h2 { margin: 0; font-family: var(--font-heading); font-size: 20px; }
+.lks-cohead .btn { margin-left: auto; }
+.lks-people { display: flex; flex-direction: column; gap: 8px; }
+.lks-person { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: rgba(255,255,255,.7); border-radius: 14px; padding: 12px 14px; flex-wrap: wrap; }
+.lks-pmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.lks-pact { display: flex; gap: 8px; align-items: center; } .lks-pact .btn { padding: 6px 12px; font-size: 12px; }
+.lks-link { font-size: 12px; font-weight: 600; color: var(--ink); }
+@media (max-width: 900px) { .lks-wrap, .lks-split { flex-direction: column; } .lks-nav, .lks-side { width: 100%; flex-direction: row; flex-wrap: wrap; } }
+.lks-test { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px dashed rgba(41,67,78,.25); padding-top: 12px; }
+.lks-test b { font-size: 11px; letter-spacing: .06em; color: var(--coral); }
+.lks-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.lks-tab { border: none; border-radius: 999px; padding: 8px 14px; background: rgba(230,237,240,.8); font-family: var(--font-heading); font-size: 12.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+.lks-tab i { font-style: normal; margin-left: 7px; font-weight: 500; opacity: .75; } .lks-tab.on { background: var(--ink); color: var(--surface); }
+.lks-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lks-erase { margin-top: 18px; border: 1px dashed rgba(41,67,78,.3) !important; font-size: 12px !important; }
+.crm-channel-tag-instagram { color: #c13584; background: rgba(193,53,132,.13); }
+.crm-channel-tag-email, .crm-channel-tag-phone, .crm-channel-tag-telegram { color: var(--deep); background: rgba(41,67,78,.1); }
+.lks-embed { display: flex; flex-direction: column; gap: 16px; }
+.lks-erase-row { margin-top: 4px; }
+.lks-modal { position: fixed; inset: 0; background: rgba(17,25,35,.45); z-index: 200; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; overflow-y: auto; }
+.lks-modal .lks-card { width: min(720px, 100%); background: #f4f8fa; }
+.lks-subrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.lks-search-pill { margin-top: 18px; margin-bottom: 18px; padding: 6px; border-radius: 999px; background: rgba(230,237,240,.8); width: min(320px, 100%); }
+.lks-search-pill[hidden] { display: none; }
+.lks-search-pill input { width: 100%; border: none; outline: none; background: #fff; border-radius: 999px; padding: 10px 18px; font-family: var(--font-body); font-size: 13.5px; color: var(--ink); }
+/* CRM Contacts: the tab rows and buttons stay put; only the list scrolls */
+#crmContactsBody { overflow: hidden; flex: 1; gap: 0; }
+#crmContactsBody .demo-reset-tabs { margin-top: 10px; margin-bottom: 10px; }
+#crmContactsBody .lks-search-pill { margin-top: 10px; margin-bottom: 10px; }
+#crmContactsBody .card-actions { padding-bottom: 10px; }
+#crmPeopleList, #crmCompanyList, #crmImportBody { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 20px; }
+#crmPeopleList[hidden], #crmCompanyList[hidden], #crmImportBody[hidden], #crmContactsBody[hidden] { display: none; }
+.lks-filters { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.lks-filters .lks-search-pill { width: auto; min-width: 200px; }
+.lks-search-pill select { width: 100%; border: none; outline: none; background: #fff; border-radius: 999px; padding: 10px 18px; font-family: var(--font-body); font-size: 13.5px; color: var(--ink); }
+.lks-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.lks-choice { border: 1px solid rgba(41,67,78,.18); background: rgba(230,237,240,.8); color: var(--ink); border-radius: 999px; padding: 9px 16px; font-family: var(--font-body); font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.lks-choice.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.lks-choice-new { border-style: dashed; }
+/* batch narrow, search wide */
+.lks-filters { flex-wrap: nowrap; }
+.lks-filters #crmBatchPill { flex: 0 0 190px; width: 190px; min-width: 0; }
+.lks-filters #crmSearchPill { flex: 1 1 340px; width: 340px; min-width: 220px; }
+#crmBatchSelect { text-overflow: ellipsis; padding-right: 8px; }
+/* search: just wide enough for its placeholder text plus a little room */
+.lks-filters #crmSearchPill { flex: 0 0 250px; width: 250px; min-width: 0; }
+.lks-filters #crmBatchPill { flex: 0 0 210px; width: 210px; }
+.lks-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-bottom: 10px; }
+.lks-chips-label { font-size: 12px; color: var(--ink-soft); }
+.lks-chip { border: 1px solid rgba(41,67,78,.18); background: rgba(230,237,240,.8); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-family: var(--font-body); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.lks-chip.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.lks-search-pill { position: relative; }
+.lks-suggest { position: absolute; top: calc(100% - 4px); right: 0; z-index: 30; min-width: 340px; max-height: 280px; overflow-y: auto; background: #fff; border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(17,25,35,.18); padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.lks-suggest[hidden] { display: none; }
+.lks-suggest-item { display: flex; justify-content: space-between; align-items: center; gap: 14px; border: none; background: transparent; text-align: left; padding: 9px 12px; border-radius: 10px;
+  font-family: var(--font-body); font-size: 13px; color: var(--ink); cursor: pointer; }
+.lks-suggest-item:hover { background: rgba(230,237,240,.9); } .lks-suggest-item i { font-style: normal; color: var(--ink-soft); font-size: 12px; }
+.lks-suggest-empty { padding: 10px 12px; font-size: 12.5px; color: var(--ink-soft); }
+.lks-outreach { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; flex-wrap: wrap; } .lks-outreach b { margin-right: 8px; }
+/* CRM list cards: names were too faded */
+#crmPeopleList .attention-flag, #crmCompanyList .attention-flag { color: var(--ink); }
+.lks-detail-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.crm-funnel-status { display: flex; align-items: center; gap: 6px; border: none; background: transparent; padding: 4px 0 0; font-family: var(--font-body); font-size: 12px; color: var(--ink); cursor: pointer; text-align: left; }
+.crm-funnel-status:hover { text-decoration: underline; }
+.crm-channel-tag-email, .crm-channel-tag-phone, .crm-channel-tag-telegram, .crm-channel-tag-instagram { text-transform: uppercase; }
+.crm-msg-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.crm-msg-views { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(230,237,240,.8); margin-right: 6px; }
+.crm-msg-view { border: none; background: transparent; border-radius: 999px; padding: 6px 12px; font-family: var(--font-body); font-size: 12.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+.crm-msg-view.on { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(17,25,35,.12); }
+.crm-msg-chan { border: none; cursor: pointer; margin-right: 0; font-size: 11px; padding: 5px 9px; } .crm-msg-chan.off { opacity: .45; text-decoration: line-through; }
+.crm-msg-group-head { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; font-size: 12px; color: var(--ink-soft); }
+.lks-stages-modal { width: min(560px, 94vw); }
+.lks-stage-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; } .lks-stage-row input { flex: 1; min-width: 0; }
+.lks-stage-add { display: flex; gap: 8px; margin: 12px 0; } .lks-stage-add input { flex: 1; }
+/* funnel header: the buttons sit together on the right */
+.crm-funnel-board-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.crm-funnel-board-header h2 { margin-right: auto; }
+.crm-funnel-board-header .btn { margin-left: 0; }
+/* contact assistant */
+.lks-split2 { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; width: min(1120px, 100%); align-items: start; }
+.lks-split2 > .lks-card { width: auto !important; }
+@media (max-width: 900px) { .lks-split2 { grid-template-columns: 1fr; } }
+.lks-ai { background: rgba(255,255,255,.7); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.lks-ai-head { display: flex; flex-direction: column; gap: 2px; } .lks-ai-head b { font-family: var(--font-heading); font-size: 15px; }
+.lks-ai-log { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+.lks-ai-msg { font-size: 13px; line-height: 1.5; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lks-ai-msg.user { background: var(--ink); color: var(--surface); align-self: flex-end; max-width: 92%; } .lks-ai-msg.assistant { background: rgba(230,237,240,.9); }
+.lks-ai textarea { width: 100%; border: none; background: rgba(230,237,240,.9); border-radius: 12px; padding: 10px 12px; font-family: var(--font-body); font-size: 13px; color: var(--ink); resize: vertical; }
+.lks-ai-proposal { background: #fff; border: 1px solid rgba(41,67,78,.15); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.lks-ai-proposal.done { opacity: .55; }
+.lks-ai-row { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; } .lks-ai-row small { display: block; color: var(--ink-soft); font-size: 11.5px; } .lks-ai-row em { color: var(--coral); font-style: normal; font-size: 12px; }
+.lks-ai-notes { margin: 0; max-height: 220px; overflow-y: auto; background: rgba(230,237,240,.6); border-radius: 10px; padding: 10px; font-family: var(--font-body); font-size: 12px; white-space: pre-wrap; }
+/* chat in the New/Edit contact window: same height as the form */
+.lks-split2 { align-items: stretch; }
+.lks-split2 > .lks-ai { height: 100%; min-height: 0; overflow: hidden; background: #f4f8fa; }
+.lks-split2 .lks-ai-log { flex: 1 1 0; min-height: 0; max-height: none; overflow-y: auto; }
+.lks-raw summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); } .lks-raw summary .btn { margin-left: 8px; }
+#crmPersonDetailRawCard summary .btn { margin-left: 10px; }
+/* chips inside the structured notes */
+.lks-marked { white-space: pre-wrap; font-size: 12.5px; line-height: 1.7; }
+.lks-chip2 { display: inline; border: 1px solid transparent; border-radius: 8px; padding: 1px 7px; margin: 0 1px; font: inherit; font-weight: 600; cursor: grab; color: var(--ink); background: rgba(127,168,184,.28); }
+.lks-chip2-company { background: rgba(224,142,120,.3); } .lks-chip2-software { background: rgba(120,180,150,.3); } .lks-chip2-name { background: rgba(110,140,220,.28); }
+.lks-chip2-email, .lks-chip2-phone, .lks-chip2-link { background: rgba(41,67,78,.14); } .lks-chip2-other { background: rgba(200,200,120,.35); }
+.lks-chip2.armed { outline: 2px solid var(--ink); }
+.lks-drop-on { outline: 2px dashed var(--ink); outline-offset: 1px; }
+.lks-rawfield { font-size: 12px; color: var(--ink-soft); }
+.lks-opt textarea.lks-rawfield { width: 100%; }
+.lks-chipfield { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 34px; border-radius: 9px; background: rgba(230,237,240,.9); padding: 5px 8px; }
+.lks-chipfield input { flex: 1; min-width: 80px; border: none !important; background: transparent !important; padding: 3px 2px !important; outline: none; }
+.lks-tag { display: inline-flex; align-items: center; gap: 4px; background: rgba(224,142,120,.28); border-radius: 8px; padding: 2px 4px 2px 8px; font-size: 12.5px; font-weight: 600; }
+.lks-tag button { border: none; background: transparent; cursor: pointer; font-size: 14px; line-height: 1; color: var(--ink-soft); padding: 0 3px; } .lks-tag button:hover { color: var(--ink); }
+.lks-chip2-role { background: rgba(224,142,120,.3); }
+/* chips: grab and carry */
+.lks-chip2 { cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; display: inline-block; }
+.lks-chip2.lifted { opacity: .4; }
+.lks-ghost { position: fixed; z-index: 1000; pointer-events: none; padding: 3px 10px; border-radius: 9px; font-weight: 600; font-size: 12.5px; color: var(--ink);
+  box-shadow: 0 6px 18px rgba(17,25,35,.28); background: #fff; cursor: grabbing; transform: rotate(-2deg); }
+.lks-drop-on { outline: 2px dashed var(--ink); outline-offset: 2px; background-color: rgba(255,255,255,.9); }
+.lks-expand { border: none; background: transparent; color: var(--ink); font-size: 11.5px; font-weight: 600; text-decoration: underline; cursor: pointer; text-transform: none; letter-spacing: 0; margin-left: 4px; }
+.lks-opt textarea { min-height: 7.5em; resize: vertical; }
+.lks-opt textarea[rows="2"] { min-height: 0; }
+/* small copy pill */
+.lks-copy { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 9px; border: 1px solid rgba(41,67,78,.18); border-radius: 999px; background: rgba(255,255,255,.75);
+  color: var(--ink-soft); font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer; vertical-align: middle; }
+.lks-copy:hover { background: #fff; color: var(--ink); border-color: rgba(41,67,78,.35); } .lks-copy svg { display: block; }
+/* New/Edit contact window: always fits the screen; the form scrolls inside, the chat input and the Save buttons stay in view */
+.lks-modal:has(.lks-split2) { padding: 24px 16px; align-items: center; overflow: hidden; }
+.lks-split2 { max-height: calc(100vh - 48px); grid-template-rows: minmax(0, 1fr); }
+.lks-split2 > .lks-card { overflow-y: auto; max-height: 100%; min-height: 0; }
+.lks-split2 > .lks-ai { max-height: 100%; }
+.lks-form > .lks-row:last-child { position: sticky; bottom: -22px; margin: 0 -24px -22px; padding: 12px 24px; background: #f4f8fa; border-top: 1px solid rgba(41,67,78,.1); z-index: 2; }
+.lks-opt textarea.lks-rawfield { min-height: 0; }
+.lks-tag-text { cursor: text; padding: 1px 0; }
+.lks-tag-edit { border: none !important; outline: 2px solid var(--ink); border-radius: 6px; padding: 1px 6px !important; font: inherit; font-weight: 600; background: #fff !important; width: 14em; max-width: 60vw; }
+.lks-tag { background: rgba(110,140,220,.22); }
+.lks-chipfield { min-height: 40px; }
+.lks-notice-back { position: fixed; inset: 0; background: rgba(17,25,35,.45); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.lks-notice { background: #f4f8fa; border-radius: 18px; padding: 22px 24px; width: min(420px, 100%); box-shadow: 0 16px 40px rgba(17,25,35,.3); display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+.lks-notice p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
+/* read-only state of the contact page */
+.lks-ro .lks-tag button, .lks-ro .lks-chipfield input { display: none !important; }
+.lks-ro .lks-tag-text { cursor: default; }
+.lks-ro.lks-chipfield { background: transparent; padding-left: 0; }
+.lks-ro.lks-chipfield:not(:has(.lks-tag))::before { content: '—'; color: var(--ink-soft); }
+.lks-form.lks-ro input, .lks-form.lks-ro textarea { background: transparent; }
+.lks-form.lks-ro textarea { resize: none; }
+#crmPersonDetailEditor .lks-form { background: transparent; padding: 0; }
+#crmPersonDetailEditor .lks-opts { margin-top: 10px; }
+.lks-notice p { white-space: pre-line; }
+/* contact page = the same look as the New contact window: editor card left, chat right at the SAME height, everything else below */
+#crmPersonDetailEditor .lks-opts { grid-template-columns: 1fr 1fr; }
+#crmPersonDetailEditor .lks-form { padding: 4px 4px 8px; }
+/* read-only keeps the same boxes, so Notes and Raw notes stay clearly separate */
+.lks-form.lks-ro input, .lks-form.lks-ro textarea { background: rgba(230,237,240,.9); }
+.lks-form.lks-ro .lks-chipfield { background: rgba(230,237,240,.55); padding: 5px 8px; }
+.lks-form.lks-ro textarea { resize: vertical; }
+/* ===== contact page (rebuilt): left column scrolls, chat stays in view on the right at full height ===== */
+#crmPersonDetailView { display: flex; flex-direction: column; min-height: 0; }
+#crmPersonDetailView[hidden] { display: none; }
+.lks-page { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; flex: 1; min-height: 0; }
+.lks-page-main { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 2px 6px 24px 0; }
+.lks-page-chat { min-height: 0; display: flex; }
+.lks-page-chat > .lks-ai { flex: 1; height: auto; min-height: 0; overflow: hidden; background: #f4f8fa; }
+.lks-page-chat .lks-ai-log { flex: 1 1 0; min-height: 0; max-height: none; overflow-y: auto; }
+.lks-standing { display: flex; flex-direction: column; gap: 6px; }
+.lks-standing .crm-detail-field:empty, .lks-standing .crm-detail-field[hidden] { display: none; }
+#crmPersonDetailEditor { padding: 14px 18px 18px; }
+#crmPersonDetailEditor .lks-form { padding: 0; background: transparent; }
+#crmPersonDetailEditor .lks-opts { grid-template-columns: 1fr 1fr; }
+@media (max-width: 1000px) { .lks-page { grid-template-columns: 1fr; overflow-y: auto; } .lks-page-main { overflow: visible; } .lks-page-chat { min-height: 420px; } }
+/* chat on the contact page: the same boundary and tint as the cards on the left */
+.lks-page-chat > .lks-ai { background: rgba(127, 168, 184, 0.07); border: 1px solid rgba(127, 168, 184, 0.22); border-radius: 12px; padding: 16px 18px; }
+.lks-page-chat .lks-ai-head b { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--teal); }
+.lks-page-chat .lks-ai textarea { background: #fff; border: 1px solid rgba(127, 168, 184, 0.28); }
+.lks-page-chat .lks-ai-msg.assistant { background: #fff; border: 1px solid rgba(127, 168, 184, 0.2); }
+.lks-also { margin-top: 18px; } .lks-also-head { font-family: var(--font-heading); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--teal); margin: 0 0 8px; padding-top: 12px; border-top: 1px solid rgba(127,168,184,.3); }
+/* company cards: the people and the add link were too faint */
+.crm-company-person-link { color: var(--ink) !important; font-weight: 600; font-size: 14px; }
+.crm-company-person-link:hover { text-decoration: underline; }
+#crmCompanyList .subtle-link-btn:not(.crm-company-person-link), .lks-also .subtle-link-btn:not(.crm-company-person-link) { color: var(--ink-soft); font-weight: 600; }
+/* contact page details card: same contrast as the New contact window (light card, clearly darker fields) */
+#crmPersonDetailEditor { background: #f4f8fa; }
+#crmPersonDetailEditor .lks-opt input, #crmPersonDetailEditor .lks-opt textarea, #crmPersonDetailEditor .lks-chipfield,
+.lks-form.lks-ro input, .lks-form.lks-ro textarea, .lks-form.lks-ro .lks-chipfield { background: rgba(222, 232, 237, 0.95); }
+#crmPersonDetailEditor .lks-opt label { color: var(--ink-soft); }
+.lks-offer { margin: 2px 0 6px; }
+/* order switch on the People page */
+.lks-sort { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(230,237,240,.8); margin-left: auto; align-self: center; }
+.lks-sort button { border: none; background: transparent; border-radius: 999px; padding: 6px 14px; font-family: var(--font-body); font-size: 12.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+.lks-sort button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(17,25,35,.12); }
+#crmCompanyActions[hidden] { display: none; }
+#crmCompanyActions { display: flex; }
+/* email draft card in the Home chat: readable, structured, one-line Send button */
+#emailSendDraftRow { align-items: flex-start; padding: 14px 16px; gap: 16px; color: var(--ink); font-size: 14px; }
+.email-draft { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.email-draft-meta { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.email-draft-meta span { display: inline-block; min-width: 64px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--teal); font-weight: 700; }
+.email-draft-body { margin-top: 8px; padding: 12px 14px; background: #fff; border: 1px solid rgba(127,168,184,.3); border-radius: 10px; font-size: 14.5px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow-y: auto; }
+.linkedin-send-draft .btn { white-space: nowrap; flex: none; }
+/* the "Send this email?" window: a real preview of the email */
+.email-confirm-modal { max-width: 640px; width: min(640px, calc(100% - 40px)); padding: 28px 30px; text-align: left; align-items: stretch; gap: 14px; }
+.email-confirm-modal h2 { text-align: left; margin: 0; font-size: 20px; }
+.email-confirm { display: flex; flex-direction: column; gap: 6px; }
+.email-confirm-meta { display: flex; gap: 12px; align-items: baseline; font-size: 14.5px; color: var(--ink); }
+.email-confirm-meta span { flex: none; min-width: 70px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--teal); }
+.email-confirm-meta b { font-weight: 600; overflow-wrap: anywhere; }
+.email-confirm-body { margin-top: 8px; padding: 18px 20px; background: #fff; border: 1px solid rgba(127,168,184,.3); border-radius: 12px; font-size: 15px; line-height: 1.6; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 46vh; overflow-y: auto; }
+.email-confirm-modal .card-actions { justify-content: flex-end; margin-top: 4px; }
+/* editable email draft */
+textarea.email-draft-body { width: 100%; box-sizing: border-box; resize: vertical; min-height: 120px; font-family: inherit; }
+textarea.email-draft-body:focus, input.email-draft-subject:focus { outline: 2px solid var(--teal); outline-offset: 1px; }
+.email-draft-subjrow { display: flex; align-items: center; gap: 4px; }
+input.email-draft-subject { flex: 1; min-width: 0; border: 1px solid rgba(127,168,184,.3); background: #fff; border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); }
+.email-draft-hint { margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
+/* possible duplicates */
+.lks-dupbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 10px; border-radius: 12px; background: rgba(224,142,120,.18); border: 1px solid rgba(224,142,120,.4); font-size: 13.5px; color: var(--ink); }
+.lks-dupbar[hidden] { display: none; }
+.lks-dups { width: min(760px, 100%); max-height: calc(100vh - 80px); overflow-y: auto; background: #f4f8fa; }
+.lks-dup-group { padding: 14px 0; border-top: 1px solid rgba(127,168,184,.3); display: flex; flex-direction: column; gap: 10px; }
+.lks-dup-people { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.lks-dup-person { background: #fff; border: 1px solid rgba(127,168,184,.3); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.lks-dup-person b { font-size: 15px; }
+/* the funnel picker: a slim pill like the buttons beside it */
+.crm-funnel-board-header select#crmFunnelBoardSelect {
+  appearance: none; -webkit-appearance: none; flex: none; width: auto; min-width: 140px; max-width: 240px; height: 36px; box-sizing: border-box;
+  padding: 0 38px 0 18px; border-radius: 999px; border: 1px solid rgba(127, 168, 184, 0.4); background-color: rgba(230, 237, 240, 0.9);
+  color: var(--ink); font-family: var(--font-body); font-size: 13.5px; font-weight: 700; letter-spacing: 0.01em; cursor: pointer; text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5l5 5 5-5' fill='none' stroke='%2329434e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 16px center; transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.crm-funnel-board-header select#crmFunnelBoardSelect:hover { background-color: #fff; border-color: rgba(127, 168, 184, 0.7); }
+.crm-funnel-board-header select#crmFunnelBoardSelect:focus { outline: none; background-color: #fff; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(127, 168, 184, 0.25); }

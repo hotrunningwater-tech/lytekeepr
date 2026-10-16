@@ -375,6 +375,96 @@ FIND_EMAIL_CONTACT_TOOL = {
     },
 }
 
+GET_CONTACT_RECORD_TOOL = {
+    "type": "function",
+    "name": "get_contact_record",
+    "description": (
+        "Read the full record of ONE contact in the CRM: their details (name, company, job title, email, phone, links), the structured "
+        "notes and the raw notes the user saved, their funnel stage, their status on each channel, and recent messages. Call it BEFORE "
+        "drafting an email or message to a contact, and whenever the user asks what you know about someone. Identify the contact by "
+        "name, company, email address or handle."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"query": {"type": "string", "description": "A name, company, email address or handle."}},
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+}
+
+CHECK_REPLY_TOOL = {
+    "type": "function",
+    "name": "check_reply",
+    "description": (
+        "Answers 'did he/she reply?', 'did X write back?', 'anything new from X?' for ONE contact. The code compares the contact's latest incoming "
+        "message with the user's latest outgoing one and returns a ready answer plus both messages. Use this instead of reading the whole history for those questions. "
+        "Confirm which contact the user means first."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Contact name, company or email address."},
+            "channel": {"type": "string", "description": "Optional: email, linkedin or instagram. Leave empty for all channels."},
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+}
+
+RESTORE_SAVED_EMAIL_DRAFT_TOOL = {
+    "type": "function",
+    "name": "restore_saved_email_draft",
+    "description": (
+        "Put one of the user's saved, unsent email drafts back on screen so they can review, edit and send it. Use it when the user asks to bring back, "
+        "reopen or continue an earlier draft. The saved drafts and their ids are listed in the conversation context. This never sends anything."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"draft_id": {"type": "string", "description": "The id of the saved draft, from the list."}},
+        "required": ["draft_id"],
+        "additionalProperties": False,
+    },
+}
+
+LIST_FUNNELS_TOOL = {
+    "type": "function",
+    "name": "list_funnels",
+    "description": (
+        "List the user's funnels with, for every stage, how many contacts are in it and how many of them have an email address. "
+        "Use it first when the user wants to email a funnel or a stage of a funnel, so you can show them the numbers and ask which stage. "
+        "Pass funnel_name to look at one funnel only; leave it empty to list all of them."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"funnel_name": {"type": "string", "description": "Optional funnel name (or part of it)."}},
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+DRAFT_FUNNEL_EMAIL_TOOL = {
+    "type": "function",
+    "name": "draft_funnel_email",
+    "description": (
+        "Stage ONE email for everyone with an email address in a funnel stage. This NEVER sends anything: it shows the email in the chat for the user to adjust and approve, "
+        "then they see and can edit every person's copy and approve the send. Write the body once as a template that "
+        "greets with the literal text {{first_name}}, for example 'Hi {{first_name}},' - the system replaces it with each person's first name, and for "
+        "someone with no name it becomes just 'Hi,'. Only call it after the user has chosen the funnel and the stage and you know what the "
+        "email should say. After calling it, tell the user the email is shown above to adjust and approve, and that nothing has been sent - never say it was sent."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "funnel_name": {"type": "string", "description": "The funnel's name."},
+            "stage_name": {"type": "string", "description": "The stage's name, e.g. Contacted."},
+            "subject": {"type": "string", "description": "The email subject line."},
+            "body": {"type": "string", "description": "The email text, greeting with {{first_name}}."},
+        },
+        "required": ["funnel_name", "stage_name", "subject", "body"],
+        "additionalProperties": False,
+    },
+}
+
 DRAFT_EMAIL_MESSAGE_TOOL = {
     "type": "function",
     "name": "draft_email_message",
@@ -402,6 +492,10 @@ DRAFT_EMAIL_MESSAGE_TOOL = {
             "body": {
                 "type": "string",
                 "description": "The exact email body text to draft.",
+            },
+            "reply_in_thread": {
+                "type": "boolean",
+                "description": "True when the user is replying to or following up on the existing email conversation with this person, so it stays in the same Gmail thread. False for a new topic.",
             },
         },
         "required": ["person_name", "body"],
@@ -466,7 +560,39 @@ DELETE_SCANNED_DOCUMENT_TOOL = {
     },
 }
 
+SET_REMINDER_TOOL = {
+    "type": "function",
+    "name": "set_reminder",
+    "description": (
+        "Create a reminder with a due date, shown on Home under 'Action "
+        "needed' (once due) or 'Waiting' (until then). Use this when the "
+        "user asks to be reminded of something — this is a plain manual "
+        "note, not a follow-up sequence: it never sends anything by "
+        "itself, it just surfaces on the dashboard on the given date."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "text": {
+                "type": "string",
+                "description": "The reminder text, e.g. 'Check in on Windowly pilot pricing'.",
+            },
+            "due_date": {
+                "type": "string",
+                "description": "Due date as YYYY-MM-DD.",
+            },
+        },
+        "required": ["text", "due_date"],
+        "additionalProperties": False,
+    },
+}
+
 TOOLS = [
+    GET_CONTACT_RECORD_TOOL,
+    LIST_FUNNELS_TOOL,
+    DRAFT_FUNNEL_EMAIL_TOOL,
+    CHECK_REPLY_TOOL,
+    RESTORE_SAVED_EMAIL_DRAFT_TOOL,
     CHRONOLOGY_SEARCH_TOOL,
     EMAIL_SEARCH_TOOL,
     DOCUMENT_SEARCH_TOOL,
@@ -482,6 +608,7 @@ TOOLS = [
     FIND_LINKEDIN_CONTACT_TOOL,
     FIND_EMAIL_CONTACT_TOOL,
     DRAFT_EMAIL_MESSAGE_TOOL,
+    SET_REMINDER_TOOL,
 ]
 
 
@@ -612,6 +739,12 @@ def run_tool(name: str, arguments: dict) -> str:
             )
         )
     if name == "search_crm_messages":
+        if arguments.get("person_name"):
+            from assistant.contact_lookup import describe, find_people
+            matches = find_people(arguments["person_name"])
+            if len(matches) > 1:       # never search several different people at once: the user picks one first
+                return json.dumps({"status": "ambiguous", "message": f"More than one contact matches '{arguments['person_name']}': "
+                                   + "; ".join(describe(p) for p in matches[:8]) + ". Show the user this list and ask which one they mean. Do not search yet."})
         conn = crm_db.get_connection()
         try:
             results = crm_db.search_messages(
@@ -624,6 +757,26 @@ def run_tool(name: str, arguments: dict) -> str:
             )
         finally:
             conn.close()
+        # Asking about one person: use the same full history the contact page shows (includes the emails saved from Gmail),
+        # not only what is stored as CRM messages, so incoming emails are never missed.
+        if arguments.get("person_name"):
+            try:
+                from assistant.contact_lookup import find_people
+                from lk_calendar import contacts as lk_contacts
+                people = find_people(arguments["person_name"])
+                if len(people) == 1:
+                    pid = people[0]["person_id"]
+                    with lk_contacts._crm() as c2:
+                        detail = crm_db.get_person_detail(c2, pid) or {}
+                    full = lk_contacts.messages_with_saved_emails(pid, detail.get("messages") or [])
+                    ch = (arguments.get("channel") or "").lower()
+                    if ch:
+                        full = [m for m in full if (m.get("channel") or "").lower() == ch]
+                    full = list(reversed(full))[: arguments.get("limit") or 50]
+                    results = [{"person_name": people[0]["name"], "channel": m.get("channel"), "direction": m.get("direction"),
+                                "timestamp": m.get("timestamp"), "message_text": m.get("message_text")} for m in full]
+            except Exception:
+                pass
         return json.dumps({"results": results, "count": len(results)})
     if name == "find_linkedin_contact":
         return json.dumps(linkedin_send_flow.resolve_linkedin_contact(arguments.get("person_name", "")))
@@ -634,6 +787,24 @@ def run_tool(name: str, arguments: dict) -> str:
                 message_text=arguments.get("message_text", ""),
             )
         )
+    if name == "list_funnels":
+        from assistant import bulk_email
+        return json.dumps(bulk_email.funnel_overview(arguments.get("funnel_name", "")))
+    if name == "draft_funnel_email":
+        from assistant import bulk_email
+        return json.dumps(bulk_email.create_bulk(arguments.get("funnel_name", ""), arguments.get("stage_name", ""),
+                                                 arguments.get("subject", ""), arguments.get("body", "")))
+    if name == "check_reply":
+        from assistant.contact_lookup import check_reply
+        return json.dumps(check_reply(arguments.get("query", ""), arguments.get("channel", "")))
+    if name == "get_contact_record":
+        from assistant.contact_lookup import contact_record
+        return json.dumps(contact_record(arguments.get("query", "")))
+    if name == "restore_saved_email_draft":
+        payload = email_send_flow.open_draft(str(arguments.get("draft_id", "")))
+        if not payload:
+            return json.dumps({"status": "not_found", "message": "That saved draft no longer exists."})
+        return json.dumps({"status": "pending_confirmation", "message": f"The draft to {payload['person_name']} is back on screen with a Send now button. Nothing has been sent."})
     if name == "find_email_contact":
         return json.dumps(email_send_flow.resolve_email_contact(arguments.get("person_name", "")))
     if name == "draft_email_message":
@@ -642,6 +813,7 @@ def run_tool(name: str, arguments: dict) -> str:
                 person_name=arguments.get("person_name", ""),
                 subject=arguments.get("subject", ""),
                 body=arguments.get("body", ""),
+                reply_in_thread=bool(arguments.get("reply_in_thread")),
             )
         )
     if name == "request_delete_scanned_document":
@@ -651,4 +823,16 @@ def run_tool(name: str, arguments: dict) -> str:
                 filename=arguments.get("filename"),
             )
         )
+    if name == "set_reminder":
+        text = (arguments.get("text") or "").strip()
+        due_date = (arguments.get("due_date") or "").strip()
+        if not text or not due_date:
+            return json.dumps({"error": "Both text and due_date are required."})
+        conn = crm_db.get_connection()
+        try:
+            crm_db.create_reminder(conn, text, due_date, source="ai_chat")
+            conn.commit()
+        finally:
+            conn.close()
+        return json.dumps({"ok": True, "text": text, "due_date": due_date})
     return json.dumps({"error": f"Unknown tool: {name}"})

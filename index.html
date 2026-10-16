@@ -4,9 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LyteKeepr — Workspace</title>
+<script>
+/* If a screen other than Home was remembered, keep the page invisible until it is restored, so a refresh never flashes through other screens. */
+(function () {
+  try {
+    var s = JSON.parse(sessionStorage.getItem('lk-view') || 'null');
+    if (s && s.tab && s.tab !== 'home') {
+      document.write('<style id="lkHold">body{visibility:hidden}</style>');
+      setTimeout(function () { var h = document.getElementById('lkHold'); if (h) h.remove(); }, 3000);
+    }
+  } catch (e) { /* nothing remembered */ }
+})();
+</script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=21">
+<link rel="stylesheet" href="styles.css?v=24">
+<link rel="stylesheet" href="lk-calendar/calendar.css">
+<link rel="stylesheet" href="lk-calendar/settings.css">
 </head>
 <body>
 
@@ -23,11 +37,13 @@
     <div class="case-identity">
       <span class="case-identity-label" id="shellIdentityLabel">Connected</span>
       <span class="case-identity-sep">·</span>
-      <span class="case-identity-value" id="shellIdentityValue">LinkedIn, Gmail, HubSpot</span>
+      <span class="case-identity-value" id="shellIdentityValue">LinkedIn, Gmail, CRM</span>
     </div>
     <div class="actions">
       <button class="demo-recorder-quick-btn" id="demoRecorderQuickBtn" type="button" aria-label="Start screen recording" title="Start screen recording" hidden></button>
-      <button class="btn btn-primary" id="syncBtn" type="button">Sync</button>
+      <button class="lk-gear" id="settingsBtn" type="button" aria-label="Settings" title="Settings: import contacts, companies">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
     </div>
   </header>
 
@@ -49,6 +65,10 @@
       <div class="rail-tab rail-tab-hubspot" id="crmTab">
         <span class="rail-tab-label">CRM</span>
       </div>
+      <div class="rail-tab rail-tab-calendar" id="calendarTab">
+        <span class="rail-tab-label">CALENDAR</span>
+        <span class="rail-tab-badge" id="calendarTabBadge" hidden></span>
+      </div>
     </div>
 
     <!-- Case Overview -->
@@ -60,6 +80,97 @@
         </div>
 
         <div class="attention-list" id="attentionList"></div>
+
+        <div class="block">
+          <span class="block-label">LinkedIn Follow-ups</span>
+
+          <div class="reminder-add-row">
+            <select id="followupLeadSelect">
+              <option value="">No specific contact (custom follow-up)</option>
+            </select>
+            <input type="text" id="followupTextInput" placeholder="e.g. Follow up about pilot pricing">
+            <input type="date" id="followupDateInput">
+            <button class="btn btn-primary btn-small" type="button" id="followupAddBtn">Add follow-up</button>
+          </div>
+
+          <div class="reminder-toplevel">
+            <button class="reminder-toplevel-toggle" type="button" aria-expanded="false" id="followupActionToggle">
+              <span class="reminder-toplevel-label">Action needed</span>
+              <span class="reminder-toplevel-count" id="followupActionCount">0</span>
+              <span class="reminder-toplevel-arrow">▶</span>
+            </button>
+            <div class="reminder-toplevel-body" id="followupActionBody" hidden>
+
+              <div class="reminder-group">
+                <button class="reminder-group-toggle" type="button" aria-expanded="false" id="followupConnectionToggle">
+                  <span class="reminder-group-label">Connection requests to check</span>
+                  <span class="reminder-group-count" id="followupConnectionCount">0</span>
+                  <span class="reminder-group-arrow">▶</span>
+                </button>
+                <div class="reminder-group-body attention-list" id="followupConnectionList" hidden></div>
+              </div>
+
+              <div class="reminder-group">
+                <button class="reminder-group-toggle" type="button" aria-expanded="false" id="followupAcceptedToggle">
+                  <span class="reminder-group-label">Accepted — needs a message</span>
+                  <span class="reminder-group-count" id="followupAcceptedCount">0</span>
+                  <span class="reminder-group-arrow">▶</span>
+                </button>
+                <div class="reminder-group-body attention-list" id="followupAcceptedList" hidden></div>
+              </div>
+
+              <div class="reminder-group">
+                <button class="reminder-group-toggle" type="button" aria-expanded="false" id="followupCustomActionToggle">
+                  <span class="reminder-group-label">Custom (no lead attached)</span>
+                  <span class="reminder-group-count" id="followupCustomActionCount">0</span>
+                  <span class="reminder-group-arrow">▶</span>
+                </button>
+                <div class="reminder-group-body attention-list" id="followupCustomActionList" hidden></div>
+              </div>
+
+              <p class="crm-empty" id="followupActionEmpty" hidden>Nothing due or overdue right now.</p>
+            </div>
+          </div>
+
+          <div class="reminder-toplevel">
+            <button class="reminder-toplevel-toggle is-calm" type="button" aria-expanded="false" id="followupWaitingToggle">
+              <span class="reminder-toplevel-label">Waiting / no action needed</span>
+              <span class="reminder-toplevel-count" id="followupWaitingCount">0</span>
+              <span class="reminder-toplevel-arrow">▶</span>
+            </button>
+            <div class="reminder-toplevel-body" id="followupWaitingBody" hidden>
+
+              <div class="reminder-group">
+                <button class="reminder-group-toggle" type="button" aria-expanded="false" id="followupWaitingConnectionToggle">
+                  <span class="reminder-group-label">Connection requests to check</span>
+                  <span class="reminder-group-count" id="followupWaitingConnectionCount">0</span>
+                  <span class="reminder-group-arrow">▶</span>
+                </button>
+                <div class="reminder-group-body upcoming-list" id="followupWaitingConnectionList" hidden></div>
+              </div>
+
+              <div class="reminder-group">
+                <button class="reminder-group-toggle" type="button" aria-expanded="false" id="followupWaitingAcceptedToggle">
+                  <span class="reminder-group-label">Accepted — needs a message</span>
+                  <span class="reminder-group-count" id="followupWaitingAcceptedCount">0</span>
+                  <span class="reminder-group-arrow">▶</span>
+                </button>
+                <div class="reminder-group-body upcoming-list" id="followupWaitingAcceptedList" hidden></div>
+              </div>
+
+              <div class="reminder-group">
+                <button class="reminder-group-toggle" type="button" aria-expanded="false" id="followupWaitingCustomToggle">
+                  <span class="reminder-group-label">Custom (no lead attached)</span>
+                  <span class="reminder-group-count" id="followupWaitingCustomCount">0</span>
+                  <span class="reminder-group-arrow">▶</span>
+                </button>
+                <div class="reminder-group-body upcoming-list" id="followupWaitingCustomList" hidden></div>
+              </div>
+
+              <p class="crm-empty" id="followupWaitingEmpty" hidden>Nothing waiting.</p>
+            </div>
+          </div>
+        </div>
 
         <div class="block">
           <span class="block-label">Waiting / No Action Needed</span>
@@ -128,24 +239,50 @@
         </div>
 
         <div class="preview-body" id="crmContactsBody">
+          <div class="lks-subrow">
           <div class="demo-reset-tabs crm-tabs-sub" role="tablist" aria-label="Contacts views">
             <button class="demo-reset-tab is-active" type="button" id="crmPeopleSubTabBtn" role="tab" aria-selected="true">People</button>
             <button class="demo-reset-tab" type="button" id="crmCompaniesSubTabBtn" role="tab" aria-selected="false">Companies</button>
+            <button class="demo-reset-tab" type="button" id="crmImportSubTabBtn" role="tab" aria-selected="false">Import</button>
+          </div>
+            <div class="lks-filters">
+            <div class="lks-search-pill" id="crmBatchPill"><select id="crmScopeSelect" aria-label="Search in">
+              <option value="all">Search in: everything</option><option value="name">Contact name</option><option value="company">Company name</option><option value="batch">Batch</option></select></div>
+            <div class="lks-search-pill" id="crmSearchPill"><input type="search" id="crmSearchInput" placeholder="Search people or companies" autocomplete="off" aria-label="Search people or companies"><div class="lks-suggest" id="crmSuggest" hidden></div></div>
+            </div>
           </div>
 
           <div class="card-actions" id="crmPeopleActions">
+            <button class="btn btn-primary btn-small" type="button" id="crmAddContactBtn">+ Add contact</button>
+            <button class="btn btn-secondary btn-small" type="button" id="crmSelectAllBtn">Select all shown</button>
+            <div class="lks-sort" id="crmSortToggle" role="group" aria-label="Order of contacts">
+              <button type="button" data-sort="activity" class="on" title="People with the most recent conversation first">Latest message</button>
+              <button type="button" data-sort="added" title="The people you added most recently first">Recently added</button>
+              <button type="button" data-sort="az" title="Alphabetical by name (company name when there is no name)">A–Z</button>
+            </div>
             <button class="btn btn-secondary btn-small" type="button" id="crmMergeSelectedBtn" hidden>Merge selected (2)</button>
             <select class="demo-reset-input" id="crmMoveToFunnelSelect" hidden></select>
             <button class="btn btn-secondary btn-small" type="button" id="crmMoveToFunnelBtn" hidden>Move to funnel</button>
           </div>
+          <div class="lks-chips" id="crmBatchChips" hidden></div>
+          <div class="lks-dupbar" id="crmDupBar" hidden></div>
           <div class="attention-list crm-full-list" id="crmPeopleList"></div>
+          <div class="card-actions" id="crmCompanyActions" hidden>
+            <div class="lks-sort" id="crmCompanySortToggle" role="group" aria-label="Order of companies">
+              <button type="button" data-sort="activity" title="Companies whose people had the most recent conversation first">Latest message</button>
+              <button type="button" data-sort="added" title="The companies you added most recently first">Recently added</button>
+              <button type="button" data-sort="az" class="on" title="Alphabetical">A–Z</button>
+            </div>
+          </div>
           <div class="attention-list crm-full-list" id="crmCompanyList" hidden></div>
+          <div class="lks-embed" id="crmImportBody" hidden></div>
         </div>
 
         <div class="preview-body" id="crmFunnelsBody" hidden>
           <div class="crm-funnel-board-header">
             <h2 id="crmFunnelBoardTitle">Funnel</h2>
             <select class="demo-reset-input" id="crmFunnelBoardSelect" hidden></select>
+            <button class="btn btn-secondary btn-small" type="button" id="crmEditStagesBtn" hidden>Edit stages</button>
             <button class="btn btn-remove btn-small" type="button" id="crmDeleteFunnelBtn" hidden>Delete</button>
             <button class="btn btn-secondary btn-small" type="button" id="crmCreateFunnelBtn">Create new</button>
           </div>
@@ -158,51 +295,37 @@
           <div class="document-viewer-heading">
             <span class="block-label">CONTACT</span>
             <h1 id="crmPersonDetailName">Person</h1>
-            <input type="text" class="demo-reset-input crm-detail-name-input" id="crmPersonDetailNameInput" hidden placeholder="Name">
+            <div class="lks-detail-tags" id="crmPersonDetailTags"></div>
           </div>
           <div class="card-actions">
             <button class="btn btn-secondary btn-small" type="button" id="crmEditPersonBtn">Edit</button>
-            <button class="btn btn-primary btn-small" type="button" id="crmSavePersonBtn" hidden>Save</button>
-            <button class="btn btn-secondary btn-small" type="button" id="crmCancelEditPersonBtn" hidden>Cancel</button>
-            <button class="btn btn-remove document-viewer-close" id="closeCrmPersonDetailBtn" type="button">Back to CRM</button>
+            <button class="btn btn-remove btn-small" type="button" id="crmDeletePersonBtn">Delete</button>
+            <button class="btn btn-remove document-viewer-close" id="closeCrmPersonDetailBtn" type="button">Back</button>
           </div>
         </div>
-        <div class="preview-body crm-detail-body">
-          <div class="preview-section crm-detail-card">
-            <span class="block-label">Overview</span>
-            <p class="crm-detail-field">
-              <span class="crm-detail-field-label">Company:</span>
-              <span id="crmPersonDetailCompany"></span>
-              <input type="text" class="demo-reset-input crm-detail-field-input" id="crmPersonDetailCompanyInput" hidden placeholder="Company">
-            </p>
-            <p class="crm-detail-field">
-              <span class="crm-detail-field-label">Job title:</span>
-              <span id="crmPersonDetailJobTitle"></span>
-              <input type="text" class="demo-reset-input crm-detail-field-input" id="crmPersonDetailJobTitleInput" hidden placeholder="Job title">
-            </p>
-            <p class="crm-detail-field" id="crmPersonDetailFunnelLine"></p>
-          </div>
-          <div class="preview-section crm-detail-card">
-            <span class="block-label">Channels</span>
-            <div id="crmPersonDetailChannels"></div>
-          </div>
-          <div class="preview-section crm-detail-card">
-            <span class="block-label">Follow-up</span>
-            <p id="crmPersonDetailFollowup"></p>
-          </div>
-          <div class="preview-section crm-detail-card">
-            <span class="block-label">Notes</span>
-            <p id="crmPersonDetailNotes"></p>
-            <textarea class="demo-reset-input crm-edit-notes-input" id="crmPersonDetailNotesInput" hidden placeholder="Notes" rows="4"></textarea>
-          </div>
-          <div class="preview-section crm-detail-card">
-            <div class="crm-detail-card-header">
-              <span class="block-label">Messages — all channels</span>
-              <button class="subtle-link-btn" type="button" id="crmPersonDetailMessagesToggle" hidden></button>
+
+        <div class="lks-page">
+          <div class="lks-page-main">
+            <!-- where this person stands: funnel, status on each channel, follow-up -->
+            <div class="preview-section crm-detail-card lks-standing">
+              <p class="crm-detail-field" id="crmPersonDetailFunnelLine"></p>
+              <div id="crmPersonDetailOutreach"></div>
+              <p class="crm-detail-field lks-note" id="crmPersonDetailFollowup"></p>
             </div>
-            <div id="crmPersonDetailMessages"></div>
+            <!-- the details (read-only until Edit) -->
+            <div class="preview-section crm-detail-card" id="crmPersonDetailEditor"></div>
+            <div class="preview-section crm-detail-card">
+              <div class="crm-detail-card-header">
+                <span class="block-label">Messages — all channels</span>
+                <button class="subtle-link-btn" type="button" id="crmPersonDetailMessagesToggle" hidden></button>
+              </div>
+              <div class="crm-msg-controls" id="crmMsgControls"></div>
+              <div id="crmPersonDetailMessages"></div>
+            </div>
           </div>
+          <aside class="lks-page-chat" id="crmPersonDetailAI"></aside>
         </div>
+
       </div>
 
       <div id="photoCropEditor" class="photo-crop-editor" hidden>
@@ -250,6 +373,51 @@
       </div>
     </section>
 
+    <!-- Calendar -->
+    <section class="panel lkc-panel" id="calendarPanel" hidden>
+      <div class="lkc-head">
+        <h1>Calendar</h1>
+        <div class="lkc-nav">
+          <button class="btn" type="button" id="lkcPrev" aria-label="Previous week">‹</button>
+          <span class="lkc-range" id="lkcRange"></span>
+          <button class="btn" type="button" id="lkcNext" aria-label="Next week">›</button>
+          <button class="btn" type="button" id="lkcToday">Today</button>
+          <button class="btn" type="button" id="lkcSyncGoogle" title="Pull your primary Google Calendar (timed events, read-only)">Sync Google</button>
+          <button class="btn" type="button" id="lkcImport">Import leads</button>
+          <button class="btn btn-primary" type="button" id="lkcNew">+ New</button>
+        </div>
+      </div>
+      <div class="lkc-filter-row">
+        <div class="lkc-filters" id="lkcFilters"></div>
+        <button class="lkc-chip lkc-density" type="button" id="lkcDensity" title="Fit the whole day on screen, or a roomier view that scrolls">Fit day</button>
+      </div>
+      <div class="lkc-body">
+        <div class="lkc-grid-wrap" id="lkcGridWrap"></div>
+        <aside class="lkc-side" id="lkcSide">
+          <div class="lkc-side-head">
+            <button class="lkc-collapse" type="button" id="lkcCollapse" aria-label="Collapse side panel" aria-expanded="true" title="Collapse side panel">›</button>
+            <div class="demo-reset-tabs" role="tablist">
+              <button class="demo-reset-tab is-active" type="button" id="lkcTabInfo">Details</button>
+              <button class="demo-reset-tab" type="button" id="lkcTabChat">Ask LyteKeepr</button>
+            </div>
+          </div>
+          <div class="lkc-pane" id="lkcSideInfo"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="panel lks-panel" id="settingsPanel" hidden>
+      <div class="lks-head"><h1>Settings</h1><button class="btn lks-soft" type="button" id="lksClose">Close</button></div>
+      <div class="lks-wrap">
+        <nav class="lks-nav" id="lksNav">
+          <button type="button" class="on" data-view="details">Profile</button>
+          <button type="button" data-view="mappings">Saved mappings</button>
+        </nav>
+        <div class="lks-main" id="lksMain"></div>
+      </div>
+    </section>
+
     <!-- AI Assistant Workspace -->
     <section class="panel ai-panel" id="aiPanel">
       <div class="assistant-heading">
@@ -279,8 +447,16 @@
       </div>
 
       <div class="linkedin-send-draft" id="emailSendDraftRow" hidden>
-        <span id="emailSendDraftText"></span>
+        <div id="emailSendDraftText" class="email-draft"></div>
         <button class="btn btn-primary btn-small" type="button" id="emailSendNowBtn">Send now</button>
+      </div>
+
+      <div class="linkedin-send-draft" id="bulkTemplateRow" hidden>
+        <div id="bulkTemplateText" class="email-draft"></div>
+        <div class="bulk-card-actions">
+          <button class="btn btn-primary btn-small" type="button" id="bulkApproveBtn">Approve</button>
+          <button class="btn btn-secondary btn-small" type="button" id="bulkTemplateCancelBtn">Cancel</button>
+        </div>
       </div>
 
       <div class="chat-input-row">
@@ -395,12 +571,34 @@
 </div>
 
 <div class="confirm-backdrop" id="emailSendConfirmBackdrop" hidden>
-  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="emailSendConfirmTitle">
+  <div class="confirm-modal email-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="emailSendConfirmTitle">
     <h2 id="emailSendConfirmTitle">Send this email?</h2>
-    <p id="emailSendConfirmText"></p>
+    <div class="email-confirm">
+      <div class="email-confirm-meta"><span>To</span><b id="emailConfirmTo"></b></div>
+      <div class="email-confirm-meta"><span>Subject</span><b id="emailConfirmSubject"></b></div>
+      <div class="email-confirm-body" id="emailConfirmBody"></div>
+    </div>
     <div class="card-actions">
       <button class="btn btn-primary" id="emailSendConfirmBtn" type="button">Confirm &amp; send</button>
       <button class="btn btn-secondary" id="emailSendCancelBtn" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="bulkEmailBackdrop" hidden>
+  <div class="confirm-modal bulk-modal" role="dialog" aria-modal="true" aria-labelledby="bulkEmailTitle">
+    <h2 id="bulkEmailTitle">Send to a funnel stage</h2>
+    <p id="bulkEmailSummary" class="bulk-summary"></p>
+    <div class="bulk-list-head">Check every email below. You can edit any one of them, and untick anyone you do not want to send to.</div>
+    <div class="bulk-list" id="bulkEmailList"></div>
+    <p id="bulkEmailProgress" class="bulk-progress" hidden></p>
+    <label class="bulk-pause">One email every
+      <select id="bulkPause"><option value="5">5 seconds</option><option value="10" selected>10 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option></select>
+    </label>
+    <div class="card-actions">
+      <button class="btn btn-primary" id="bulkEmailSendBtn" type="button">Send</button>
+      <button class="btn btn-secondary" id="bulkEmailBackBtn" type="button">Back to the email</button>
+      <button class="btn btn-secondary" id="bulkEmailCancelBtn" type="button">Cancel</button>
     </div>
   </div>
 </div>
@@ -423,6 +621,18 @@
     <div class="card-actions">
       <button class="btn btn-remove" type="button" id="crmRemoveConfirmBtn">Remove</button>
       <button class="btn btn-secondary" type="button" id="crmRemoveCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="crmStageMoveBackdrop" hidden>
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="crmStageMoveTitle">
+    <h2 id="crmStageMoveTitle">Confirm stage change</h2>
+    <p id="crmStageMoveText"></p>
+    <p id="crmStageMoveEffect" ></p>
+    <div class="card-actions">
+      <button class="btn" type="button" id="crmStageMoveOkBtn">Yes, move</button>
+      <button class="btn btn-secondary" type="button" id="crmStageMoveCancelBtn">Cancel</button>
     </div>
   </div>
 </div>
@@ -461,8 +671,35 @@
   </div>
 </div>
 
+<div class="confirm-backdrop" id="crmStagesBackdrop" hidden>
+  <div class="confirm-modal lks-stages-modal" role="dialog" aria-modal="true" aria-labelledby="crmStagesTitle">
+    <h2 id="crmStagesTitle">Edit stages</h2>
+    <div id="crmStagesList"></div>
+    <div class="lks-stage-add"><input type="text" class="demo-reset-input" id="crmStageNewName" placeholder="New stage name"><button class="btn btn-secondary btn-small" type="button" id="crmStageAddBtn">+ Add stage</button></div>
+    <p class="lks-err" id="crmStagesError" hidden></p>
+    <div class="card-actions"><button class="btn btn-primary" type="button" id="crmStagesDoneBtn">Done</button></div>
+  </div>
+</div>
+
+<div class="confirm-backdrop" id="crmMoveBackdrop" hidden>
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="crmMoveTitle">
+    <h2 id="crmMoveTitle">Move to a funnel</h2>
+    <div class="lks-choices" id="crmMoveChoices"></div>
+    <input type="text" class="demo-reset-input" id="crmMoveNewName" placeholder="Funnel name" hidden>
+    <p id="crmMoveSummary" hidden></p>
+    <p class="lks-err" id="crmMoveError" hidden></p>
+    <div class="card-actions">
+      <button class="btn btn-primary" type="button" id="crmMoveConfirmBtn">Move</button>
+      <button class="btn btn-secondary" type="button" id="crmMoveCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="crop-lock.js"></script>
 <script src="chat.js"></script>
+<script src="lk-calendar/calendar.js"></script>
+<script src="lk-calendar/settings.js"></script>
+<script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
 <script type="module" src="demo/reset.js"></script>
 <script>
@@ -811,7 +1048,7 @@
             .then(function (res) { return res.json(); })
             .then(function (data) {
               loaded = true;
-              renderConversationMessages(body, data);
+              renderConversationMessages(body, data, conv.participant_name);
               body.hidden = false;
               toggle.textContent = 'Hide messages';
               body.scrollTop = body.scrollHeight;
@@ -831,7 +1068,7 @@
       return card;
     }
 
-    function renderConversationMessages(container, data) {
+    function renderConversationMessages(container, data, contactName) {
       container.innerHTML = '';
       if (!data.ok) {
         var err = document.createElement('p');
@@ -852,7 +1089,7 @@
         var row = document.createElement('p');
         row.className = 'attention-copy';
         row.style.marginTop = '6px';
-        var who = msg.direction === 'outgoing' ? 'You' : (msg.sender || 'Them');
+        var who = msg.direction === 'outgoing' ? 'You' : (contactName || msg.sender || 'Them');
         var when = msg.timestamp ? ' (' + msg.timestamp + ')' : '';
         row.innerHTML = '<strong>' + who + when + ':</strong> ';
         row.appendChild(document.createTextNode(msg.message_text || ''));
@@ -892,28 +1129,13 @@
     var crmCompaniesSubTabBtn = document.getElementById('crmCompaniesSubTabBtn');
     var crmPeopleActions = document.getElementById('crmPeopleActions');
     var crmCompanyList = document.getElementById('crmCompanyList');
+    var crmImportSubTabBtn = document.getElementById('crmImportSubTabBtn');
+    var crmImportBody = document.getElementById('crmImportBody');
     var crmPeopleList = document.getElementById('crmPeopleList');
     var crmPersonDetailView = document.getElementById('crmPersonDetailView');
     var crmPersonDetailName = document.getElementById('crmPersonDetailName');
-    var crmPersonDetailNameInput = document.getElementById('crmPersonDetailNameInput');
-    var crmPersonDetailCompany = document.getElementById('crmPersonDetailCompany');
-    var crmPersonDetailCompanyInput = document.getElementById('crmPersonDetailCompanyInput');
-    var crmPersonDetailJobTitle = document.getElementById('crmPersonDetailJobTitle');
-    var crmPersonDetailJobTitleInput = document.getElementById('crmPersonDetailJobTitleInput');
     var crmPersonDetailFunnelLine = document.getElementById('crmPersonDetailFunnelLine');
-    var crmPersonDetailChannels = document.getElementById('crmPersonDetailChannels');
     var crmPersonDetailFollowup = document.getElementById('crmPersonDetailFollowup');
-    var crmPersonDetailNotes = document.getElementById('crmPersonDetailNotes');
-    var crmPersonDetailNotesInput = document.getElementById('crmPersonDetailNotesInput');
-    var crmEditPersonBtn = document.getElementById('crmEditPersonBtn');
-    var crmSavePersonBtn = document.getElementById('crmSavePersonBtn');
-    var crmCancelEditPersonBtn = document.getElementById('crmCancelEditPersonBtn');
-    var crmPersonEditFields = [
-      [crmPersonDetailName, crmPersonDetailNameInput],
-      [crmPersonDetailCompany, crmPersonDetailCompanyInput],
-      [crmPersonDetailJobTitle, crmPersonDetailJobTitleInput],
-      [crmPersonDetailNotes, crmPersonDetailNotesInput],
-    ];
     var crmCurrentPersonId = null;
     var crmCurrentPersonData = null;
     var crmPersonDetailMessages = document.getElementById('crmPersonDetailMessages');
@@ -955,14 +1177,121 @@
       });
     }
 
-    function renderCrmCompanies(container) {
-      var companies = crmOverviewData.companies || [];
+    var crmSearchQuery = '';
+    var crmBatchFilter = '';
+    var crmSortMode = 'activity';
+    try { var saved = localStorage.getItem('lk-people-sort'); crmSortMode = saved === 'added' || saved === 'az' ? saved : 'activity'; } catch (e) { /* storage blocked */ }
+    var crmCompanySort = 'az';
+    try { var cs = localStorage.getItem('lk-company-sort'); crmCompanySort = cs === 'added' || cs === 'activity' ? cs : 'az'; } catch (e) { /* storage blocked */ }
+    var crmScope = 'all';
+    function crmWords(text) {
+      var hay = String(text || '').toLowerCase();
+      return crmSearchQuery.split(/\s+/).every(function (w) { return !w || hay.indexOf(w) !== -1; });
+    }
+    var crmPickPerson = null;
+    var crmPickCompany = '';
+    function crmPersonMatch(p) {
+      if (crmPickPerson) return p.person_id === crmPickPerson;
+      if (crmPickCompany) return p.company_name === crmPickCompany;
+      if (crmBatchFilter) return p.batch === crmBatchFilter;
+      if (crmScope === 'batch') return true;
+      var text = crmScope === 'name' ? p.name : crmScope === 'company' ? p.company_name
+        : [p.name, p.company_name, p.email, p.phone, p.handles].join(' ');       // contact, company, email, Instagram handle, LinkedIn link, phone
+      return crmWords(text);
+    }
+    function crmCompanyMatch(co) {
+      if (crmPickCompany) return co.company_name === crmPickCompany;
+      if (crmScope === 'name' || crmScope === 'batch' || crmBatchFilter) {
+        return (crmOverviewData.people || []).some(function (p) { return p.company_name === co.company_name && crmPersonMatch(p); });
+      }
+      return crmWords(co.company_name);
+    }
+    function renderCrmBatchChips() {
+      var box = document.getElementById('crmBatchChips');
+      if (box) box.hidden = true;
+    }
+    function crmApplyPick(label, apply) {
+      apply();
+      document.getElementById('crmSearchInput').value = label;
+      crmSearchQuery = label.toLowerCase();
+      document.getElementById('crmSuggest').hidden = true;
+      renderCrmPeople(crmPeopleList);
+      renderCrmCompanies(crmCompanyList);
+      updateCrmMergeButton();
+    }
+    function renderCrmSuggest() {
+      var box = document.getElementById('crmSuggest');
+      box.innerHTML = '';
+      var picked = crmBatchFilter || crmPickPerson || crmPickCompany;
+      if (crmScope === 'all' || !crmSearchQuery || picked || crmPeopleList.hidden) { box.hidden = true; return; }
+      var people = (crmOverviewData && crmOverviewData.people) || [];
+      var items = [];
+      if (crmScope === 'batch') {
+        var counts = {};
+        people.forEach(function (p) { if (p.batch) counts[p.batch] = (counts[p.batch] || 0) + 1; });
+        Object.keys(counts).filter(crmWords).sort().forEach(function (b) {
+          items.push({ label: b, count: counts[b], apply: function () { crmBatchFilter = b; } });
+        });
+      } else if (crmScope === 'company') {
+        ((crmOverviewData && crmOverviewData.companies) || []).filter(function (co) { return crmWords(co.company_name); }).forEach(function (co) {
+          items.push({ label: co.company_name, count: co.people_count, apply: function () { crmPickCompany = co.company_name; } });
+        });
+      } else {
+        people.filter(function (p) { return crmWords(p.name); }).forEach(function (p) {
+          items.push({ label: p.name, extra: p.company_name || '', apply: function () { crmPickPerson = p.person_id; } });
+        });
+      }
+      if (!items.length) {
+        var none = document.createElement('div');
+        none.className = 'lks-suggest-empty';
+        none.textContent = 'Nothing matches';
+        box.appendChild(none);
+      }
+      items.slice(0, 30).forEach(function (it) {
+        var item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'lks-suggest-item';
+        var nm = document.createElement('span'); nm.textContent = it.label + (it.extra ? ' · ' + it.extra : '');
+        item.appendChild(nm);
+        if (it.count != null) { var ct = document.createElement('i'); ct.textContent = it.count; item.appendChild(ct); }
+        item.addEventListener('mousedown', function (e) { e.preventDefault(); crmApplyPick(it.label, it.apply); });
+        box.appendChild(item);
+      });
+      box.hidden = false;
+    }
+    function crmSearchingEverything() { return crmScope === 'all' && crmSearchQuery && !crmBatchFilter && !crmPickPerson && !crmPickCompany; }
+    function appendAlso(container, kind) {         // "Search in: everything" looks in both lists, whichever tab you are on
+      if (!crmSearchingEverything()) return;
+      var n = kind === 'companies' ? (crmOverviewData.companies || []).filter(crmCompanyMatch).length : (crmOverviewData.people || []).filter(crmPersonMatch).length;
+      if (!n) return;
+      var wrap = document.createElement('div');
+      wrap.className = 'lks-also';
+      var head = document.createElement('div');
+      head.className = 'lks-also-head';
+      head.textContent = (kind === 'companies' ? 'Companies' : 'People') + ' matching "' + crmSearchQuery + '" (' + n + ')';
+      wrap.appendChild(head);
+      var body = document.createElement('div');
+      body.className = 'attention-list';
+      wrap.appendChild(body);
+      container.appendChild(wrap);
+      if (kind === 'companies') renderCrmCompanies(body, true); else renderCrmPeople(body, true);
+    }
+
+    function renderCrmCompanies(container, noAlso) {
+      var companies = (crmOverviewData.companies || []).filter(crmCompanyMatch);
+      if (crmCompanySort === 'added') companies = companies.slice().sort(function (a, b) { return b.company_id - a.company_id; });       // newest added first
+      else if (crmCompanySort === 'activity') {                                                                                         // the company whose people wrote most recently first
+        var latest = {};
+        (crmOverviewData.people || []).forEach(function (p) { if (p.company_name && p.last_message_at && (!latest[p.company_name] || p.last_message_at > latest[p.company_name])) latest[p.company_name] = p.last_message_at; });
+        companies = companies.slice().sort(function (a, b) { return String(latest[b.company_name] || '').localeCompare(String(latest[a.company_name] || '')); });
+      }
       container.innerHTML = '';
       if (!companies.length) {
         var empty = document.createElement('p');
         empty.className = 'crm-empty';
-        empty.textContent = 'No companies on file yet — they fill in automatically as contacts are enriched.';
+        empty.textContent = crmSearchQuery ? 'No companies match your search.' : 'No companies on file yet — they fill in automatically as contacts are enriched.';
         container.appendChild(empty);
+        if (!noAlso) appendAlso(container, 'people');
         return;
       }
       companies.forEach(function (co) {
@@ -972,22 +1301,57 @@
         flag.className = 'attention-flag';
         flag.textContent = co.company_name;
         card.appendChild(flag);
-        var copy = document.createElement('p');
-        copy.className = 'attention-copy';
-        copy.textContent = co.people_count + (co.people_count === 1 ? ' person' : ' people') + ' · ' + co.company_status;
-        card.appendChild(copy);
+
+        var toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'attention-why attention-why-trigger';
+        toggle.textContent = co.people_count + (co.people_count === 1 ? ' person' : ' people') + ' · ' + co.company_status + (co.created_at ? ' · added ' + formatCrmTimestamp(co.created_at) : '');
+        card.appendChild(toggle);
+
+        var peopleList = document.createElement('div');
+        peopleList.className = 'crm-company-people-list';
+        peopleList.hidden = true;
+        (crmOverviewData.people || [])
+          .filter(function (p) { return p.company_name === co.company_name; })
+          .forEach(function (p) {
+            var personBtn = document.createElement('button');
+            personBtn.type = 'button';
+            personBtn.className = 'subtle-link-btn crm-company-person-link';
+            personBtn.textContent = p.name || '(No name)';
+            personBtn.addEventListener('click', function () {
+              openCrmPersonDetail(p.person_id);
+            });
+            peopleList.appendChild(personBtn);
+          });
+        card.appendChild(peopleList);
+        var anotherBtn = document.createElement('button');
+        anotherBtn.type = 'button';
+        anotherBtn.className = 'subtle-link-btn';
+        anotherBtn.textContent = '+ Another contact';
+        anotherBtn.addEventListener('click', function () { window.lkContacts.anotherContact(co.company_id); });
+        card.appendChild(anotherBtn);
+
+        toggle.addEventListener('click', function () {
+          peopleList.hidden = !peopleList.hidden;
+        });
+
         container.appendChild(card);
       });
     }
 
-    function renderCrmPeople(container) {
-      var people = crmOverviewData.people || [];
+    function renderCrmPeople(container, noAlso) {
+      var people = (crmOverviewData.people || []).filter(crmPersonMatch);
+      if (crmSortMode === 'added') people = people.slice().sort(function (a, b) { return b.person_id - a.person_id; });      // newest added first
+      else if (crmSortMode === 'az') people = people.slice().sort(function (a, b) { return String(a.name || a.company_name || '').localeCompare(String(b.name || b.company_name || ''), undefined, { sensitivity: 'base' }); });
       container.innerHTML = '';
       if (!people.length) {
         var empty = document.createElement('p');
         empty.className = 'crm-empty';
-        empty.textContent = 'No people on file yet — connect a channel and sync to start populating this.';
+        empty.textContent = crmSearchQuery || crmBatchFilter || crmPickPerson || crmPickCompany
+          ? 'No people match your search.'
+          : 'No people on file yet — connect a channel and sync to start populating this.';
         container.appendChild(empty);
+        if (!noAlso) appendAlso(container, 'companies');
         return;
       }
       people.forEach(function (person) {
@@ -1013,7 +1377,7 @@
 
         var flag = document.createElement('span');
         flag.className = 'attention-flag';
-        flag.textContent = person.name + (person.company_name ? ' · ' + person.company_name : '');
+        flag.textContent = (person.name || 'No name') + (person.company_name ? ' · ' + person.company_name : '');
         topRow.appendChild(flag);
 
         var removeBtn = document.createElement('button');
@@ -1039,7 +1403,7 @@
         var lastMessageBit = person.last_message_text
           ? 'Last message: "' + person.last_message_text + '"' + (person.last_message_at ? ' (' + formatCrmTimestamp(person.last_message_at) + ')' : '')
           : null;
-        var bits = [person.job_title, lastMessageBit].filter(Boolean);
+        var bits = [person.job_title, person.batch ? 'Batch: ' + person.batch : '', person.created_at ? 'Added ' + formatCrmTimestamp(person.created_at) : '', lastMessageBit].filter(Boolean);
         copy.textContent = bits.length ? bits.join(' · ') : 'No messages yet.';
         card.appendChild(copy);
 
@@ -1060,24 +1424,35 @@
         }
         container.appendChild(card);
       });
+      if (!noAlso) appendAlso(container, 'companies');
       updateCrmMergeButton();
     }
 
     function updateCrmMergeButton() {
       var showMerge = crmSelectedPersonIds.length === 2;
       crmMergeSelectedBtn.hidden = !showMerge;
-      var showMoveControls = crmSelectedPersonIds.length >= 1 && crmFunnelsData.length > 0;
-      crmMoveToFunnelSelect.hidden = !showMoveControls;
+      var showMoveControls = crmSelectedPersonIds.length >= 1;
+      crmMoveToFunnelSelect.hidden = true;
       crmMoveToFunnelBtn.hidden = !showMoveControls;
+      crmMoveToFunnelBtn.textContent = 'Move ' + crmSelectedPersonIds.length + ' to funnel';
       // An empty .card-actions still eats flex-gap space as an empty row
       // even with all its buttons hidden — collapse the whole wrapper too.
-      crmPeopleActions.hidden = !showMerge && !showMoveControls;
+      crmPeopleActions.hidden = crmPeopleList.hidden;
+      renderCrmBatchChips();
+      var shown = crmShownPeople();
+      var allOn = shown.length > 0 && shown.every(function (p) { return crmSelectedPersonIds.indexOf(p.person_id) !== -1; });
+      var selAll = document.getElementById('crmSelectAllBtn');
+      if (selAll) selAll.textContent = allOn ? 'Deselect all' : 'Select all shown';
+    }
+    function crmShownPeople() {
+      return ((crmOverviewData && crmOverviewData.people) || []).filter(crmPersonMatch);
     }
 
     function updateCrmFunnelBoardTitle() {
       var selectedFunnel = crmFunnelsData.find(function (f) { return f.funnel_id === crmSelectedFunnelId; });
       crmFunnelBoardTitle.textContent = selectedFunnel ? selectedFunnel.name : 'No funnels yet';
       crmDeleteFunnelBtn.hidden = !selectedFunnel;
+      document.getElementById('crmEditStagesBtn').hidden = !selectedFunnel;
     }
 
     function loadCrmFunnels() {
@@ -1111,15 +1486,78 @@
             opt2.textContent = f.name;
             crmMoveToFunnelSelect.appendChild(opt2);
           });
+          var optNew = document.createElement('option');
+          optNew.value = 'new';
+          optNew.textContent = '+ Create new funnel…';
+          crmMoveToFunnelSelect.appendChild(optNew);
           updateCrmMergeButton();
           renderCrmFunnelBoard();
         })
         .catch(function () {});
     }
 
+    (function () {
+      var backdrop = document.getElementById('crmStagesBackdrop');
+      var list = document.getElementById('crmStagesList');
+      var errBox = document.getElementById('crmStagesError');
+      function post(url, body) {
+        return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+          .then(function (res) { return res.json(); })
+          .then(function (d) { if (d.error) { errBox.textContent = d.error; errBox.hidden = false; } else { errBox.hidden = true; } return d; });
+      }
+      function refresh() { renderCrmFunnelBoard(); loadCrmOverview(); }
+      function load() {
+        fetch('/api/crm/funnels/' + crmSelectedFunnelId + '/board').then(function (r) { return r.json(); }).then(function (board) {
+          list.innerHTML = '';
+          board.stages.forEach(function (st, i) {
+            var row = document.createElement('div');
+            row.className = 'lks-stage-row';
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'demo-reset-input';
+            input.value = st.name;
+            function save() { if (input.value.trim() && input.value.trim() !== st.name) post('/api/crm/funnels/stages/' + st.stage_id + '/rename', { name: input.value }).then(function () { load(); refresh(); }); }
+            input.addEventListener('change', save);
+            row.appendChild(input);
+            var count = document.createElement('span');
+            count.className = 'lks-note';
+            count.textContent = st.people.length ? st.people.length + (st.people.length === 1 ? ' person' : ' people') : '';
+            row.appendChild(count);
+            [['↑', 'up', i === 0], ['↓', 'down', i === board.stages.length - 1]].forEach(function (b) {
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'btn btn-secondary btn-small';
+              btn.textContent = b[0];
+              btn.disabled = b[2];
+              btn.addEventListener('click', function () { post('/api/crm/funnels/stages/' + st.stage_id + '/move-position', { direction: b[1] }).then(function () { load(); refresh(); }); });
+              row.appendChild(btn);
+            });
+            var del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'btn btn-remove btn-small';
+            del.textContent = '✕';
+            del.title = st.people.length ? 'Move the people out first' : 'Delete this stage';
+            del.disabled = st.people.length > 0;
+            del.addEventListener('click', function () { post('/api/crm/funnels/stages/' + st.stage_id + '/delete').then(function () { load(); refresh(); }); });
+            row.appendChild(del);
+            list.appendChild(row);
+          });
+        });
+      }
+      document.getElementById('crmEditStagesBtn').addEventListener('click', function () { errBox.hidden = true; load(); backdrop.hidden = false; });
+      document.getElementById('crmStagesDoneBtn').addEventListener('click', function () { backdrop.hidden = true; });
+      document.getElementById('crmStageAddBtn').addEventListener('click', function () {
+        var inp = document.getElementById('crmStageNewName');
+        if (!inp.value.trim()) return;
+        post('/api/crm/funnels/' + crmSelectedFunnelId + '/stages', { name: inp.value }).then(function () { inp.value = ''; load(); refresh(); });
+      });
+    })();
+
+    var crmBoardRequest = 0;
     function renderCrmFunnelBoard() {
-      crmFunnelBoardWrap.innerHTML = '';
+      var myRequest = ++crmBoardRequest;       // two renders can overlap (a move triggers two); only the newest may draw
       if (crmSelectedFunnelId == null) {
+        crmFunnelBoardWrap.innerHTML = '';
         var empty = document.createElement('p');
         empty.className = 'crm-empty';
         empty.textContent = 'No funnels yet — create one above.';
@@ -1129,7 +1567,7 @@
       fetch('/api/crm/funnels/' + crmSelectedFunnelId + '/board')
         .then(function (res) { return res.json(); })
         .then(function (board) {
-          if (!board || !board.stages) return;
+          if (myRequest !== crmBoardRequest || !board || !board.stages) return;
           var wrap = document.createElement('div');
           wrap.className = 'crm-funnel-board';
 
@@ -1142,6 +1580,42 @@
               renderCrmFunnelBoard();
               loadCrmOverview();
             });
+          }
+
+          // Moving a card changes statuses and tasks, so ask what the move means first.
+          function askStageMove(personId, stage) {
+            var who = null, from = null;
+            board.stages.forEach(function (st) {
+              st.people.forEach(function (p) { if (p.person_id === personId) { who = p; from = st; } });
+            });
+            if (!who || from.stage_id === stage.stage_id) return;
+            var key = (stage.name || '').toLowerCase();
+            var q, effect;
+            if (key === 'new lead') {
+              q = 'Move ' + (who.name || 'this contact') + ' back to New lead? Confirm that you have not contacted them yet.';
+              effect = 'Their status is set back to new.';
+            } else if (key === 'contacted') {
+              q = 'Confirm: have you already contacted ' + (who.name || 'this contact') + '?';
+              effect = 'Their status becomes "sent" and a follow-up task is created for 3 days from now.';
+            } else if (key === 'in conversation') {
+              q = 'Confirm: are you already in conversation with ' + (who.name || 'this contact') + '?';
+              effect = 'Their status becomes "replied" and a "Reply to ..." task is created.';
+            } else if (key === 'lost') {
+              q = 'Confirm: is ' + (who.name || 'this contact') + ' no longer a prospect?';
+              effect = 'Their status is set to a closed one ("done" / "non customer"), so no more follow-ups are planned.';
+            } else {
+              q = 'Confirm: does ' + (who.name || 'this contact') + ' belong in "' + stage.name + '"?';
+              effect = 'Their status is set to "' + stage.name.toLowerCase() + '" in each channel.';
+            }
+            var bd = document.getElementById('crmStageMoveBackdrop');
+            document.getElementById('crmStageMoveText').textContent = q;
+            document.getElementById('crmStageMoveEffect').textContent = effect;
+            var ok = document.getElementById('crmStageMoveOkBtn');
+            var cancel = document.getElementById('crmStageMoveCancelBtn');
+            ok.onclick = function () { bd.hidden = true; moveCardToStage(personId, stage.stage_id); };
+            cancel.onclick = function () { bd.hidden = true; };
+            bd.hidden = false;
+            ok.focus();
           }
 
           board.stages.forEach(function (stage) {
@@ -1166,7 +1640,7 @@
               e.preventDefault();
               col.classList.remove('crm-funnel-stage-dragover');
               var personId = parseInt(e.dataTransfer.getData('text/plain'), 10);
-              if (personId) moveCardToStage(personId, stage.stage_id);
+              if (personId) askStageMove(personId, stage);
             });
 
             stage.people.forEach(function (person) {
@@ -1184,7 +1658,7 @@
 
               var name = document.createElement('div');
               name.className = 'crm-funnel-person-name';
-              name.textContent = person.name;
+              name.textContent = person.name || 'No name';
               card.appendChild(name);
               if (person.company_name) {
                 var company = document.createElement('div');
@@ -1192,11 +1666,26 @@
                 company.textContent = person.company_name;
                 card.appendChild(company);
               }
+              card.style.cursor = 'pointer';
+              card.addEventListener('click', function () { openCrmPersonDetail(person.person_id); });
+              (person.statuses || []).forEach(function (st) {
+                var line = document.createElement('button');
+                line.type = 'button';
+                line.className = 'crm-funnel-status';
+                line.title = 'Change status';
+                var tag = document.createElement('span');
+                tag.className = 'crm-channel-tag crm-channel-tag-' + st.channel;
+                tag.textContent = st.label;
+                line.appendChild(tag);
+                line.appendChild(document.createTextNode(st.status));
+                line.addEventListener('click', function (e) { e.stopPropagation(); window.lkContacts.openStatus(person.person_id, st.channel); });
+                card.appendChild(line);
+              });
               col.appendChild(card);
             });
             wrap.appendChild(col);
           });
-          crmFunnelBoardWrap.appendChild(wrap);
+          crmFunnelBoardWrap.replaceChildren(wrap);
         })
         .catch(function () {});
     }
@@ -1261,15 +1750,94 @@
       });
     }
     if (crmMoveToFunnelBtn) {
-      crmMoveToFunnelBtn.addEventListener('click', function () {
-        if (!crmSelectedPersonIds.length || !crmMoveToFunnelSelect.value) return;
-        fetch('/api/crm/funnels/move', {
+      var moveBackdrop = document.getElementById('crmMoveBackdrop');
+      var moveChoices = document.getElementById('crmMoveChoices');
+      var moveNewName = document.getElementById('crmMoveNewName');
+      var moveError = document.getElementById('crmMoveError');
+      var moveChoice = null;
+      var moveConfirming = false;
+      var movePeople = [];
+      var moveSummary = document.getElementById('crmMoveSummary');
+      var moveConfirmBtn = document.getElementById('crmMoveConfirmBtn');
+      var moveCancelBtn = document.getElementById('crmMoveCancelBtn');
+      function setMoveStep(confirming) {
+        moveConfirming = confirming;
+        moveChoices.hidden = confirming || crmFunnelsData.length === 0;
+        moveNewName.hidden = confirming || moveChoice !== 'new';
+        moveSummary.hidden = !confirming;
+        moveConfirmBtn.textContent = confirming ? 'Yes, move them' : 'Move';
+        moveCancelBtn.textContent = confirming ? 'Back' : 'Cancel';
+        moveError.hidden = true;
+      }
+      function renderMoveChoices() {
+        moveChoices.innerHTML = '';
+        var options = crmFunnelsData.map(function (f) { return { id: String(f.funnel_id), label: f.name }; });
+        options.push({ id: 'new', label: '+ New funnel' });
+        options.forEach(function (o) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'lks-choice' + (moveChoice === o.id ? ' on' : '') + (o.id === 'new' ? ' lks-choice-new' : '');
+          b.textContent = o.label;
+          b.addEventListener('click', function () {
+            moveChoice = o.id;
+            moveError.hidden = true;
+            moveNewName.hidden = o.id !== 'new';
+            if (o.id === 'new') moveNewName.focus();
+            renderMoveChoices();
+          });
+          moveChoices.appendChild(b);
+        });
+      }
+      function moveFail(msg) { moveError.textContent = msg; moveError.hidden = false; }
+      function moveTo(funnelId) {
+        return fetch('/api/crm/funnels/move', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ person_ids: crmSelectedPersonIds, funnel_id: parseInt(crmMoveToFunnelSelect.value, 10) }),
+          body: JSON.stringify({ person_ids: movePeople, funnel_id: funnelId }),
         }).then(function () {
-          crmSelectedPersonIds = [];
+          moveBackdrop.hidden = true;
+          crmSelectedPersonIds = crmSelectedPersonIds.filter(function (id) { return movePeople.indexOf(id) === -1; });
+          loadCrmFunnels();
           loadCrmOverview();
+          if (!crmPersonDetailView.hidden && crmCurrentPersonId) openCrmPersonDetail(crmCurrentPersonId);
+        });
+      }
+      function openMove(ids) {
+        if (!ids.length) return;
+        movePeople = ids;
+        document.getElementById('crmMoveTitle').textContent = (crmFunnelsData.length ? 'Move ' : 'Create a funnel for ') + ids.length + (ids.length === 1 ? ' person' : ' people') + (crmFunnelsData.length ? ' to a funnel' : '');
+        moveChoice = crmFunnelsData.length ? String(crmFunnelsData[0].funnel_id) : 'new';
+        moveNewName.value = '';
+        moveNewName.hidden = moveChoice !== 'new';
+        moveError.hidden = true;
+        renderMoveChoices();
+        setMoveStep(false);
+        moveBackdrop.hidden = false;
+      }
+      window.lkOpenMove = openMove;
+      crmMoveToFunnelBtn.addEventListener('click', function () { openMove(crmSelectedPersonIds.slice()); });
+      moveCancelBtn.addEventListener('click', function () { if (moveConfirming) setMoveStep(false); else moveBackdrop.hidden = true; });
+      moveConfirmBtn.addEventListener('click', function () {
+        if (!moveChoice) return;
+        var n = movePeople.length;
+        var who = n + (n === 1 ? ' person' : ' people');
+        if (!moveConfirming) {
+          var name = moveNewName.value.trim();
+          if (moveChoice === 'new' && !name) { moveFail('Give the new funnel a name.'); return; }
+          var target = moveChoice === 'new' ? 'a new funnel called "' + name + '"' : 'the funnel "' + (crmFunnelsData.filter(function (f) { return String(f.funnel_id) === moveChoice; })[0] || {}).name + '"';
+          moveSummary.textContent = 'Move ' + who + ' into ' + target + '? People already in another funnel will leave it.';
+          setMoveStep(true);
+          return;
+        }
+        if (moveChoice !== 'new') { moveTo(parseInt(moveChoice, 10)); return; }
+        fetch('/api/crm/funnels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: moveNewName.value.trim() }),
+        }).then(function (res) { return res.json(); }).then(function (data) {
+          if (data.funnel_id) return moveTo(data.funnel_id);
+          setMoveStep(false);
+          moveFail(data.error || 'Could not create the funnel.');
         });
       });
     }
@@ -1506,6 +2074,8 @@
         .then(function (res) { return res.json(); })
         .then(function (data) {
           crmOverviewData = data;
+          if (window.lkContacts && window.lkContacts.checkDuplicates) window.lkContacts.checkDuplicates();
+          updateCrmMergeButton();
           renderCrmCompanies(crmCompanyList);
           renderCrmPeople(crmPeopleList);
           loadCrmFunnels();
@@ -1537,6 +2107,20 @@
       loadCrmOverview();
     }
 
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      var open = Array.prototype.filter.call(document.querySelectorAll('.confirm-backdrop'), function (b) { return !b.hidden; });
+      if (open.length) { open[open.length - 1].hidden = true; e.stopPropagation(); }
+    });
+    window.lkOpenPerson = openCrmPersonDetail;
+    window.lkCurrentPersonId = function () { return crmCurrentPersonId; };
+    window.lkGoToFunnel = function (funnelId) {
+      openCrmLanding();
+      showCrmFunnelsTab();
+      crmSelectedFunnelId = funnelId;
+      loadCrmFunnels();
+    };
+
     function showCrmContactsTab() {
       crmContactsTabBtn.classList.add('is-active');
       crmContactsTabBtn.setAttribute('aria-selected', 'true');
@@ -1564,6 +2148,11 @@
       crmPeopleList.hidden = false;
       crmPeopleActions.hidden = false;
       crmCompanyList.hidden = true;
+      document.getElementById('crmCompanyActions').hidden = true;
+      crmImportSubTabBtn.classList.remove('is-active');
+      crmImportSubTabBtn.setAttribute('aria-selected', 'false');
+      crmImportBody.hidden = true;
+      document.getElementById('crmSearchPill').hidden = false; document.getElementById('crmBatchPill').hidden = false;
     }
     function showCrmCompaniesSubTab() {
       crmCompaniesSubTabBtn.classList.add('is-active');
@@ -1571,16 +2160,104 @@
       crmPeopleSubTabBtn.classList.remove('is-active');
       crmPeopleSubTabBtn.setAttribute('aria-selected', 'false');
       crmCompanyList.hidden = false;
+      document.getElementById('crmCompanyActions').hidden = false;
       crmPeopleList.hidden = true;
       crmPeopleActions.hidden = true;
+      crmImportSubTabBtn.classList.remove('is-active');
+      crmImportSubTabBtn.setAttribute('aria-selected', 'false');
+      crmImportBody.hidden = true;
+      document.getElementById('crmSearchPill').hidden = false; document.getElementById('crmBatchPill').hidden = false;
     }
-    if (crmPeopleSubTabBtn) crmPeopleSubTabBtn.addEventListener('click', showCrmPeopleSubTab);
-    if (crmCompaniesSubTabBtn) crmCompaniesSubTabBtn.addEventListener('click', showCrmCompaniesSubTab);
+    function showCrmImportSubTab() {
+      crmImportSubTabBtn.classList.add('is-active');
+      crmImportSubTabBtn.setAttribute('aria-selected', 'true');
+      crmPeopleSubTabBtn.classList.remove('is-active');
+      crmPeopleSubTabBtn.setAttribute('aria-selected', 'false');
+      crmCompaniesSubTabBtn.classList.remove('is-active');
+      crmCompaniesSubTabBtn.setAttribute('aria-selected', 'false');
+      crmPeopleList.hidden = true;
+      crmPeopleActions.hidden = true;
+      crmCompanyList.hidden = true;
+      document.getElementById('crmCompanyActions').hidden = true;
+      crmImportBody.hidden = false;
+      document.getElementById('crmSearchPill').hidden = true; document.getElementById('crmBatchPill').hidden = true; document.getElementById('crmBatchChips').hidden = true;
+      if (window.lkContacts) window.lkContacts.mountImport(crmImportBody, function () { showCrmPeopleSubTab(); loadCrmOverview(); });
+    }
+    crmImportSubTabBtn.addEventListener('click', showCrmImportSubTab);
+    document.getElementById('crmScopeSelect').addEventListener('change', function () {
+      crmScope = this.value;
+      crmBatchFilter = '';
+      crmPickPerson = null;
+      crmPickCompany = '';
+      crmSearchQuery = '';
+      document.getElementById('crmSearchInput').value = '';
+      document.getElementById('crmSearchInput').placeholder = crmScope === 'batch' ? 'Search batch names' : crmScope === 'name' ? 'Search contact names' : crmScope === 'company' ? 'Search company names' : 'Search people or companies';
+      if (crmOverviewData) { renderCrmPeople(crmPeopleList); renderCrmCompanies(crmCompanyList); updateCrmMergeButton(); }
+    });
+    function paintSortToggle() {
+      document.querySelectorAll('#crmSortToggle button').forEach(function (b) { b.classList.toggle('on', b.dataset.sort === crmSortMode); });
+    }
+    paintSortToggle();
+    document.querySelectorAll('#crmSortToggle button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        crmSortMode = b.dataset.sort;
+        try { localStorage.setItem('lk-people-sort', crmSortMode); } catch (e) { /* storage blocked */ }
+        paintSortToggle();
+        if (crmOverviewData) renderCrmPeople(crmPeopleList);
+      });
+    });
+    function paintCompanySort() {
+      document.querySelectorAll('#crmCompanySortToggle button').forEach(function (b) { b.classList.toggle('on', b.dataset.sort === crmCompanySort); });
+    }
+    paintCompanySort();
+    document.querySelectorAll('#crmCompanySortToggle button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        crmCompanySort = b.dataset.sort;
+        try { localStorage.setItem('lk-company-sort', crmCompanySort); } catch (e) { /* storage blocked */ }
+        paintCompanySort();
+        if (crmOverviewData) renderCrmCompanies(crmCompanyList);
+      });
+    });
+    document.getElementById('crmSelectAllBtn').addEventListener('click', function () {
+      var shown = crmShownPeople();
+      var allOn = shown.length > 0 && shown.every(function (p) { return crmSelectedPersonIds.indexOf(p.person_id) !== -1; });
+      var ids = shown.map(function (p) { return p.person_id; });
+      crmSelectedPersonIds = allOn ? crmSelectedPersonIds.filter(function (id) { return ids.indexOf(id) === -1; }) : crmSelectedPersonIds.concat(ids.filter(function (id) { return crmSelectedPersonIds.indexOf(id) === -1; }));
+      renderCrmPeople(crmPeopleList);
+      updateCrmMergeButton();
+    });
+    document.getElementById('crmSearchInput').addEventListener('input', function () {
+      crmSearchQuery = this.value.trim().toLowerCase();
+      crmBatchFilter = '';
+      crmPickPerson = null;
+      crmPickCompany = '';
+      if (crmOverviewData) { renderCrmPeople(crmPeopleList); renderCrmCompanies(crmCompanyList); updateCrmMergeButton(); renderCrmSuggest(); }
+    });
+    document.getElementById('crmSearchInput').addEventListener('focus', function () { if (crmOverviewData) renderCrmSuggest(); });
+    document.getElementById('crmSearchInput').addEventListener('blur', function () { document.getElementById('crmSuggest').hidden = true; });
+    document.getElementById('crmAddContactBtn').addEventListener('click', function () { window.lkContacts.addContact({}, loadCrmOverview); });
+    document.addEventListener('lk-contact-removed', function (e) {       // drop the person from the lists on screen right away
+      if (!crmOverviewData || !e.detail) return;
+      crmOverviewData.people = (crmOverviewData.people || []).filter(function (p) { return p.person_id !== e.detail.id; });
+      renderCrmPeople(crmPeopleList);
+      renderCrmCompanies(crmCompanyList);
+    });
+    document.addEventListener('lk-contacts-changed', function () {
+      loadCrmOverview();
+      if (!crmFunnelsBody.hidden) renderCrmFunnelBoard();
+    });
+    document.addEventListener('lk-outreach-saved', function () {
+      if (crmCurrentPersonId && !crmPersonDetailView.hidden) openCrmPersonDetail(crmCurrentPersonId);
+      if (!crmFunnelsBody.hidden) renderCrmFunnelBoard();
+    });
+    if (crmPeopleSubTabBtn) crmPeopleSubTabBtn.addEventListener('click', function () { showCrmPeopleSubTab(); loadCrmOverview(); });
+    if (crmCompaniesSubTabBtn) crmCompaniesSubTabBtn.addEventListener('click', function () { showCrmCompaniesSubTab(); loadCrmOverview(); });
 
     function buildCrmDetailMessageRow(m) {
-      var who = m.direction === 'outgoing' ? 'You' : (m.sender || 'Them');
+      var contactName = crmCurrentPersonData ? crmCurrentPersonData.name : null;
+      var who = m.direction === 'outgoing' ? 'You' : (contactName || m.sender || 'Them');
       var row = document.createElement('div');
-      row.className = 'crm-detail-message';
+      row.className = 'crm-detail-message ' + (m.direction === 'outgoing' ? 'is-mine' : 'is-theirs');
 
       var meta = document.createElement('div');
       meta.className = 'crm-detail-message-meta';
@@ -1600,18 +2277,82 @@
       }
       row.appendChild(meta);
 
+      // Saved emails fold "Subject: X" onto the front of message_text
+      // (no separate subject column — see _crm_write_email) — split it
+      // back out here so Subject and body render as distinct lines
+      // instead of running together as one wall of text.
+      var fullText = m.message_text || '';
+      var bodyText = fullText;
+      if (m.channel === 'email' && fullText.indexOf('Subject: ') === 0) {
+        var splitAt = fullText.indexOf('\n\n');
+        if (splitAt !== -1) {
+          var subjectEl = document.createElement('p');
+          subjectEl.className = 'crm-detail-message-subject';
+          subjectEl.textContent = fullText.slice(0, splitAt);
+          row.appendChild(subjectEl);
+          bodyText = fullText.slice(splitAt + 2);
+        }
+      }
+
       var textEl = document.createElement('p');
       textEl.className = 'crm-detail-message-text';
-      textEl.textContent = m.message_text || '';
+      textEl.textContent = bodyText;
       row.appendChild(textEl);
+
+      var lineCount = bodyText.split('\n').length;
+      if (lineCount > 5) {
+        textEl.classList.add('is-clamped');
+        var expandBtn = document.createElement('button');
+        expandBtn.type = 'button';
+        expandBtn.className = 'subtle-link-btn crm-detail-message-expand';
+        expandBtn.textContent = 'Show full message';
+        expandBtn.addEventListener('click', function () {
+          var collapsed = textEl.classList.toggle('is-clamped');
+          expandBtn.textContent = collapsed ? 'Show full message' : 'Show less';
+        });
+        row.appendChild(expandBtn);
+      }
 
       return row;
     }
 
+    var crmMsgView = 'all';            // 'all' = one timeline, 'channel' = grouped by channel
+    var crmMsgOff = {};                // channels switched off
+    var crmMsgPersonId = null;
+    function renderCrmMsgControls(channels) {
+      var box = document.getElementById('crmMsgControls');
+      box.innerHTML = '';
+      var views = document.createElement('div');
+      views.className = 'crm-msg-views';
+      [['all', 'All together'], ['channel', 'By channel']].forEach(function (v) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'crm-msg-view' + (crmMsgView === v[0] ? ' on' : '');
+        b.textContent = v[1];
+        b.addEventListener('click', function () { crmMsgView = v[0]; renderCrmPersonDetailMessages(); });
+        views.appendChild(b);
+      });
+      box.appendChild(views);
+      if (channels.length > 1) {
+        channels.forEach(function (ch) {
+          var tag = document.createElement('button');
+          tag.type = 'button';
+          tag.className = 'crm-channel-tag crm-channel-tag-' + ch.toLowerCase() + ' crm-msg-chan' + (crmMsgOff[ch] ? ' off' : '');
+          tag.title = crmMsgOff[ch] ? 'Show ' + ch : 'Hide ' + ch;
+          tag.textContent = (crmMsgOff[ch] ? '☐ ' : '☑ ') + ch;
+          tag.addEventListener('click', function () { crmMsgOff[ch] = !crmMsgOff[ch]; renderCrmPersonDetailMessages(); });
+          box.appendChild(tag);
+        });
+      }
+    }
     function renderCrmPersonDetailMessages() {
       crmPersonDetailMessages.innerHTML = '';
-      var messages = crmPersonDetailAllMessages;
-      if (!messages.length) {
+      if (crmMsgPersonId !== crmCurrentPersonId) { crmMsgPersonId = crmCurrentPersonId; crmMsgOff = {}; }
+      var all = crmPersonDetailAllMessages;
+      var channels = [];
+      all.forEach(function (m) { if (m.channel && channels.indexOf(m.channel) === -1) channels.push(m.channel); });
+      renderCrmMsgControls(channels);
+      if (!all.length) {
         var empty = document.createElement('p');
         empty.className = 'crm-empty';
         empty.textContent = 'No messages yet.';
@@ -1619,16 +2360,43 @@
         crmPersonDetailMessagesToggle.hidden = true;
         return;
       }
-      var visible = crmPersonDetailMessagesExpanded
-        ? messages
-        : messages.slice(-CRM_DETAIL_MESSAGES_COLLAPSED_COUNT);
-      visible.forEach(function (m) {
+      var messages = all.filter(function (m) { return !crmMsgOff[m.channel]; });
+      if (!messages.length) {
+        var none = document.createElement('p');
+        none.className = 'crm-empty';
+        none.textContent = 'All channels are switched off. Tick one above.';
+        crmPersonDetailMessages.appendChild(none);
+        crmPersonDetailMessagesToggle.hidden = true;
+        return;
+      }
+      var N = CRM_DETAIL_MESSAGES_COLLAPSED_COUNT;
+      if (crmMsgView === 'channel') {
+        channels.filter(function (ch) { return !crmMsgOff[ch]; }).forEach(function (ch) {
+          var own = messages.filter(function (m) { return m.channel === ch; });
+          var head = document.createElement('div');
+          head.className = 'crm-msg-group-head';
+          var tg = document.createElement('span');
+          tg.className = 'crm-channel-tag crm-channel-tag-' + ch.toLowerCase();
+          tg.textContent = ch;
+          head.appendChild(tg);
+          head.appendChild(document.createTextNode(own.length + (own.length === 1 ? ' message' : ' messages')));
+          crmPersonDetailMessages.appendChild(head);
+          (crmPersonDetailMessagesExpanded ? own : own.slice(-N)).slice().reverse().forEach(function (m) {
+            crmPersonDetailMessages.appendChild(buildCrmDetailMessageRow(m));
+          });
+        });
+        var biggest = Math.max.apply(null, channels.map(function (ch) { return messages.filter(function (m) { return m.channel === ch; }).length; }));
+        crmPersonDetailMessagesToggle.hidden = biggest <= N;
+        crmPersonDetailMessagesToggle.textContent = crmPersonDetailMessagesExpanded ? 'Show only the last ' + N + ' per channel' : 'Show all messages';
+        return;
+      }
+      (crmPersonDetailMessagesExpanded ? messages : messages.slice(-N)).slice().reverse().forEach(function (m) {
         crmPersonDetailMessages.appendChild(buildCrmDetailMessageRow(m));
       });
-      if (messages.length > CRM_DETAIL_MESSAGES_COLLAPSED_COUNT) {
+      if (messages.length > N) {
         crmPersonDetailMessagesToggle.hidden = false;
         crmPersonDetailMessagesToggle.textContent = crmPersonDetailMessagesExpanded
-          ? 'Show only the last ' + CRM_DETAIL_MESSAGES_COLLAPSED_COUNT
+          ? 'Show only the last ' + N
           : 'Show all ' + messages.length + ' messages';
       } else {
         crmPersonDetailMessagesToggle.hidden = true;
@@ -1646,63 +2414,38 @@
         .then(function (res) { return res.json(); })
         .then(function (person) {
           if (!person || person.error) return;
+          if (crmPersonDetailView.hidden) crmBackTo = currentViewOrigin();       // opened from somewhere else: remember where
+          closeCrmPersonDetailBtn.textContent = 'Back to ' + crmBackTo.label;
           closeAllCasePanels();
           aiPanel.hidden = true;
           crmPersonDetailView.hidden = false;
           crmCurrentPersonId = personId;
           crmCurrentPersonData = person;
 
-          crmPersonDetailName.textContent = person.name;
-          crmPersonDetailNotes.textContent = person.notes || 'No notes yet.';
-          crmPersonDetailCompany.textContent = person.company_name || '—';
-          crmPersonDetailJobTitle.textContent = person.job_title || '—';
+          crmPersonDetailName.textContent = person.name || ('No name' + (person.company_name ? ' · ' + person.company_name : ''));
+          var tagBox = document.getElementById('crmPersonDetailTags');
+          tagBox.innerHTML = '';
+          var seen = {};
+          (person.channels || []).forEach(function (ch) { seen[ch.channel.toLowerCase()] = 1; });
+          if (person.email) seen.email = 1;
+          if (person.phone) seen.phone = 1;
+          if (person.telegram) seen.telegram = 1;
+          Object.keys(seen).forEach(function (k) {
+            var tg = document.createElement('span');
+            tg.className = 'crm-channel-tag crm-channel-tag-' + k;
+            tg.textContent = k;
+            tagBox.appendChild(tg);
+          });
           crmPersonDetailFunnelLine.textContent = person.funnel_name
             ? 'Funnel: ' + person.funnel_name + (person.funnel_stage_name ? ' — ' + person.funnel_stage_name : '')
             : 'Not in a funnel.';
-          exitCrmPersonEditMode();
-
-          crmPersonDetailChannels.innerHTML = '';
-          (person.channels || []).forEach(function (ch) {
-            var row = document.createElement('div');
-            row.className = 'crm-channel-row';
-
-            var tag = document.createElement('span');
-            tag.className = 'crm-channel-tag crm-channel-tag-' + ch.channel.toLowerCase();
-            tag.textContent = ch.channel + (ch.display_name ? ' · ' + ch.display_name : '');
-            row.appendChild(tag);
-
-            var identifierLine = document.createElement('p');
-            identifierLine.className = 'attention-copy crm-channel-identifier';
-            var idValue = ch.channel_identifier || '';
-            if (idValue.indexOf('name:') === 0) {
-              // Not a real address/URL — just the name-based fallback used
-              // when LinkedIn never gave us a real profile slug for this
-              // contact (see get_or_create_person_for_channel).
-              identifierLine.textContent = 'No LinkedIn profile link captured — matched by name only.';
-            } else {
-              // A real LinkedIn identifier is just the bare slug — turn it
-              // into the actual URL so it's directly copy-pasteable/usable,
-              // not just an opaque string. Other channels (email) already
-              // are a real, usable value as-is.
-              var displayValue = ch.channel.toLowerCase() === 'linkedin'
-                ? 'https://www.linkedin.com/in/' + idValue + '/'
-                : idValue;
-              identifierLine.textContent = displayValue;
-              identifierLine.title = 'Click to select, then copy';
-              identifierLine.style.userSelect = 'all';
-              identifierLine.style.cursor = 'text';
-            }
-            row.appendChild(identifierLine);
-
-            crmPersonDetailChannels.appendChild(row);
-          });
-          if (!(person.channels || []).length) {
-            crmPersonDetailChannels.textContent = 'No channels linked.';
-          }
+          if (window.lkContacts && window.lkContacts.mountContactPage) window.lkContacts.mountContactPage(personId);
+          if (window.lkContacts && window.lkContacts.renderOutreach) window.lkContacts.renderOutreach(document.getElementById('crmPersonDetailOutreach'), personId, person.funnel_id || null);
 
           var activeFollowUp = (person.follow_ups || []).find(function (f) {
             return f.status === 'active' || f.status === 'awaiting_approval' || f.status === 'needs_review';
           });
+          crmPersonDetailFollowup.hidden = !activeFollowUp;
           crmPersonDetailFollowup.textContent = activeFollowUp
             ? 'Stage ' + activeFollowUp.stage + ' — ' + activeFollowUp.status + (activeFollowUp.next_follow_up_at ? ' — next check ' + formatCrmTimestamp(activeFollowUp.next_follow_up_at) : '')
             : 'No active follow-up sequence.';
@@ -1713,56 +2456,30 @@
         })
         .catch(function () {});
     }
-    if (closeCrmPersonDetailBtn) closeCrmPersonDetailBtn.addEventListener('click', openCrmLanding);
-
-    // The whole detail page toggles into an editable state in place —
-    // no popup. Each editable field is a (display span, hidden input)
-    // pair in crmPersonEditFields; entering edit mode just swaps which
-    // one of each pair is visible and copies the current display text in
-    // as the input's starting value.
-    function enterCrmPersonEditMode() {
-      crmPersonEditFields.forEach(function (pair) {
-        var display = pair[0], input = pair[1];
-        var value = display.textContent;
-        input.value = (value === '—' || value === 'No notes yet.') ? '' : value;
-        display.hidden = true;
-        input.hidden = false;
-      });
-      crmEditPersonBtn.hidden = true;
-      crmSavePersonBtn.hidden = false;
-      crmCancelEditPersonBtn.hidden = false;
-      crmPersonDetailNameInput.focus();
+    // "Back" returns to wherever the contact was opened from: Home, the People or Companies list, a funnel, LinkedIn or the Calendar.
+    var crmBackTo = { tab: 'crm', sub: 'people', label: 'CRM' };
+    function currentViewOrigin() {
+      var cal = document.getElementById('calendarPanel');
+      if (cal && !cal.hidden) return { tab: 'calendar', label: 'Calendar' };
+      if (!crmPanel.hidden) {
+        if (!crmFunnelsBody.hidden) return { tab: 'crm', main: 'funnels', funnelId: crmSelectedFunnelId, label: 'Funnel' };
+        if (crmCompaniesSubTabBtn.classList.contains('is-active')) return { tab: 'crm', sub: 'companies', label: 'Companies' };
+        return { tab: 'crm', sub: 'people', label: 'People' };
+      }
+      if (!linkedinPanel.hidden) return { tab: 'linkedin', label: 'LinkedIn' };
+      return { tab: 'home', label: 'Home' };
     }
-    function exitCrmPersonEditMode() {
-      crmPersonEditFields.forEach(function (pair) {
-        pair[0].hidden = false;
-        pair[1].hidden = true;
-      });
-      crmEditPersonBtn.hidden = false;
-      crmSavePersonBtn.hidden = true;
-      crmCancelEditPersonBtn.hidden = true;
-    }
-    if (crmEditPersonBtn) crmEditPersonBtn.addEventListener('click', enterCrmPersonEditMode);
-    if (crmCancelEditPersonBtn) crmCancelEditPersonBtn.addEventListener('click', exitCrmPersonEditMode);
-    if (crmSavePersonBtn) {
-      crmSavePersonBtn.addEventListener('click', function () {
-        var name = (crmPersonDetailNameInput.value || '').trim();
-        if (!name || crmCurrentPersonId == null) return;
-        fetch('/api/crm/people/' + crmCurrentPersonId + '/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: name,
-            company_name: crmPersonDetailCompanyInput.value,
-            job_title: crmPersonDetailJobTitleInput.value,
-            notes: crmPersonDetailNotesInput.value,
-          }),
-        }).then(function () {
-          openCrmPersonDetail(crmCurrentPersonId);
-          loadCrmOverview();
-        });
-      });
-    }
+    if (closeCrmPersonDetailBtn) closeCrmPersonDetailBtn.addEventListener('click', function () {
+      var back = crmBackTo;
+      crmBackTo = { tab: 'crm', sub: 'people', label: 'CRM' };
+      if (back.tab === 'home') { homeTab.click(); return; }
+      if (back.tab === 'calendar') { document.getElementById('calendarTab').click(); return; }
+      if (back.tab === 'linkedin') { document.getElementById('linkedinTab').click(); return; }
+      openCrmLanding();
+      if (back.main === 'funnels') { if (back.funnelId != null) crmSelectedFunnelId = back.funnelId; showCrmFunnelsTab(); renderCrmFunnelBoard(); }
+      else if (back.sub === 'companies') showCrmCompaniesSubTab();
+      else showCrmPeopleSubTab();
+    });
 
     if (crmTab) {
       crmTab.addEventListener('click', function () {
@@ -1807,7 +2524,7 @@
 
             var flag = document.createElement('span');
             flag.className = 'attention-flag';
-            flag.textContent = item.name + (item.company_name ? ' · ' + item.company_name : '');
+            flag.textContent = (item.name || 'No name') + (item.company_name ? ' · ' + item.company_name : '');
             card.appendChild(flag);
 
             if (item.last_channel) {
@@ -1819,7 +2536,7 @@
 
             var copy = document.createElement('p');
             copy.className = 'attention-copy';
-            var who = item.last_message_direction === 'outgoing' ? 'You' : item.name;
+            var who = item.last_message_direction === 'outgoing' ? 'You' : (item.name || item.company_name || 'Them');
             copy.textContent = who + ': "' + item.last_message_text + '"' + (item.last_message_at ? ' (' + formatCrmTimestamp(item.last_message_at) + ')' : '');
             card.appendChild(copy);
 
@@ -1837,6 +2554,339 @@
     }
     setInterval(loadRecentActivity, 30000);
     loadRecentActivity();
+
+    // ---- LinkedIn Follow-ups (manual leads + custom reminders) ----
+    // Deliberately separate from the automated follow_ups engine — see
+    // crm/db.py's linkedin_leads/reminders table comments.
+    var followupLeadSelect = document.getElementById('followupLeadSelect');
+    var followupTextInput = document.getElementById('followupTextInput');
+    var followupDateInput = document.getElementById('followupDateInput');
+    var followupAddBtn = document.getElementById('followupAddBtn');
+    var followupActionToggle = document.getElementById('followupActionToggle');
+    var followupActionBody = document.getElementById('followupActionBody');
+    var followupActionCount = document.getElementById('followupActionCount');
+    var followupActionEmpty = document.getElementById('followupActionEmpty');
+    var followupConnectionToggle = document.getElementById('followupConnectionToggle');
+    var followupConnectionList = document.getElementById('followupConnectionList');
+    var followupConnectionCount = document.getElementById('followupConnectionCount');
+    var followupAcceptedToggle = document.getElementById('followupAcceptedToggle');
+    var followupAcceptedList = document.getElementById('followupAcceptedList');
+    var followupAcceptedCount = document.getElementById('followupAcceptedCount');
+    var followupCustomActionToggle = document.getElementById('followupCustomActionToggle');
+    var followupCustomActionList = document.getElementById('followupCustomActionList');
+    var followupCustomActionCount = document.getElementById('followupCustomActionCount');
+    var followupWaitingToggle = document.getElementById('followupWaitingToggle');
+    var followupWaitingBody = document.getElementById('followupWaitingBody');
+    var followupWaitingCount = document.getElementById('followupWaitingCount');
+    var followupWaitingEmpty = document.getElementById('followupWaitingEmpty');
+    var followupWaitingConnectionToggle = document.getElementById('followupWaitingConnectionToggle');
+    var followupWaitingConnectionList = document.getElementById('followupWaitingConnectionList');
+    var followupWaitingConnectionCount = document.getElementById('followupWaitingConnectionCount');
+    var followupWaitingAcceptedToggle = document.getElementById('followupWaitingAcceptedToggle');
+    var followupWaitingAcceptedList = document.getElementById('followupWaitingAcceptedList');
+    var followupWaitingAcceptedCount = document.getElementById('followupWaitingAcceptedCount');
+    var followupWaitingCustomToggle = document.getElementById('followupWaitingCustomToggle');
+    var followupWaitingCustomList = document.getElementById('followupWaitingCustomList');
+    var followupWaitingCustomCount = document.getElementById('followupWaitingCustomCount');
+
+    function setupReminderToggle(toggleBtn, bodyEl) {
+      if (!toggleBtn) return;
+      toggleBtn.addEventListener('click', function () {
+        var expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+        toggleBtn.setAttribute('aria-expanded', String(!expanded));
+        bodyEl.hidden = expanded;
+      });
+    }
+    setupReminderToggle(followupActionToggle, followupActionBody);
+    setupReminderToggle(followupConnectionToggle, followupConnectionList);
+    setupReminderToggle(followupAcceptedToggle, followupAcceptedList);
+    setupReminderToggle(followupCustomActionToggle, followupCustomActionList);
+    setupReminderToggle(followupWaitingToggle, followupWaitingBody);
+    setupReminderToggle(followupWaitingConnectionToggle, followupWaitingConnectionList);
+    setupReminderToggle(followupWaitingAcceptedToggle, followupWaitingAcceptedList);
+    setupReminderToggle(followupWaitingCustomToggle, followupWaitingCustomList);
+
+    function todayIsoDate() {
+      var d = new Date();
+      var mm = String(d.getMonth() + 1).padStart(2, '0');
+      var dd = String(d.getDate()).padStart(2, '0');
+      return d.getFullYear() + '-' + mm + '-' + dd;
+    }
+    if (followupDateInput) followupDateInput.value = todayIsoDate();
+
+    function makePostponeButton(onPick) {
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-secondary btn-small';
+      btn.type = 'button';
+      btn.textContent = 'Postpone';
+      btn.addEventListener('click', function () {
+        var newDate = window.prompt('Postpone to which date? (YYYY-MM-DD)', '');
+        if (newDate) onPick(newDate);
+      });
+      return btn;
+    }
+
+    function buildLeadCard(lead, kind) {
+      var card = document.createElement('div');
+      card.className = 'attention attention-quiet';
+
+      var topRow = document.createElement('div');
+      topRow.className = 'crm-person-top-row';
+      var flag = document.createElement('span');
+      flag.className = 'attention-flag';
+      flag.textContent = lead.name + (lead.company ? ' — ' + lead.company : '');
+      topRow.appendChild(flag);
+      card.appendChild(topRow);
+
+      var copy = document.createElement('p');
+      copy.className = 'attention-copy';
+      var tag = document.createElement('span');
+      tag.className = 'crm-channel-tag crm-channel-tag-linkedin';
+      tag.textContent = 'LinkedIn';
+      copy.appendChild(tag);
+
+      var isOverdue = lead.follow_up_date < todayIsoDate();
+      var statusBits = [];
+      if (kind === 'connection') {
+        statusBits.push(lead.accepted ? ('status: ' + lead.accepted) : 'not yet accepted');
+      } else {
+        statusBits.push('Accepted');
+      }
+      statusBits.push((isOverdue ? 'overdue ' : 'due ') + lead.follow_up_date);
+      copy.appendChild(document.createTextNode(' ' + statusBits.join(' · ')));
+      if (isOverdue) {
+        var overdueTag = document.createElement('span');
+        overdueTag.className = 'reminder-overdue';
+        overdueTag.textContent = ' (overdue)';
+        copy.appendChild(overdueTag);
+      }
+      if (kind === 'accepted' && !lead.dm_after_accept) {
+        var note = document.createElement('span');
+        note.className = 'reminder-inline-note';
+        note.textContent = '⚠ no message prepared';
+        copy.appendChild(note);
+      }
+      card.appendChild(copy);
+
+      var preparedText = lead.connection_note || lead.dm_after_accept;
+      if (preparedText) {
+        var preview = document.createElement('p');
+        preview.className = 'reminder-note-preview';
+        preview.textContent = '"' + preparedText + '"';
+        card.appendChild(preview);
+      }
+
+      var actions = document.createElement('div');
+      actions.className = 'card-actions attention-actions';
+
+      function postUpdate(fields) {
+        return fetch('/api/linkedin-leads/' + lead.lead_id + '/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fields),
+        }).then(loadFollowups);
+      }
+
+      if (kind === 'connection') {
+        var acceptedBtn = document.createElement('button');
+        acceptedBtn.className = 'btn btn-primary btn-small';
+        acceptedBtn.type = 'button';
+        acceptedBtn.textContent = 'Accepted';
+        acceptedBtn.addEventListener('click', function () { postUpdate({ accepted: 'yes' }); });
+        actions.appendChild(acceptedBtn);
+        actions.appendChild(makePostponeButton(function (newDate) { postUpdate({ follow_up_date: newDate }); }));
+        var declinedBtn = document.createElement('button');
+        declinedBtn.className = 'btn btn-remove btn-small';
+        declinedBtn.type = 'button';
+        declinedBtn.textContent = 'Declined';
+        declinedBtn.addEventListener('click', function () { postUpdate({ status: 'declined' }); });
+        actions.appendChild(declinedBtn);
+      } else {
+        var repliedBtn = document.createElement('button');
+        repliedBtn.className = 'btn btn-primary btn-small';
+        repliedBtn.type = 'button';
+        repliedBtn.textContent = 'Replied';
+        repliedBtn.addEventListener('click', function () { postUpdate({ replied: 'yes', status: 'completed' }); });
+        actions.appendChild(repliedBtn);
+        actions.appendChild(makePostponeButton(function (newDate) { postUpdate({ follow_up_date: newDate }); }));
+        var completedBtn = document.createElement('button');
+        completedBtn.className = 'subtle-link-btn';
+        completedBtn.type = 'button';
+        completedBtn.textContent = 'Mark completed';
+        completedBtn.addEventListener('click', function () { postUpdate({ status: 'completed' }); });
+        actions.appendChild(completedBtn);
+      }
+      card.appendChild(actions);
+      return card;
+    }
+
+    function buildWaitingLeadCard(lead) {
+      var card = document.createElement('div');
+      card.className = 'attention attention-quiet';
+      var topRow = document.createElement('div');
+      topRow.className = 'crm-person-top-row';
+      var flag = document.createElement('span');
+      flag.className = 'attention-flag';
+      flag.textContent = lead.name + (lead.company ? ' — ' + lead.company : '');
+      topRow.appendChild(flag);
+      card.appendChild(topRow);
+      var copy = document.createElement('p');
+      copy.className = 'attention-copy';
+      var tag = document.createElement('span');
+      tag.className = 'crm-channel-tag crm-channel-tag-linkedin';
+      tag.textContent = 'LinkedIn';
+      copy.appendChild(tag);
+      copy.appendChild(document.createTextNode(' next check ' + lead.follow_up_date));
+      card.appendChild(copy);
+      return card;
+    }
+
+    function reminderSourceLabel(reminder) {
+      if (reminder.source === 'ai_chat') return 'Set via AI chat';
+      if (reminder.source === 'system_leads_csv_missing') return 'LyteKeepr';
+      return 'Custom reminder';
+    }
+
+    function buildReminderCard(reminder) {
+      var card = document.createElement('div');
+      card.className = 'attention attention-quiet';
+      var flag = document.createElement('span');
+      flag.className = 'attention-flag';
+      flag.textContent = reminder.text;
+      card.appendChild(flag);
+      var copy = document.createElement('p');
+      copy.className = 'attention-copy';
+      copy.textContent = reminderSourceLabel(reminder) + ' · due ' + reminder.due_date;
+      card.appendChild(copy);
+
+      var actions = document.createElement('div');
+      actions.className = 'card-actions attention-actions';
+
+      function postUpdate(status, dueDate) {
+        var body = { status: status };
+        if (dueDate) body.due_date = dueDate;
+        return fetch('/api/reminders/' + reminder.reminder_id + '/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }).then(loadFollowups);
+      }
+
+      var doneBtn = document.createElement('button');
+      doneBtn.className = 'btn btn-primary btn-small';
+      doneBtn.type = 'button';
+      doneBtn.textContent = 'Done';
+      doneBtn.addEventListener('click', function () { postUpdate('done'); });
+      actions.appendChild(doneBtn);
+      actions.appendChild(makePostponeButton(function (newDate) { postUpdate('postponed', newDate); }));
+      var dismissBtn = document.createElement('button');
+      dismissBtn.className = 'btn btn-remove btn-small';
+      dismissBtn.type = 'button';
+      dismissBtn.textContent = 'Dismiss';
+      dismissBtn.addEventListener('click', function () { postUpdate('dismissed'); });
+      actions.appendChild(dismissBtn);
+
+      card.appendChild(actions);
+      return card;
+    }
+
+    function buildWaitingReminderCard(reminder) {
+      var card = document.createElement('div');
+      card.className = 'attention attention-quiet';
+      var flag = document.createElement('span');
+      flag.className = 'attention-flag';
+      flag.textContent = reminder.text;
+      card.appendChild(flag);
+      var copy = document.createElement('p');
+      copy.className = 'attention-copy';
+      copy.textContent = reminderSourceLabel(reminder) + ' · next check ' + reminder.due_date;
+      card.appendChild(copy);
+      return card;
+    }
+
+    function loadFollowups() {
+      fetch('/api/reminders')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          var action = data.action_needed || { connection_requests: [], accepted_needs_message: [], custom: [] };
+          var waiting = data.waiting || { leads: [], custom: [] };
+
+          followupConnectionList.innerHTML = '';
+          action.connection_requests.forEach(function (l) { followupConnectionList.appendChild(buildLeadCard(l, 'connection')); });
+          followupConnectionCount.textContent = action.connection_requests.length;
+
+          followupAcceptedList.innerHTML = '';
+          action.accepted_needs_message.forEach(function (l) { followupAcceptedList.appendChild(buildLeadCard(l, 'accepted')); });
+          followupAcceptedCount.textContent = action.accepted_needs_message.length;
+
+          followupCustomActionList.innerHTML = '';
+          action.custom.forEach(function (r) { followupCustomActionList.appendChild(buildReminderCard(r)); });
+          followupCustomActionCount.textContent = action.custom.length;
+
+          var actionTotal = action.connection_requests.length + action.accepted_needs_message.length + action.custom.length;
+          followupActionCount.textContent = actionTotal;
+          followupActionEmpty.hidden = actionTotal > 0;
+
+          var waitingConnection = waiting.leads.filter(function (l) { return (l.accepted || '').toLowerCase() !== 'yes'; });
+          var waitingAccepted = waiting.leads.filter(function (l) { return (l.accepted || '').toLowerCase() === 'yes'; });
+
+          followupWaitingConnectionList.innerHTML = '';
+          waitingConnection.forEach(function (l) { followupWaitingConnectionList.appendChild(buildWaitingLeadCard(l)); });
+          followupWaitingConnectionCount.textContent = waitingConnection.length;
+
+          followupWaitingAcceptedList.innerHTML = '';
+          waitingAccepted.forEach(function (l) { followupWaitingAcceptedList.appendChild(buildWaitingLeadCard(l)); });
+          followupWaitingAcceptedCount.textContent = waitingAccepted.length;
+
+          followupWaitingCustomList.innerHTML = '';
+          waiting.custom.forEach(function (r) { followupWaitingCustomList.appendChild(buildWaitingReminderCard(r)); });
+          followupWaitingCustomCount.textContent = waiting.custom.length;
+
+          var waitingTotal = waiting.leads.length + waiting.custom.length;
+          followupWaitingCount.textContent = waitingTotal;
+          followupWaitingEmpty.hidden = waitingTotal > 0;
+        })
+        .catch(function () {});
+
+      fetch('/api/linkedin-leads')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          var currentValue = followupLeadSelect.value;
+          followupLeadSelect.innerHTML = '<option value="">No specific contact (custom follow-up)</option>';
+          (data.leads || []).forEach(function (lead) {
+            var opt = document.createElement('option');
+            opt.value = lead.lead_id;
+            opt.textContent = lead.name + (lead.company ? ' — ' + lead.company : '');
+            followupLeadSelect.appendChild(opt);
+          });
+          followupLeadSelect.value = currentValue;
+        })
+        .catch(function () {});
+    }
+
+    if (followupAddBtn) {
+      followupAddBtn.addEventListener('click', function () {
+        var text = followupTextInput.value.trim();
+        var dueDate = followupDateInput.value;
+        if (!text || !dueDate) return;
+        var leadId = followupLeadSelect.value;
+        var body = { text: text, due_date: dueDate };
+        if (leadId) body.lead_id = Number(leadId);
+        fetch('/api/reminders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }).then(function () {
+          followupTextInput.value = '';
+          followupDateInput.value = todayIsoDate();
+          followupLeadSelect.value = '';
+          loadFollowups();
+        });
+      });
+    }
+
+    setInterval(loadFollowups, 60000);
+    loadFollowups();
     function pollNotificationCount() {
       fetch('/api/notifications/count')
         .then(function (res) { return res.json(); })

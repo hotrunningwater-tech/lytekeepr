@@ -53,6 +53,30 @@ def get_profile(access_token: str | None = None) -> dict:
     return _request("GET", "/profile", access_token=access_token)
 
 
+def get_sender_name(access_token: str | None = None) -> str:
+    """The display name set on the connected Gmail address (the name recipients see in From). Empty if none is set."""
+    data = _request("GET", "/settings/sendAs", access_token=access_token)
+    entries = data.get("sendAs") or []
+    pick = next((e for e in entries if e.get("isPrimary")), None) or next((e for e in entries if e.get("isDefault")), None) or (entries[0] if entries else {})
+    name = (pick.get("displayName") or "").strip()
+    if name:
+        return name
+    # no display name on the account: use the name on the emails the user has sent (the most common one in the latest few)
+    import collections
+    import email.utils
+    seen = collections.Counter()
+    try:
+        for m in (_request("GET", "/messages", params={"q": "in:sent", "maxResults": 5}, access_token=access_token).get("messages") or [])[:5]:
+            d = _request("GET", f"/messages/{m['id']}", params={"format": "metadata", "metadataHeaders": "From"}, access_token=access_token)
+            headers = {x["name"].lower(): x["value"] for x in d.get("payload", {}).get("headers", [])}
+            display = email.utils.parseaddr(headers.get("from", ""))[0].strip()
+            if display:
+                seen[display] += 1
+    except Exception:
+        return ""
+    return seen.most_common(1)[0][0] if seen else ""
+
+
 def list_message_ids(query: str, page_token: str | None = None) -> dict:
     params = {"q": query, "maxResults": 500}
     if page_token:

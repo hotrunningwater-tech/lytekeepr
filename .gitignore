@@ -22,3 +22,11 @@ deploy/lytekeepr.xyz/
 
 node_modules/
 .DS_Store
+
+# Calendar database (live data)
+lk_calendar/calendar.db*
+
+# Scraped / lead data and big backups: personal data, kept out of git
+linkedin-post-scrape-test/
+linkedin-leads/
+*.bak

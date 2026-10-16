@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500&display=swap">
+<style>
+  /* LinkedIn company banner: 1128x191 (rendered at 2x).
+     LinkedIn shows the full width on wide desktop, but crops the sides to roughly
+     3.6:1 (center ~690px) on narrower views and puts the logo over the left part.
+     Safe zone for content: x 520-900, centered vertically. */
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1128px; height: 191px; overflow: hidden; position: relative;
+    background: linear-gradient(180deg, #adc5ce 0%, #b9ced5 100%);
+    color: #29434E; font-family: "Inter", sans-serif;
+  }
+  .content {
+    position: absolute; left: 520px; width: 390px; top: 50%; transform: translateY(-50%);
+  }
+  .headline {
+    margin: 0; font-family: "General Sans", sans-serif; font-weight: 700;
+    font-size: 25px; line-height: 1.18; letter-spacing: -0.4px;
+  }
+  .tags { display: flex; gap: 7px; margin-top: 12px; }
+  .tag { background: rgba(242, 248, 250, 0.85); border-radius: 100px;
+    padding: 4px 11px; font-size: 11.5px; font-weight: 500; }
+</style>
+</head>
+<body>
+  <div class="content">
+    <p class="headline">Your CRM. All your<br>conversations. One place.</p>
+    <div class="tags">
+      <span class="tag">LinkedIn</span>
+      <span class="tag">Email</span>
+      <span class="tag">CRM</span>
+    </div>
+  </div>
+</body>
+</html>

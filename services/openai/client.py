@@ -16,11 +16,17 @@ class OpenAIServiceError(Exception):
     """Raised when the OpenAI request fails, with a human-readable message."""
 
 
-def _call_responses_api(client: OpenAI, *, model: str, input_items: list, tools: list[dict] | None):
+def _call_responses_api(client: OpenAI, *, model: str, input_items: list, tools: list[dict] | None, reasoning_effort: str | None = None):
     kwargs = {"model": model, "input": input_items, "store": False}
     if tools:
         kwargs["tools"] = tools
     try:
+        if reasoning_effort:
+            try:
+                return client.responses.create(**kwargs, reasoning={"effort": reasoning_effort})
+            except openai.BadRequestError as exc:      # this model doesn't accept the setting: carry on without it
+                if "reasoning" not in str(exc).lower():
+                    raise
         return client.responses.create(**kwargs)
     except openai.AuthenticationError as exc:
         raise OpenAIServiceError(
@@ -41,6 +47,9 @@ def generate_reply(
     model: str,
     tools: list[dict] | None = None,
     tool_runner=None,
+    max_iterations: int = MAX_TOOL_ITERATIONS,
+    final_summary: bool = False,
+    reasoning_effort: str | None = None,
 ) -> str:
     if not api_key:
         raise OpenAIServiceError(
@@ -50,8 +59,8 @@ def generate_reply(
     client = OpenAI(api_key=api_key)
     input_items: list = list(messages)
 
-    for _ in range(MAX_TOOL_ITERATIONS):
-        response = _call_responses_api(client, model=model, input_items=input_items, tools=tools)
+    for _ in range(max_iterations):
+        response = _call_responses_api(client, model=model, input_items=input_items, tools=tools, reasoning_effort=reasoning_effort)
 
         function_calls = [item for item in response.output if getattr(item, "type", None) == "function_call"]
         if not function_calls or not tool_runner:
@@ -79,6 +88,9 @@ def generate_reply(
                 }
             )
 
+    if final_summary:
+        # Out of tool rounds: let the model write its reply from what the tools already did, with no more tool calls.
+        response = _call_responses_api(client, model=model, input_items=input_items, tools=None, reasoning_effort=reasoning_effort)
     return response.output_text or "I wasn't able to finish that — try rephrasing your question."
 
 

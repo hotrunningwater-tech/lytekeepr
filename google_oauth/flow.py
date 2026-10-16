@@ -19,15 +19,19 @@ from .store import save_tokens
 AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify"
+CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+# Everything requested at sign-in, space-separated as Google expects. Existing Gmail
+# access is unchanged; Calendar is read-only and nothing uses it yet.
+REQUESTED_SCOPES = (GMAIL_MODIFY_SCOPE, CALENDAR_READONLY_SCOPE)
 
 
-def build_authorization_url() -> str:
+def build_authorization_url(state: str | None = None) -> str:
     config = GoogleOAuthConfig.from_env().require()
     params = {
         "client_id": config.client_id,
         "redirect_uri": config.redirect_uri,
         "response_type": "code",
-        "scope": GMAIL_MODIFY_SCOPE,
+        "scope": " ".join(REQUESTED_SCOPES),
         "access_type": "offline",
         # Forces Google to always return a refresh_token, even on repeat
         # connections from the same account (otherwise it's only issued
@@ -35,6 +39,8 @@ def build_authorization_url() -> str:
         "prompt": "consent",
         "include_granted_scopes": "true",
     }
+    if state:
+        params["state"] = state      # signed by the app; the callback refuses requests without a valid one
     return f"{AUTH_ENDPOINT}?{urllib.parse.urlencode(params)}"
 
 

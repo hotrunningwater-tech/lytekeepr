@@ -13,6 +13,8 @@ Then open http://127.0.0.1:5052 in a browser.
 """
 
 import io
+import json
+import os
 import logging
 import subprocess
 import urllib.parse
@@ -52,6 +54,8 @@ from integrations.linkedin import client as linkedin_client
 from integrations.linkedin import sync as linkedin_sync
 from integrations.linkedin import storage as linkedin_sync_storage
 from crm import db as crm_db
+from linkedin_leads import importer as leads_importer
+from linkedin_leads.csv_writeback import write_lead_to_csv
 from doc_registry.registry import compute_counts, dismiss_entries
 from doc_registry.photo_review_state import set_pending_review
 from doc_registry.scheduler import maybe_run_daily_check, run_check_now
@@ -83,6 +87,12 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024  # local demo uploads and recordings
 
+import auth_gate
+auth_gate.install(app, APP_DIR)
+
+import lk_calendar
+lk_calendar.register(app)
+
 
 @app.get("/")
 def index():
@@ -91,6 +101,19 @@ def index():
     # kind of stale-page confusion that wasted real debugging time here.
     # This is the one page that must never be cached.
     response = send_from_directory(APP_DIR, "index.html")
+    prefix = os.getenv("LK_URL_PREFIX", "").rstrip("/")
+    if prefix:
+        # Served under a path (e.g. /calendar/) behind nginx: make the page's absolute
+        # "/api/..." style requests go through that path too.
+        shim = (
+            "<script>(function(P){window.LK_PREFIX=P;var f=window.fetch;"
+            "window.fetch=function(u,o){if(typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/')u=P+u;return f.call(this,u,o);};"
+            "var x=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){"
+            "if(typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/')arguments[1]=P+u;return x.apply(this,arguments);};"
+            "})(" + json.dumps(prefix) + ");</script>"
+        )
+        html = (APP_DIR / "index.html").read_text(encoding="utf-8").replace("<head>", "<head>" + shim, 1)
+        response = app.response_class(html, mimetype="text/html")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -289,7 +312,7 @@ def api_chat():
     pending_email_count = len(get_pending_candidates(account_id)) if account_id else 0
 
     try:
-        reply = get_reply(messages, document=document, pending_email_count=pending_email_count)
+        reply = get_reply(messages, document=document, pending_email_count=pending_email_count, pending_draft=email_send_flow.load_pending_send())
     except OpenAIServiceError as exc:
         return jsonify({"error": str(exc)}), 502
 
@@ -338,6 +361,80 @@ def linkedin_send_pending_cancel():
     return jsonify({"ok": True})
 
 
+@app.post("/api/funnel-email/reset")
+def funnel_email_reset():
+    # "Clear chat": forget the funnel and stage picked so far, and drop a staged (unsent) batch.
+    from assistant import bulk_email, funnel_flow
+    funnel_flow.clear()
+    bulk_email.clear_pending()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/email/bulk-pending")
+def email_bulk_pending_get():
+    # The funnel email waiting for review (the popup opens from this), or the batch being sent right now.
+    from assistant import bulk_email
+    return jsonify({"pending": bulk_email.preview(), "job": bulk_email.job_status()})
+
+
+@app.post("/api/email/bulk-pending/update")
+def email_bulk_pending_update():
+    from assistant import bulk_email
+    body = request.get_json(silent=True) or {}
+    result = bulk_email.update(body.get("subject"), body.get("body"), body.get("excluded"), body.get("overrides"))
+    if result is None:
+        return jsonify({"error": "This batch is no longer available."}), 404
+    return jsonify({"pending": result})
+
+
+@app.post("/api/email/bulk-pending/phase")
+def email_bulk_pending_phase():
+    # "template" = edit the one email; "review" = the user approved it and now checks every person's copy.
+    from assistant import bulk_email
+    body = request.get_json(silent=True) or {}
+    result = bulk_email.set_phase(str(body.get("phase", "")))
+    if result is None:
+        return jsonify({"error": "This batch is no longer available."}), 404
+    return jsonify({"pending": result})
+
+
+@app.post("/api/email/bulk-pending/send")
+def email_bulk_pending_send():
+    # Only the popup's send button gets here; the AI can never start a send.
+    from assistant import bulk_email
+    body = request.get_json(silent=True) or {}
+    result = bulk_email.start_send(str(body.get("id", "")), body.get("pause"))
+    return jsonify(result), (200 if result["status"] == "started" else 409)
+
+
+@app.post("/api/email/bulk-pending/cancel")
+def email_bulk_pending_cancel():
+    from assistant import bulk_email
+    bulk_email.clear_pending()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/email/send-pending")
+def email_send_pending_get():
+    # Lets the UI bring back the email draft after a page reload (the draft itself lives on the server for 30 minutes).
+    pending = email_send_flow.load_pending_send()
+    if not pending:
+        return jsonify({"pending": None})
+    return jsonify({"pending": {
+        "person_name": pending.get("person_name"),
+        "to_email": pending.get("to_email"),
+        "subject": pending.get("subject"),
+        "body": pending.get("body"),
+    }})
+
+
+@app.post("/api/email/send-pending/update")
+def email_send_pending_update():
+    body = request.get_json(silent=True) or {}
+    payload = email_send_flow.update_pending_send(str(body.get("subject", "")), str(body.get("body", "")))
+    return jsonify({"ok": bool(payload)})
+
+
 @app.post("/api/email/send-pending/confirm")
 def email_send_pending_confirm():
     return jsonify(email_send_flow.confirm_pending_send())
@@ -349,14 +446,27 @@ def email_send_pending_cancel():
     return jsonify({"ok": True})
 
 
+def _oauth_state_signer():
+    # The state is only ever issued by /auth/google/start (behind the login) and expires after 10 minutes, so
+    # the callback, which runs without the login cookie, cannot be driven by someone else's Google authorization.
+    from itsdangerous import URLSafeTimedSerializer
+    secret = os.getenv("LYTEKEEPR_SECRET_KEY") or os.getenv("LYTEKEEPR_PASSWORD") or "local-dev-only"
+    return URLSafeTimedSerializer(secret, salt="google-oauth-state")
+
+
+def _app_home() -> str:
+    # "/" locally; "/calendar/" when the app is served under that path on lytekeepr.xyz
+    return os.getenv("LK_URL_PREFIX", "").rstrip("/") + "/"
+
+
 @app.get("/auth/google/start")
 def google_oauth_start():
     # Kicks off the flow: browser navigates here, we 302 straight to
     # Google's consent screen. All client_id/secret handling stays server-side.
     try:
-        url = build_authorization_url()
+        url = build_authorization_url(state=_oauth_state_signer().dumps("google-oauth"))
     except GoogleOAuthError as exc:
-        return redirect(f"/?gmail=error&reason={urllib.parse.quote(str(exc))}")
+        return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote(str(exc))}")
     return redirect(url)
 
 
@@ -364,27 +474,37 @@ def google_oauth_start():
 def google_oauth_callback():
     error = request.args.get("error")
     if error:
-        return redirect(f"/?gmail=error&reason={urllib.parse.quote(error)}")
+        return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote(error)}")
+
+    try:
+        _oauth_state_signer().loads(request.args.get("state", ""), max_age=600)
+    except Exception:
+        return redirect(f"{_app_home()}?gmail=error&reason=invalid_or_expired_state")
 
     code = request.args.get("code")
     if not code:
-        return redirect("/?gmail=error&reason=missing_code")
+        return redirect(f"{_app_home()}?gmail=error&reason=missing_code")
 
     try:
         tokens = exchange_code_for_tokens(code)
         profile = gmail_client.get_profile(tokens.get("access_token"))
     except GoogleOAuthError as exc:
-        return redirect(f"/?gmail=error&reason={urllib.parse.quote(str(exc))}")
+        return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote(str(exc))}")
 
     account_id = profile.get("emailAddress")
     if not account_id:
-        return redirect("/?gmail=error&reason=missing_account_email")
+        return redirect(f"{_app_home()}?gmail=error&reason=missing_account_email")
 
     save_tokens(tokens, account_id=account_id)
     set_active_account_id(account_id)
     clear_legacy_tokens()
+    try:
+        from lk_calendar import profile as lk_profile
+        lk_profile.refresh_suggested(force=True)           # the name on this Google account, offered for the user to confirm
+    except Exception:
+        pass
 
-    return redirect("/?gmail=connected")
+    return redirect(f"{_app_home()}?gmail=connected")
 
 
 @app.get("/api/google/status")
@@ -465,6 +585,8 @@ def crm_person_detail(person_id):
         conn.close()
     if detail is None:
         return jsonify({"error": "No such person."}), 404
+    from lk_calendar import contacts as lk_contacts
+    detail["messages"] = lk_contacts.messages_with_saved_emails(person_id, detail.get("messages") or [])     # + emails saved in the Gmail tab
     return jsonify(detail)
 
 
@@ -516,6 +638,14 @@ def crm_move_to_funnel():
         conn.commit()
     finally:
         conn.close()
+    if funnel_id is not None:
+        try:
+            from lk_calendar import contacts as lk_contacts
+            lk_contacts.ensure_leads(person_ids)      # everyone in a funnel has a status per channel (new = no task)
+            lk_contacts.apply_history_status(person_ids)   # already written to before joining: "email sent", dated by the last message
+            lk_contacts.sync_stages(person_ids)       # people who already have statuses land in the matching stage
+        except Exception:
+            app.logger.exception("stage sync after funnel move failed")
     return jsonify({"ok": True})
 
 
@@ -529,7 +659,56 @@ def crm_funnel_board(funnel_id):
         conn.close()
     if board is None:
         return jsonify({"error": "No such funnel."}), 404
+    try:
+        from lk_calendar import contacts as lk_contacts
+        ids = [p["person_id"] for st in board["stages"] for p in st["people"]]
+        statuses = lk_contacts.statuses_for(ids)
+        for st in board["stages"]:
+            for p in st["people"]:
+                p["statuses"] = statuses.get(p["person_id"], [])
+    except Exception:
+        app.logger.exception("could not add statuses to the funnel board")
     return jsonify(board)
+
+
+def _stage_edit(action):
+    conn = crm_db.get_connection()
+    try:
+        out = action(conn)
+        conn.commit()
+        return jsonify({"ok": True, **(out or {})})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.post("/api/crm/funnels/<int:funnel_id>/stages")
+def crm_add_stage(funnel_id):
+    name = (request.get_json(silent=True) or {}).get("name", "")
+    return _stage_edit(lambda conn: {"stage_id": crm_db.add_stage(conn, funnel_id, name)})
+
+
+@app.post("/api/crm/funnels/stages/<int:stage_id>/rename")
+def crm_rename_stage(stage_id):
+    name = (request.get_json(silent=True) or {}).get("name", "")
+    def run(conn):
+        old = crm_db.rename_stage(conn, stage_id, name)
+        if old and old.lower() != name.strip().lower():
+            from lk_calendar import contacts as lk_contacts
+            lk_contacts.rename_stage_mapping(old, name.strip()[:60])
+    return _stage_edit(run)
+
+
+@app.post("/api/crm/funnels/stages/<int:stage_id>/move-position")
+def crm_move_stage_position(stage_id):
+    direction = -1 if (request.get_json(silent=True) or {}).get("direction") == "up" else 1
+    return _stage_edit(lambda conn: crm_db.move_stage(conn, stage_id, direction))
+
+
+@app.post("/api/crm/funnels/stages/<int:stage_id>/delete")
+def crm_delete_stage(stage_id):
+    return _stage_edit(lambda conn: crm_db.delete_stage(conn, stage_id))
 
 
 @app.post("/api/crm/funnels/stages/move")
@@ -543,19 +722,35 @@ def crm_move_to_stage():
     try:
         crm_db.move_person_to_stage(conn, person_id, stage_id)
         conn.commit()
+        row = conn.execute("SELECT name FROM funnel_stages WHERE stage_id = ?", (stage_id,)).fetchone()
     finally:
         conn.close()
+    if row:
+        try:
+            from lk_calendar import contacts as lk_contacts
+            lk_contacts.apply_stage(int(person_id), row["name"])      # moving by hand changes the status to match
+        except Exception:
+            app.logger.exception("status update after stage move failed")
     return jsonify({"ok": True})
 
 
 @app.post("/api/crm/people/<int:person_id>/delete")
 def crm_delete_person(person_id):
+    info = None
+    try:
+        from lk_calendar import contacts as lk_contacts
+        info = lk_contacts.collect_for_delete(person_id)
+        lk_contacts.delete_calendar_links(person_id)       # their statuses and calendar tasks go with them
+    except Exception:
+        app.logger.exception("could not clean the calendar side of a deleted contact")
     conn = crm_db.get_connection()
     try:
         crm_db.delete_person(conn, person_id)
         conn.commit()
     finally:
         conn.close()
+    if info:
+        lk_contacts.cleanup_after_delete(info)              # their saved drafts, and their company if they were its only person
     return jsonify({"ok": True})
 
 
@@ -603,12 +798,12 @@ def crm_merge_people():
     merge_person_id = body.get("merge_person_id")
     if not isinstance(keep_person_id, int) or not isinstance(merge_person_id, int):
         return jsonify({"error": "keep_person_id and merge_person_id (integers) are required."}), 400
-    conn = crm_db.get_connection()
+    from lk_calendar import contacts as lk_contacts
+    from lk_calendar.store import ValidationError
     try:
-        crm_db.merge_people(conn, keep_person_id, merge_person_id)
-        conn.commit()
-    finally:
-        conn.close()
+        lk_contacts.merge_contacts(keep_person_id, merge_person_id)      # keeps notes, statuses and tasks, not just messages
+    except ValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"ok": True})
 
 
@@ -667,6 +862,110 @@ def followups_stop(follow_up_id):
         if pending and pending.get("person_name") == row["person_name"]:
             clear_pending_send()
 
+    return jsonify({"ok": True})
+
+
+# --- LinkedIn leads (manual prospecting) + reminders ---------------------
+
+@app.get("/api/reminders")
+def reminders_overview():
+    conn = crm_db.get_connection()
+    try:
+        return jsonify(crm_db.get_reminders_overview(conn))
+    finally:
+        conn.close()
+
+
+@app.get("/api/linkedin-leads")
+def linkedin_leads_list():
+    """Open leads, for the "attach to a contact" dropdown on the Add
+    follow-up row — not the full reminders breakdown."""
+    conn = crm_db.get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT lead_id, name, company FROM linkedin_leads WHERE status = 'open' "
+            "ORDER BY name COLLATE NOCASE"
+        ).fetchall()
+        return jsonify({"leads": [dict(r) for r in rows]})
+    finally:
+        conn.close()
+
+
+@app.post("/api/reminders")
+def reminders_create():
+    """A reminder tied to a lead (lead_id given) updates that lead's own
+    notes/follow_up_date instead of creating a separate row — a lead has
+    exactly one due date, its own, never a second one living in a
+    different table. Only a reminder with no lead attached becomes its
+    own standalone row."""
+    body = request.get_json(silent=True) or {}
+    text = (body.get("text") or "").strip()
+    due_date = (body.get("due_date") or "").strip()
+    lead_id = body.get("lead_id")
+    if not text or not due_date:
+        return jsonify({"error": "'text' and 'due_date' are required."}), 400
+
+    conn = crm_db.get_connection()
+    try:
+        if lead_id:
+            crm_db.update_linkedin_lead(conn, int(lead_id), notes=text, follow_up_date=due_date)
+            lead = crm_db.get_linkedin_lead(conn, int(lead_id))
+            conn.commit()
+            if lead:
+                write_lead_to_csv(dict(lead))
+        else:
+            crm_db.create_reminder(conn, text, due_date, source="manual")
+            conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/reminders/<int:reminder_id>/update")
+def reminders_update(reminder_id):
+    body = request.get_json(silent=True) or {}
+    status = (body.get("status") or "").strip()
+    due_date = (body.get("due_date") or "").strip() or None
+    if status not in {"done", "postponed", "dismissed", "pending"}:
+        return jsonify({"error": "status must be one of: done, postponed, dismissed, pending."}), 400
+    if status == "postponed" and not due_date:
+        return jsonify({"error": "'due_date' is required when postponing."}), 400
+
+    conn = crm_db.get_connection()
+    try:
+        crm_db.update_reminder_status(conn, reminder_id, status, due_date)
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/linkedin-leads/<int:lead_id>/update")
+def linkedin_leads_update(lead_id):
+    """Covers Accepted/Declined/Replied/Postpone/Dismiss on a lead card —
+    updates the DB then writes the same change back into its source CSV
+    (the spreadsheet stays the record of truth)."""
+    body = request.get_json(silent=True) or {}
+    accepted = body.get("accepted")
+    replied = body.get("replied")
+    status = body.get("status")
+    follow_up_date = body.get("follow_up_date")
+
+    conn = crm_db.get_connection()
+    try:
+        lead = crm_db.get_linkedin_lead(conn, lead_id)
+        if lead is None:
+            return jsonify({"error": "Unknown lead."}), 404
+        crm_db.update_linkedin_lead(
+            conn, lead_id,
+            accepted=accepted, replied=replied, status=status, follow_up_date=follow_up_date,
+        )
+        updated_lead = crm_db.get_linkedin_lead(conn, lead_id)
+        conn.commit()
+    finally:
+        conn.close()
+
+    write_lead_to_csv(dict(updated_lead))
     return jsonify({"ok": True})
 
 
@@ -893,19 +1192,66 @@ def gmail_message_detail(message_id):
     return jsonify(record)
 
 
+def run_gmail_scan(since_date=None) -> dict:
+    """Scan Gmail once. Emails from trusted CRM contacts are saved to the contact straight away; the rest wait for review."""
+    result = scan_for_candidates(since_date=since_date)
+    account_id = result["account_id"]
+
+    known_contact_ids = []
+    new_ids = result.get("new_candidate_ids", [])
+    if new_ids:
+        crm_db.init_db()
+        lookup_conn = crm_db.get_connection()
+        try:
+            for message_id in new_ids:
+                message = gmail_storage.load_pending(account_id, message_id)
+                if not message:
+                    continue
+                contact_info = _email_contact_info(message)
+                if contact_info is None:
+                    continue
+                existing = crm_db.find_channel_account(lookup_conn, "email", contact_info[0])
+                if existing is not None and existing["contact_status"] == "trusted":
+                    known_contact_ids.append(message_id)
+        finally:
+            lookup_conn.close()
+
+    if known_contact_ids:
+        # Same two-step pipeline /api/gmail/save-candidates uses for a
+        # manual approval — save_candidates() moves the message from
+        # pending into gmail's permanent store first, then it's read
+        # back from there (not the now-deleted pending copy) for the
+        # CRM write, exactly like that route does.
+        save_candidates(account_id, known_contact_ids)
+        crm_conn = crm_db.get_connection()
+        try:
+            for message_id in known_contact_ids:
+                message = gmail_storage.load_message(account_id, message_id)
+                if message:
+                    _crm_write_email(crm_conn, message)
+            crm_conn.commit()
+        finally:
+            crm_conn.close()
+
+    result["auto_saved_known_contact_ids"] = known_contact_ids
+    result["candidates"] = get_pending_candidates(account_id)
+    return result
+
+
 @app.post("/api/gmail/scan")
 def gmail_scan():
     # Scans for new/changed Gmail messages (full 90-day window on first
-    # run, historyId-based diff afterward — see gmail.sync.scan_for_candidates),
-    # classifies each new one for likely case relevance via the OpenAI
-    # classifier, and stores only a lightweight scan-state entry for each.
-    # Nothing is permanently saved here — new messages become pending
-    # candidates for the user to approve via /api/gmail/save-candidates.
+    # run, historyId-based diff afterward — see gmail.sync.scan_for_candidates).
+    # A message from an address that's already a trusted email contact in
+    # the CRM is auto-saved immediately below — same "trust, once earned,
+    # needs no re-approval" rule LinkedIn's sync already applies (see
+    # get_or_create_person_for_channel). Only a message from an address
+    # with no trusted channel_account yet becomes a pending candidate the
+    # user must approve via /api/gmail/save-candidates.
     body = request.get_json(silent=True) or {}
     since_date = (body.get("since") or "").strip() or None
     try:
-        result = scan_for_candidates(since_date=since_date)
-        result["candidates"] = get_pending_candidates(result["account_id"])
+        result = run_gmail_scan(since_date)
     except ValueError:
         return jsonify({"error": f"Invalid date: {since_date!r}. Use YYYY-MM-DD."}), 400
     except (GmailSyncError, GoogleOAuthError) as exc:
@@ -1445,13 +1791,14 @@ def api_photo_review_from_email():
     return jsonify(result)
 
 
-def _crm_write_email(conn, message: dict) -> None:
-    """Writes one saved Gmail message into the CRM, filed under whichever
-    side of the conversation isn't the user (the recipient for an outgoing
-    message, the sender for an incoming one) — same 'person = the contact,
-    not me' convention LinkedIn already uses. No subject column exists on
-    Messages, so it's folded into the stored text instead of added as a
-    new column."""
+def _email_contact_info(message: dict) -> tuple[str, str, str] | None:
+    """Resolves which address on this message is "the contact" (the other
+    side of the conversation from the user) — the recipient for an
+    outgoing message, the sender for an incoming one, same 'person = the
+    contact, not me' convention LinkedIn already uses. Returns
+    (contact_email, contact_name, direction), or None if there's no usable
+    address. Shared by _crm_write_email and the scan-time known-contact
+    check so both ever agree on who "the contact" is for a given message."""
     from_obj = message.get("from") or {}
     to_list = message.get("to") or []
     label_ids = message.get("labelIds") or []
@@ -1459,8 +1806,20 @@ def _crm_write_email(conn, message: dict) -> None:
     contact = (to_list[0] if to_list else {}) if direction == "outgoing" else from_obj
     contact_email = contact.get("email") or ""
     if not contact_email:
-        return
+        return None
     contact_name = contact.get("name") or contact_email
+    return contact_email, contact_name, direction
+
+
+def _crm_write_email(conn, message: dict) -> None:
+    """Writes one saved Gmail message into the CRM. No subject column
+    exists on Messages, so it's folded into the stored text instead of
+    added as a new column."""
+    contact_info = _email_contact_info(message)
+    if contact_info is None:
+        return
+    contact_email, contact_name, direction = contact_info
+    from_obj = message.get("from") or {}
 
     if crm_db.is_contact_excluded(conn, "email", contact_email):
         return  # explicitly removed by the user — never silently re-created
@@ -1627,9 +1986,47 @@ def api_ocr():
     )
 
 
+# ---- Daily Gmail sync ----------------------------------------------------------------------------------------
+# Once a day (after 7 AM Toronto time) the same scan as the Gmail tab's button runs: emails from trusted CRM contacts go
+# straight onto the contact, everything else waits for review. A failure (for example an expired Google sign-in) is
+# only logged and retried on the next tick; set LK_GMAIL_DAILY=0 to switch it off. Does nothing if Gmail isn't connected.
+def _gmail_daily_tick() -> str:
+    from datetime import datetime
+    from lk_calendar import store as _store
+    if not get_active_account_id():
+        return "skipped"
+    now = _store.now_local()
+    if now.hour < 7:
+        return "not due"
+    last = _store.get_state("gmail_last_daily_scan") or ""
+    if last[:10] == now.date().isoformat():
+        return "not due"
+    _store.set_state("gmail_last_daily_scan", now.isoformat())     # recorded first: a failure waits for tomorrow, never loops
+    run_gmail_scan(None)
+    return "synced"
+
+
+def _gmail_daily_loop():
+    import logging
+    import time
+    time.sleep(60)
+    while True:
+        try:
+            _gmail_daily_tick()
+        except Exception:
+            logging.getLogger(__name__).exception("daily Gmail sync failed; it will try again tomorrow")
+        time.sleep(600)
+
+
+if os.getenv("LK_GMAIL_DAILY", "1") != "0":
+    import threading as _threading
+    _threading.Thread(target=_gmail_daily_loop, name="gmail-daily-sync", daemon=True).start()
+
+
 if __name__ == "__main__":
     linkedin_sync.start_scheduler()
     followup_engine.start_scheduler()
+    leads_importer.start_scheduler()
 
     # threaded=True: /api/gmail/scan can run for minutes on a large mailbox;
     # without this the single-threaded dev server can't answer the

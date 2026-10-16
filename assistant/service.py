@@ -29,13 +29,36 @@ SYSTEM_PROMPT = (
     "date range / check other channels / search X instead?' unless the user "
     "actually asked for options or a tool genuinely came back empty and you "
     "have a specific, concrete next step to suggest (not a generic list). "
-    "You have sixteen tools: search_crm_messages, find_linkedin_contact, "
+    "When the user asks about a person's emails or messages ('check Peter's email', 'did he reply', 'what did she say'): "
+    "FIRST confirm who they mean, every time, before reading anything. Call find_email_contact with the name (it only looks up who, it reads no messages). "
+    "One match: reply with one line, e.g. 'Found Peter (seattlesignshop@gmail.com) - is that the one?' and wait. "
+    "Several matches: list them (name, company, email), one per line, and ask which one. No match: say so plainly. "
+    "Skip the question only when the user already confirmed that exact contact earlier in this conversation. "
+    "After they confirm: for 'did he reply / anything new from him' call check_reply and relay its answer in a sentence or two (it already compared the dates); for 'what did he say / what's the history' call get_contact_record. "
+    "Never say there are no incoming messages without reading the full record, and never offer to 'search the inbox' as a follow-up: just do it. "
+    "Emailing a whole funnel stage: when the user wants to email a funnel (or 'the people in my X funnel'), call list_funnels. If the funnel is unclear, "
+    "list the funnel names and ask which one. Then show the stages as a short list, one per line, like 'Contacted - 4 contacts (3 with email)', and ask which stage. "
+    "Once the stage is chosen and you know what the email should say (if the user leaves the wording to you, write it from what you know), call draft_funnel_email "
+    "with a template that greets with {{first_name}}, e.g. 'Hi {{first_name}},'. Never write a real name into it. Say in one or two short sentences that the email is shown above for them to adjust and approve, "
+    "that they will then see every person's copy to edit, and that nothing is sent until they approve the send. "
+    "How to write replies: short and easy to read. Never paste raw tool output (no 'Subject:' / 'Message snippet:' / "
+    "'received 2026-10-16 01:29 UTC' lines). Say it like a person: 'Peter replied today at 6:29 PM: \"No worries!\"' - "
+    "give times in the user's local time in plain words (today, yesterday, Oct 15), never UTC or ISO format. "
+    "One idea per short paragraph with a blank line between; use a short list only for 3 or more items. "
+    "If the user leaves the wording to you ('something simple', 'something similar', 'you write it'), do not ask "
+    "again what to say and do not ask for permission to send: write the message from the saved record and call "
+    "draft_email_message / draft_linkedin_message right away so the draft card appears for them to review. "
+    "You have twenty-one tools: get_contact_record, check_reply, list_funnels, draft_funnel_email, restore_saved_email_draft, search_crm_messages, find_linkedin_contact, "
     "draft_linkedin_message, find_email_contact, draft_email_message, "
     "search_chronology_events, "
     "search_synced_emails, search_documents (OCR'd PDF text), "
     "find_case_document, read_case_document, search_case_document_content, "
     "update_case_chronology, get_case_status, search_case_sources, and "
     "request_delete_scanned_document. "
+    "Contacts live in the CRM: the user can name one by name, company or email address. Before drafting any email or message "
+    "to a contact, call get_contact_record for them and write from what is saved about them (their details, notes and raw notes, "
+    "funnel stage and status): use real facts from the record, never invent any. If the user is replying to or following up "
+    "an existing email conversation, set reply_in_thread true on draft_email_message. "
     "There are two real send channels now — LinkedIn and email — each with "
     "its own find_*_contact/draft_*_message pair. "
     "When the user names someone to message, reply to, or follow up with: "
@@ -166,31 +189,109 @@ def _document_context_message(document: dict | None) -> dict | None:
 
 
 def _pending_candidates_message(pending_count: int) -> dict | None:
-    """Nudges the assistant to mention un-reviewed email candidates, for
-    users who don't notice the drawer's own review banner."""
+    """Tells the assistant how many scanned emails await review, only so it can answer if the user asks. It never brings it up unprompted."""
     if not pending_count:
         return None
     return {
         "role": "system",
         "content": (
-            f"There are {pending_count} scanned emails still awaiting the user's review "
-            "in the Email drawer's candidate list (flagged as likely relevant, not "
-            "yet saved as records). If it hasn't already been mentioned earlier in this "
-            "conversation, briefly let the user know they have emails waiting for review "
-            "and suggest opening the Email drawer to confirm them — but don't repeat this "
-            "reminder in every reply."
+            f"For reference only: {pending_count} scanned emails are awaiting the user's review in the Email drawer. "
+            "Do NOT mention this unless the user asks about emails to review or about the Email drawer. Never add it as an 'also' to an unrelated answer."
         ),
     }
 
 
-def get_reply(history: list[dict], *, document: dict | None = None, pending_email_count: int = 0) -> str:
+def _saved_drafts_message(current: dict | None) -> dict | None:
+    """The last five unsent email drafts, newest first, so the AI can answer questions about them and bring one back when asked."""
+    try:
+        from assistant import email_send_flow
+        drafts = email_send_flow.list_drafts()
+    except Exception:
+        return None
+    if not drafts:
+        return None
+    lines = []
+    for d in drafts:
+        snippet = " ".join((d.get("body") or "").split())[:90]
+        mark = " (this is the draft currently on screen)" if current and current.get("draftId") == d.get("id") else ""
+        lines.append(f"- id {d['id']}: to {d.get('person_name')} <{d.get('to_email')}>, subject \"{d.get('subject') or ''}\": {snippet}{mark}")
+    return {"role": "system", "content": (
+        "Unsent email drafts the user has saved (the last five, newest first; a draft is removed once it is sent):\n" + "\n".join(lines) + "\n"
+        "These exist only so you can help if the user asks about an earlier draft or wants one back. If they do, call restore_saved_email_draft with its id "
+        "(it puts that draft back on screen for review). Do not mention this list unless the user asks.")}
+
+
+def _funnels_message() -> dict | None:
+    """The user's funnels with the people in each stage, always in front of the AI, so it never has to ask which funnels exist."""
+    try:
+        from assistant import bulk_email
+        overview = bulk_email.funnel_overview()
+    except Exception:
+        return None
+    if overview.get("status") != "found":
+        return None
+    blocks = []
+    for f in overview["funnels"]:
+        stages = "\n".join(f"  - {st['stage']}: {st['contacts']} contacts ({st['with_email']} with an email address)" for st in f["stages"])
+        blocks.append(f"Funnel \"{f['funnel']}\":\n{stages}")
+    return {"role": "system", "content": (
+        "The user's funnels right now (stage by stage):\n" + "\n\n".join(blocks) + "\n"
+        "If the user mentions a funnel, a stage, or wants to email 'a funnel' or 'my people', answer from this list at once: show the matching funnel's stages "
+        "with these numbers, one per line, and ask which stage (or, if they gave the funnel name loosely or with a typo, match it to the closest name here; if "
+        "there is only one funnel, use it without asking). Never ask the user to explain what a funnel is or which funnels exist. "
+        "Once the stage is chosen and the wording is known, call draft_funnel_email.")}
+
+
+def _funnel_step_message() -> dict | None:
+    try:
+        from assistant import funnel_flow
+        return funnel_flow.context_message()
+    except Exception:
+        return None
+
+
+def _sender_message() -> dict:
+    """Who the user is, for signing emails and messages. Never leave a placeholder like [Your name] in a draft."""
+    try:
+        from lk_calendar import store
+        name = store.get_setting("sender_name").strip()
+    except Exception:
+        name = ""
+    if name:
+        text = (f"The user's name is {name}. Sign every email and message you draft with it (for example 'Best, {name}'). "
+                "Never write a placeholder such as [Your name] or [Name].")
+    else:
+        text = ("The user's name is not saved. In a draft, never write a placeholder such as [Your name]: end with a plain sign-off ('Best,') "
+                "and tell the user in one short sentence that a popup will ask them to confirm their name (or they can set it under Settings → Profile) so you can sign with it.")
+    return {"role": "system", "content": text}
+
+
+def _draft_message(draft: dict | None) -> dict | None:
+    if not draft:
+        return None
+    return {"role": "system", "content": (
+        "An email draft is waiting for the user's approval. The user may have edited it by hand, so THIS is its current text:\n"
+        f"To: {draft.get('person_name')} <{draft.get('to_email')}>\nSubject: {draft.get('subject') or ''}\n\n{draft.get('body') or ''}\n\n"
+        "If the user asks you to change, fix, shorten or restyle it, start from exactly this text (keep their edits) and call draft_email_message again "
+        "with the full revised email for the same person. Do not rewrite it from scratch unless they ask.")}
+
+
+def get_reply(history: list[dict], *, document: dict | None = None, pending_email_count: int = 0, pending_draft: dict | None = None) -> str:
     """history: list of {"role": "user"|"assistant", "content": str}, oldest first.
     document: optional OCR result dict for the currently attached PDF.
     pending_email_count: emails awaiting review in the candidate list."""
     config = AssistantConfig.from_env()
 
+    try:
+        from assistant import funnel_flow
+        routed = funnel_flow.route(history)         # emailing a funnel: code asks funnel, then stage, then wording (no AI call)
+    except Exception:
+        routed = None
+    if routed:
+        return routed
+
     trimmed = history[-MAX_HISTORY_MESSAGES:]
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}, _sender_message()]
 
     doc_message = _document_context_message(document)
     if doc_message:
@@ -200,15 +301,28 @@ def get_reply(history: list[dict], *, document: dict | None = None, pending_emai
     if pending_message:
         messages.append(pending_message)
 
-    messages.extend(trimmed)
+    # The draft on screen and the saved drafts go right before the user's latest message, so they are the freshest thing the AI reads
+    # (a draft placed before a long conversation can lose out to older wording further down).
+    context = [m for m in (_funnels_message(), _draft_message(pending_draft), _saved_drafts_message(pending_draft), _funnel_step_message()) if m]
+    body = list(trimmed)
+    latest = body.pop() if body and body[-1].get("role") == "user" else None
+    messages.extend(body)
+    messages.extend(context)
+    if latest:
+        messages.append(latest)
 
-    return generate_reply(
+    reply = generate_reply(
         messages,
         api_key=config.api_key,
         model=config.model,
         tools=TOOLS,
         tool_runner=run_tool,
     )
+    try:
+        from lk_calendar import profile
+        return profile.sign(reply)
+    except Exception:
+        return reply
 
 
 __all__ = ["get_reply", "OpenAIServiceError"]
