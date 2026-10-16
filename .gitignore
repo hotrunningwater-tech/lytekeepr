@@ -33,3 +33,6 @@ linkedin-leads/
 
 # The directory of accounts and emails (live data)
 profiles/directory.db*
+# The list of workspaces (live data)
+profiles/registry.json
+profiles/active-profile.json

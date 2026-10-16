@@ -43,6 +43,14 @@ if [ "${1:-}" = "--dry-run" ]; then
   rsync -azi --delete --dry-run --filter="merge $FILTER" ./ "$HOST:$DEST" | grep -v '^\.' || true
   exit 0
 fi
+# Never ship code that lets one workspace see another's data.
+echo "Checking that workspaces are kept apart..."
+if ! python3 scripts/check_isolation.py > /tmp/lk-isolation.log 2>&1; then
+  grep -E "LEAK|CHANGED|FILE|BROKEN|FAILED|REFUSED|COULD NOT" /tmp/lk-isolation.log | head -20
+  echo "Deploy stopped: the isolation check did not pass (full output in /tmp/lk-isolation.log)."
+  exit 1
+fi
+grep "PASSED" /tmp/lk-isolation.log
 rsync -az --delete --filter="merge $FILTER" ./ "$HOST:$DEST"
 ssh "$HOST" 'chown -R lkcal:lkcal /opt/lytekeepr-calendar/app &&
   su -s /bin/bash lkcal -c "cd /opt/lytekeepr-calendar && venv/bin/pip install -q --disable-pip-version-check -r app/requirements.txt" &&
