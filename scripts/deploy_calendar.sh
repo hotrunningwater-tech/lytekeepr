@@ -22,6 +22,7 @@ cat > "$FILTER" <<'RULES'
 - /profiles/data/
 - /profiles/active-profile.json
 - /profiles/registry.json
+- /profiles/directory.db*
 - /google_oauth/accounts/
 - /google_oauth/active-account.json
 - /ocr_service/storage_data/
