@@ -38,7 +38,7 @@
   <div class="login-brand"><span class="brand-dot"></span><span>LyteKeepr</span></div>
   <div>
     <h1>Sign in</h1>
-    <p class="overview-sub">Use the Google account the admin added</p>
+    <p class="overview-sub">Sign in or create your account with Google</p>
   </div>
   <p class="err" id="gerr"></p>
   <a class="btn btn-primary google-btn" href="auth/google/login">
@@ -58,7 +58,8 @@
 </div>
 <script>(function(){
   var q=location.search, box=document.querySelector(".login");
-  var msg={"3":"That Google account has not been added. Ask the admin to add your email.","4":"Google sign-in did not work. Try again."};
+  var msg={"3":"That Google account cannot sign in. If you were invited, ask your admin to check your email.","4":"Google sign-in did not work. Try again.",
+           "5":"This account is suspended. Contact LyteKeepr.","6":"We could not create your account right now. Try again later."};
   var m=q.match(/e=(\d)/);
   if(m&&msg[m[1]]){var g=document.getElementById("gerr");g.textContent=msg[m[1]];g.classList.add("show");}
   if(q.includes("e=1")||q.includes("e=2")){box.classList.add("badpw");document.querySelector(".admin-pw").open=true;}

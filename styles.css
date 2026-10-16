@@ -2661,3 +2661,12 @@ html[data-photo-crop-lock="active"] .email-panel {
 
 /* Team members (not the admin) do not see the admin's Gmail, LinkedIn or the AI assistant until those work per person */
 body.is-team-member #emailTab, body.is-team-member #linkedinTab, body.is-team-member #aiPanel { display: none !important; }
+
+/* Workspaces: LinkedIn only in the first workspace; a new sign-up waits for approval */
+body.no-linkedin #linkedinTab { display: none !important; }
+.lk-waiting { position: fixed; inset: 0; z-index: 9000; background: var(--backdrop, #b7c8cf); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.lk-waiting-card { background: var(--surface); border-radius: 26px; box-shadow: var(--shadow-panel); padding: 40px 36px; max-width: 460px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.lk-waiting-card h1 { margin: 0; font-size: 24px; }
+.lk-waiting-card p { margin: 0; font-size: 14.5px; color: var(--ink); line-height: 1.55; }
+.lk-waiting-card .lk-waiting-small { font-size: 13px; color: var(--ink-soft); }
+.lk-waiting-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--coral); }

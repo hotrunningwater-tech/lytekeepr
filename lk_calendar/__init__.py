@@ -20,6 +20,9 @@ def register(app):
     except Exception:
         logging.getLogger(__name__).exception("could not move the shared calendar or Google tokens into the first workspace")
     users.register(app)
+    from pathlib import Path
+    from . import superadmin
+    superadmin.register(app, str(Path(__file__).resolve().parent.parent))
     try:
         users.ensure_admin()
     except Exception:

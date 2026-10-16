@@ -28,8 +28,17 @@ def _public(row) -> dict:
 
 
 def admin_email() -> str:
-    """The admin's email: LYTEKEEPR_ADMIN_EMAIL if set, else the connected Gmail address, else none."""
+    """This workspace's admin (owner): the owner recorded in the directory; for the first workspace, before that is known,
+    LYTEKEEPR_ADMIN_EMAIL or the connected Gmail address."""
     import os
+    try:
+        from profiles.store import get_active_profile_id
+        from . import directory
+        acct = directory.account_for_profile(get_active_profile_id())
+        if acct and acct["owner_email"]:
+            return acct["owner_email"].lower()
+    except Exception:
+        pass
     mail = (os.getenv("LYTEKEEPR_ADMIN_EMAIL") or "").strip().lower()
     if mail:
         return mail
@@ -45,6 +54,17 @@ def ensure_admin() -> None:
     mail = admin_email()
     if not mail or not EMAIL.match(mail):
         return
+    from profiles.store import get_active_profile_id, home_profile_id
+    if get_active_profile_id() == home_profile_id():          # the first workspace is account 1 in the directory, owned by the admin
+        from . import directory
+        directory.ensure_home_account(mail)
+        with store._conn() as conn:                           # the team added before the directory existed belongs to this workspace
+            team = [r["email"] for r in conn.execute("SELECT email FROM users WHERE role != 'admin'")]
+        for email in team:
+            try:
+                directory.add_member(email, home_profile_id(), "internal")
+            except directory.DirectoryError:
+                pass
     with store._conn() as conn:
         if conn.execute("SELECT 1 FROM users WHERE role = 'admin'").fetchone():
             return
@@ -151,9 +171,16 @@ def unshare_funnel_everywhere(funnel_id: int) -> None:
 
 def create_user(email: str, name: str = "", share_emails: bool = False) -> dict:
     email = _clean_email(email)
+    from profiles.store import get_active_profile_id
+    from . import directory
     with store._conn() as conn:
         if conn.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
             raise store.ValidationError("that email is already on the list")
+    try:
+        directory.add_member(email, get_active_profile_id(), "internal")       # one email, one account: refused if it belongs elsewhere
+    except directory.DirectoryError as exc:
+        raise store.ValidationError(str(exc))
+    with store._conn() as conn:
         cur = conn.execute("INSERT INTO users (email, name, role, active, share_emails, created_at) VALUES (?, ?, 'user', 1, ?, ?)",
                            (email, (name or "").strip()[:100], 1 if share_emails else 0, store.now_local().isoformat()))
         row = conn.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -193,9 +220,12 @@ def set_share_emails(user_id: int, share: bool) -> dict:
 
 
 def remove_user(user_id: int) -> None:
-    _must_be_user(user_id)
+    row = _must_be_user(user_id)
     with store._conn() as conn:
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    from profiles.store import get_active_profile_id
+    from . import directory
+    directory.remove_member(row["email"], get_active_profile_id())
 
 
 # ------------------------------------------------------------------ routes
@@ -228,6 +258,13 @@ def register(app):
         out = {k: user.get(k) for k in ("id", "email", "name", "role")}
         if user.get("role") == "admin":              # the admin's name is the one saved in Settings > Profile
             out["name"] = store.get_setting("sender_name").strip() or out["name"]
+        from profiles.store import get_active_profile_id, home_profile_id
+        from . import directory
+        acct = directory.account_for_profile(get_active_profile_id()) or {}
+        out["account_status"] = acct.get("status", "active")
+        out["workspace"] = acct.get("name", "")
+        out["is_super_admin"] = directory.is_super_admin(out.get("email") or "") and user.get("role") == "admin"
+        out["features"] = {"linkedin": get_active_profile_id() == home_profile_id()}       # LinkedIn is the first workspace's only
         return jsonify(out)
 
     @app.get("/api/team")

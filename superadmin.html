@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LyteKeepr super admin</title>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { padding: 24px; }
+  .sa { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .sa-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: rgba(255,255,255,.7); border-radius: 18px; padding: 16px 22px; }
+  .sa-top h1 { margin: 0; font-size: 22px; } .sa-top small { color: var(--coral); font-family: var(--font-heading); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 11px; display: block; }
+  .card { background: rgba(255,255,255,.7); border-radius: 18px; padding: 20px 22px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; font-family: var(--font-heading); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); padding: 8px 10px; }
+  td { padding: 12px 10px; border-top: 1px solid rgba(41,67,78,.08); vertical-align: middle; } td small { display: block; color: var(--ink-soft); font-size: 12px; }
+  .pill { font-family: var(--font-heading); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+  .pill.waiting { background: #f6e6c9; color: #8a5a10; } .pill.active { background: #d8eee2; color: #1f6b46; } .pill.suspended { background: #f7d9d2; color: #a3412b; } .pill.waived { background: #e3e8ea; color: #7b8b92; }
+  .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .note { font-size: 12.5px; color: var(--ink-soft); }
+  @media (max-width: 700px) { body { padding: 12px; } th:nth-child(3), td:nth-child(3), th:nth-child(4), td:nth-child(4) { display: none; } }
+</style>
+</head>
+<body>
+<div class="sa">
+  <div class="sa-top"><div><small>Super admin</small><h1>Accounts</h1></div><a class="btn btn-secondary" href="./">Back to LyteKeepr</a></div>
+  <div class="card">
+    <p class="note" id="note">Loading…</p>
+    <table id="tbl" hidden><thead><tr><th>Account</th><th>Status</th><th>People</th><th>Signed up</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+  </div>
+</div>
+<script>
+(function () {
+  var rows = document.getElementById('rows'), note = document.getElementById('note'), tbl = document.getElementById('tbl');
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function post(id, status) {
+    return fetch('api/superadmin/accounts/' + id + '/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: status }) })
+      .then(function (r) { return r.json(); }).then(load);
+  }
+  function load() {
+    fetch('api/superadmin/accounts').then(function (r) { return r.json(); }).then(function (data) {
+      if (!data.accounts) { note.textContent = data.error || 'Could not load.'; return; }
+      var waiting = data.accounts.filter(function (a) { return a.status === 'waiting'; }).length;
+      note.textContent = data.accounts.length + ' accounts' + (waiting ? ', ' + waiting + ' waiting for approval' : '') + '. Charges are waived for everyone.';
+      rows.replaceChildren();
+      data.accounts.forEach(function (a) {
+        var tr = el('tr');
+        var who = el('td'); who.appendChild(el('b', null, a.name || a.owner_email)); who.appendChild(el('small', null, a.owner_email));
+        var st = el('td'); st.appendChild(el('span', 'pill ' + a.status, a.status === 'waiting' ? 'Waiting' : a.status === 'active' ? 'Active' : 'Suspended'));
+        st.appendChild(document.createTextNode(' ')); st.appendChild(el('span', 'pill waived', a.billing === 'waived' ? 'Waived' : a.billing));
+        var acts = el('td'); var box = el('div', 'acts');
+        function btn(label, cls, status) { var b = el('button', 'btn ' + cls, label); b.type = 'button'; b.onclick = function () { b.disabled = true; post(a.id, status); }; box.appendChild(b); }
+        if (a.status === 'waiting') btn('Approve', 'btn-primary', 'active');
+        if (a.status === 'active') btn('Suspend', 'btn-secondary', 'suspended');
+        if (a.status === 'suspended') btn('Reactivate', 'btn-primary', 'active');
+        acts.appendChild(box);
+        tr.append(who, st, el('td', null, String(a.people)), el('td', null, (a.created_at || '').replace('T', ' ').slice(0, 16)), acts);
+        rows.appendChild(tr);
+      });
+      tbl.hidden = false;
+    }).catch(function () { note.textContent = 'Could not load.'; });
+  }
+  load();
+})();
+</script>
+</body>
+</html>

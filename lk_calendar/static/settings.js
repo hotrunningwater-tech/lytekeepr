@@ -646,6 +646,16 @@
     chip.title = u.email || '';
     chip.hidden = false;
     document.body.classList.toggle('is-team-member', u.role !== 'admin');      // team members do not see Gmail, LinkedIn or the assistant yet
+    document.body.classList.toggle('no-linkedin', !(u.features && u.features.linkedin));   // LinkedIn is the first workspace's only
+    if (u.account_status === 'waiting') showWaiting(u);
+  }
+  function showWaiting(u) {                            // a new sign-up: signed in, but nothing works until the account is approved
+    if (document.getElementById('lkWaiting')) return;
+    document.body.appendChild(h('div', { class: 'lk-waiting', id: 'lkWaiting' }, [h('div', { class: 'lk-waiting-card' }, [
+      h('div', { class: 'lk-waiting-dot' }), h('h1', {}, 'Thanks for signing up'),
+      h('p', {}, ['Your LyteKeepr account (', h('b', {}, u.email || ''), ') is waiting for approval. You can use it as soon as it is approved.']),
+      h('p', { class: 'lk-waiting-small' }, 'You do not need to do anything else. Come back later and sign in again.'),
+      h('a', { class: 'btn btn-secondary', href: (window.LK_PREFIX || '') + '/logout' }, 'Sign out')])]));
   }
   function loadMe() {                                  // who is signed in; the Team section is only for the admin
     return api('GET', '/api/me').then(function (r) { me = r; showChip(r); var tb = nav.querySelector('[data-view=team]'); if (tb) tb.hidden = r.role !== 'admin'; return r; }).catch(function () { return null; });
@@ -716,7 +726,8 @@
     loadMe().then(function (u) {
       if (!u) return;
       who.replaceChildren(h('span', { class: 'lks-note' }, 'Signed in as ' + (u.email || 'the admin') + (u.role === 'admin' ? ' · Admin' : '')),
-        h('a', { class: 'btn lks-soft btn-small', href: (window.LK_PREFIX || '') + '/logout' }, 'Sign out'));
+        h('a', { class: 'btn lks-soft btn-small', href: (window.LK_PREFIX || '') + '/logout' }, 'Sign out'),
+        u.is_super_admin ? h('a', { class: 'btn btn-primary btn-small', href: (window.LK_PREFIX || '') + '/superadmin' }, 'Super admin: accounts') : null);
     });
     api('GET', '/api/calendar/profile').then(function (r) {
       input.value = r.name || '';

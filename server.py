@@ -471,7 +471,8 @@ def google_oauth_start():
     # Kicks off the flow: browser navigates here, we 302 straight to
     # Google's consent screen. All client_id/secret handling stays server-side.
     try:
-        url = build_authorization_url(state=_oauth_state_signer().dumps("google-oauth"))
+        from profiles.store import get_active_profile_id
+        url = build_authorization_url(state=_oauth_state_signer().dumps({"p": "connect", "w": get_active_profile_id()}))   # which workspace to save the Gmail to
     except GoogleOAuthError as exc:
         return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote(str(exc))}")
     return redirect(url)
@@ -499,6 +500,17 @@ def google_oauth_callback():
         return auth_gate.finish_google_login(who["email"], who["email_verified"], who["name"])
     if not code:
         return redirect(f"{_app_home()}?gmail=error&reason=missing_code")
+    # Connecting Gmail: the tokens go into the workspace that started it (named inside the signed state, because Google's return
+    # trip does not carry the login cookie on the live site).
+    from profiles.store import home_profile_id, list_profiles, use_profile
+    workspace = purpose.get("w") if isinstance(purpose, dict) else home_profile_id()
+    if workspace not in {p["profile_id"] for p in list_profiles()}:
+        return redirect(f"{_app_home()}?gmail=error&reason=unknown_workspace")
+    with use_profile(workspace):
+        return _finish_gmail_connect(code)
+
+
+def _finish_gmail_connect(code):
 
     try:
         tokens = exchange_code_for_tokens(code)

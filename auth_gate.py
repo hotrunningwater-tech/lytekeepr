@@ -21,19 +21,64 @@ MAX_FAILURES = 8
 LOCKOUT_SECONDS = 15 * 60
 
 
-_session = {}        # filled by install(): the signer, the URL prefix and the cookie writer
+# Things that still exist once for the whole app (the LinkedIn session, the LinkedIn lead files, the OCR document service, demo
+# and developer tools) belong to the first workspace only; other workspaces are refused until they work per workspace.
+HOME_ONLY_API = ("/api/linkedin", "/api/linkedin-leads", "/api/documents", "/api/files", "/api/ocr", "/api/photo-review",
+                 "/api/demo", "/api/dev", "/api/diagnostics")
+WAITING_ALLOWED_API = ("/api/me",)
 
 
 def finish_google_login(email: str, verified: bool, name: str = ""):
-    """Called by the Google callback: let the person in (cookie + redirect home) if their email is on the list, else back to the login page."""
-    from lk_calendar import users
+    """Called by the Google callback. A known email goes into its own workspace; an unknown one gets a new workspace that waits
+    for approval; a suspended workspace, a turned-off person or an unverified Google email is sent back to the login page."""
+    from profiles.store import use_profile
+    from lk_calendar import directory, users
     prefix = _session.get("prefix", "")
-    person = users.sign_in_with_google(email, verified, name)
+    email = (email or "").strip().lower()
+    if not email or not verified:
+        return redirect(prefix + "/login?e=3")
+    users.ensure_admin()                                   # the first workspace is registered before anyone is looked up
+    account, _role = directory.lookup(email)
+    if account is None:
+        try:
+            account = directory.sign_up(email, name)
+        except directory.DirectoryError:
+            return redirect(prefix + "/login?e=6")
+        _notify_signup(email, request.host_url.rstrip("/") + prefix)
+    if account["status"] == "suspended":
+        return redirect(prefix + "/login?e=5")
+    with use_profile(account["profile_id"]):
+        person = users.sign_in_with_google(email, verified, name)
     if not person:
         return redirect(prefix + "/login?e=3")
     response = make_response(redirect(prefix + "/"))
-    _session["set_cookie"](response, person["id"])
+    _session["set_cookie"](response, person["id"], account["profile_id"])
     return response
+
+
+def _notify_signup(email: str, app_url: str) -> None:
+    """Tell the super admin about a new sign-up, by email from the first workspace's Gmail. Best effort: a failure never blocks the sign-up."""
+    import threading
+
+    def send():
+        try:
+            from email.mime.text import MIMEText
+            from gmail import client as gmail_client
+            from profiles.store import home_profile_id, use_profile
+            from lk_calendar import directory
+            with use_profile(home_profile_id()):
+                for admin in sorted(directory.super_admins()):
+                    mime = MIMEText(f"{email} signed up for LyteKeepr and is waiting for your approval.\n\nApprove them here: {app_url}/superadmin\n")
+                    mime["To"] = admin
+                    mime["Subject"] = f"New LyteKeepr sign-up: {email}"
+                    gmail_client.send_message(mime.as_bytes())
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("could not email the super admin about a new sign-up")
+    threading.Thread(target=send, name="signup-notice", daemon=True).start()
+
+
+_session = {}        # filled by install(): the signer, the URL prefix and the cookie writer
 
 
 def install(app, app_dir):
@@ -61,14 +106,20 @@ def install(app, app_dir):
         failures[who] = [t for t in failures[who] if now - t < LOCKOUT_SECONDS]
         return len(failures[who]) >= MAX_FAILURES
 
-    def set_cookie(response, user_id):
+    def set_cookie(response, user_id, profile_id=None):
+        from profiles.store import home_profile_id
         secure = request.is_secure or request.headers.get("X-Forwarded-Proto") == "https"
-        response.set_cookie(COOKIE, signer.dumps({"u": user_id}), max_age=MAX_AGE, httponly=True, samesite="Lax", secure=secure, path=prefix or "/")
+        payload = {"u": user_id, "w": profile_id or home_profile_id()}          # who, and which workspace they work in
+        response.set_cookie(COOKIE, signer.dumps(payload), max_age=MAX_AGE, httponly=True, samesite="Lax", secure=secure, path=prefix or "/")
 
     _session.update(prefix=prefix, set_cookie=set_cookie)
 
     def current_user():
-        """The signed-in person, or None. An old cookie ("ok") is the admin; a person who was turned off or removed is no longer let in."""
+        """The signed-in person, or None. The cookie names the person and their workspace; this request is switched into that
+        workspace. An old cookie is the admin of the first workspace. A person turned off or removed, or a suspended workspace,
+        is no longer let in."""
+        from profiles.store import home_profile_id, list_profiles, set_request_profile
+        from lk_calendar import directory, users
         token = request.cookies.get(COOKIE)
         if not token:
             return None
@@ -77,25 +128,39 @@ def install(app, app_dir):
         except BadSignature:
             return None
         user_id = data.get("u") if isinstance(data, dict) else 0
+        workspace = (data.get("w") if isinstance(data, dict) else None) or home_profile_id()
+        if workspace != home_profile_id() and workspace not in {p["profile_id"] for p in list_profiles()}:
+            return None
+        set_request_profile(workspace)
+        account = directory.account_for_profile(workspace)
+        status = account["status"] if account else "active"
+        if status == "suspended":
+            return None
+        g.account_status = status
         try:
-            from lk_calendar import users
             return users.for_session(int(user_id or 0))
         except Exception:
-            return {"id": 0, "email": "", "name": "", "role": "admin"} if user_id == 0 else None
+            return None
 
     @app.before_request
     def require_login():
-        from profiles.store import home_profile_id, set_request_profile
-        g.profile_token = set_request_profile(home_profile_id())     # the workspace this request works in (per person in a later step)
+        from profiles.store import get_active_profile_id, home_profile_id, set_request_profile
+        g.profile_token = set_request_profile(home_profile_id())     # until the cookie says otherwise (current_user switches it)
         if request.path in PUBLIC_PATHS:
             return None
         user = current_user()
         if user:
             g.user = user
-            if user.get("role") != "admin" and request.path.startswith("/api"):
-                from lk_calendar import users
-                if not users.api_allowed_for_user(request.path):
-                    return jsonify({"error": "This is not available to team members yet."}), 403
+            path = request.path
+            if path.startswith("/api"):
+                if g.get("account_status") == "waiting" and not path.startswith(WAITING_ALLOWED_API):
+                    return jsonify({"error": "Your account is waiting for approval.", "waiting": True}), 403
+                if path.startswith(HOME_ONLY_API) and get_active_profile_id() != home_profile_id():
+                    return jsonify({"error": "This is not available in your workspace yet."}), 403
+                if user.get("role") != "admin":
+                    from lk_calendar import users
+                    if not users.api_allowed_for_user(path):
+                        return jsonify({"error": "This is not available to team members yet."}), 403
             return None
         if request.method == "GET" and not request.path.startswith("/api"):
             return redirect(prefix + "/login")

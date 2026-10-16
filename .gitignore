@@ -30,3 +30,6 @@ lk_calendar/calendar.db*
 linkedin-post-scrape-test/
 linkedin-leads/
 *.bak
+
+# The directory of accounts and emails (live data)
+profiles/directory.db*
