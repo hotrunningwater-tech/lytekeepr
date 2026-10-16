@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Nightly backup of the live databases: the calendar (events, leads) and the CRM (people, companies, funnels) (runs on the server, see /etc/cron.d/lytekeepr-calendar-backup).
+"""Nightly backup of the live databases, for every workspace: its calendar (events, leads, team) and its CRM (people, companies,
+funnels) (runs on the server, see /etc/cron.d/lytekeepr-calendar-backup). Each workspace's copies are kept and pruned on their own.
 
 Uses SQLite's own backup API, so it is safe while the app is running. Keeps the newest KEEP copies.
 Restore: stop the service, copy a backup over /opt/lytekeepr-calendar/data/calendar.db, start it again.
 """
 import datetime
-import glob
 import os
 import sqlite3
 import sys
 from pathlib import Path
 
-SRC = Path("/opt/lytekeepr-calendar/data/calendar.db")
-CRM_GLOB = "/opt/lytekeepr-calendar/app/profiles/data/*/crm/lytekeepr.db"      # people, companies, funnels
+SRC = Path("/opt/lytekeepr-calendar/data/calendar.db")              # the old shared calendar, until a workspace has adopted it
+PROFILES_DATA = Path(os.getenv("LK_PROFILES_ROOT", "/opt/lytekeepr-calendar/app/profiles")) / "data"     # <workspace>/crm, <workspace>/calendar
 DEST = Path("/opt/lytekeepr-calendar/backups")
 KEEP = 14
 
@@ -43,7 +43,15 @@ def backup(src_path: Path, prefix: str, count_sql: dict) -> bool:
     return True
 
 
-results = [backup(SRC, "calendar", {"events": "SELECT COUNT(*) FROM events", "leads": "SELECT COUNT(*) FROM leads"})]
-for crm in sorted(glob.glob(CRM_GLOB)):
-    results.append(backup(Path(crm), "crm", {"people": "SELECT COUNT(*) FROM people", "companies": "SELECT COUNT(*) FROM companies"}))
+CAL_COUNTS = {"events": "SELECT COUNT(*) FROM events", "leads": "SELECT COUNT(*) FROM leads"}
+CRM_COUNTS = {"people": "SELECT COUNT(*) FROM people", "companies": "SELECT COUNT(*) FROM companies"}
+results = []
+adopted = any(PROFILES_DATA.glob("*/calendar/adopted-from.txt"))
+if SRC.exists() and not adopted:
+    results.append(backup(SRC, "calendar", CAL_COUNTS))
+for ws in sorted(p for p in PROFILES_DATA.glob("*") if p.is_dir()):
+    if (ws / "calendar" / "calendar.db").exists():
+        results.append(backup(ws / "calendar" / "calendar.db", f"ws{ws.name}-calendar", CAL_COUNTS))
+    if (ws / "crm" / "lytekeepr.db").exists():
+        results.append(backup(ws / "crm" / "lytekeepr.db", f"ws{ws.name}-crm", CRM_COUNTS))
 sys.exit(0 if all(results) else 1)

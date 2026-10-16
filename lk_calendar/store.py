@@ -13,7 +13,36 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 TZ = ZoneInfo("America/Toronto")
-DB_PATH = Path(os.getenv("LK_CALENDAR_DB") or Path(__file__).resolve().parent / "calendar.db")
+# Before workspaces existed there was one calendar database for the whole app (LK_CALENDAR_DB on the server). It is copied once
+# into the first workspace and then left untouched as a backup; every workspace now has its own <workspace>/calendar/calendar.db.
+LEGACY_DB_PATH = Path(os.getenv("LK_CALENDAR_DB") or Path(__file__).resolve().parent / "calendar.db")
+_adopt_lock = __import__("threading").Lock()
+
+
+def db_path() -> Path:
+    """This workspace's calendar database."""
+    from profiles.store import get_active_profile_id, home_profile_id, profile_component_dir
+    path = profile_component_dir("calendar") / "calendar.db"
+    if not path.exists() and LEGACY_DB_PATH.exists() and get_active_profile_id() == home_profile_id():
+        _adopt_legacy(path)
+    return path
+
+
+def _adopt_legacy(path: Path) -> None:
+    """Copy the old shared calendar database into the first workspace (SQLite's own backup, safe while it is in use)."""
+    with _adopt_lock:
+        if path.exists():
+            return
+        tmp = path.with_suffix(".adopting")
+        src = sqlite3.connect(f"file:{LEGACY_DB_PATH}?mode=ro", uri=True)
+        dst = sqlite3.connect(tmp)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        tmp.replace(path)
+        (path.parent / "adopted-from.txt").write_text(f"{LEGACY_DB_PATH}\n{datetime.now().isoformat()}\n")
 
 # Which funnel stage each status belongs to (by stage name). Changing a status moves the person to that stage if they are in a funnel.
 DEFAULT_STAGES = {
@@ -191,8 +220,7 @@ class _ClosingConnection(sqlite3.Connection):
 
 
 def _conn():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10, factory=_ClosingConnection)
+    conn = sqlite3.connect(db_path(), timeout=10, factory=_ClosingConnection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
@@ -205,6 +233,9 @@ def _conn():
         ("events", "external_id", "TEXT NOT NULL DEFAULT ''"),
         ("events", "my_notes", "TEXT NOT NULL DEFAULT ''"),
         ("events", "owner_id", "INTEGER"),
+        ("users", "access", "TEXT NOT NULL DEFAULT 'funnels'"),
+        ("users", "share_emails", "INTEGER NOT NULL DEFAULT 0"),
+        ("users", "last_login_at", "TEXT NOT NULL DEFAULT ''"),
         ("events", "meeting_status", "TEXT NOT NULL DEFAULT ''"),
         ("events", "has_call", "INTEGER NOT NULL DEFAULT 0"),
         ("events", "untimed", "INTEGER NOT NULL DEFAULT 0"),

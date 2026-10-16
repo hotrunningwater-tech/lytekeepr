@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent.parent
-PROFILE_ROOT = APP_DIR / "profiles"
+PROFILE_ROOT = Path(os.getenv("LK_PROFILES_ROOT") or APP_DIR / "profiles")      # LK_PROFILES_ROOT: tests, or data kept outside the app
 PROFILE_DATA_ROOT = PROFILE_ROOT / "data"
 REGISTRY_PATH = PROFILE_ROOT / "registry.json"
 ACTIVE_PROFILE_PATH = PROFILE_ROOT / "active-profile.json"
@@ -18,6 +21,43 @@ LEGACY_STATE_DIRS = ("email-storage", "ocr-storage", "document-registry", "chron
 DEFAULT_PROFILE_ID = "profile-default"
 DEFAULT_SHELL_VARIANT = "default"
 TEST_SHELL_VARIANTS = ("variant_1", "variant_2", "variant_3")
+
+# Each customer workspace (a USER) is one profile with its own data folder. A web request works inside exactly one of them: the
+# login gate sets it at the start of the request (see auth_gate.py) and every data path (CRM, calendar, email, Google tokens,
+# assistant state) is resolved from it. Outside a request (background jobs, scripts) the global active profile is used.
+_REQUEST_PROFILE: ContextVar[str | None] = ContextVar("lytekeepr_request_profile", default=None)
+
+
+def set_request_profile(profile_id: str | None):
+    """Make this request work inside one workspace. Returns a token for reset_request_profile()."""
+    return _REQUEST_PROFILE.set(_normalize_profile_id(profile_id) if profile_id else None)
+
+
+def reset_request_profile(token) -> None:
+    _REQUEST_PROFILE.reset(token)
+
+
+@contextmanager
+def use_profile(profile_id: str):
+    """Run a block (a background job, a script) inside one workspace."""
+    token = set_request_profile(profile_id)
+    try:
+        yield
+    finally:
+        _REQUEST_PROFILE.reset(token)
+
+
+def home_profile_id() -> str:
+    """The workspace the app was set up with (the global active profile). Until each person is mapped to their own workspace,
+    everyone works here; background jobs also run here for now."""
+    ensure_profile_bootstrap()
+    active_profile_id = _load_active_profile_id()
+    if active_profile_id:
+        return active_profile_id
+    registry = _load_registry()
+    first = sorted(registry["profiles"].keys())[0]
+    _save_active_profile_id(first)
+    return first
 
 
 def _utc_now() -> str:
@@ -247,14 +287,11 @@ def list_profiles() -> list[dict]:
 
 
 def get_active_profile_id() -> str:
-    ensure_profile_bootstrap()
-    active_profile_id = _load_active_profile_id()
-    if active_profile_id:
-        return active_profile_id
-    registry = _load_registry()
-    first = sorted(registry["profiles"].keys())[0]
-    _save_active_profile_id(first)
-    return first
+    """The workspace the current request (or job) works in."""
+    current = _REQUEST_PROFILE.get()
+    if current:
+        return current
+    return home_profile_id()
 
 
 def get_active_profile() -> dict:

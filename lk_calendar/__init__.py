@@ -7,12 +7,18 @@ register(app) in server.py and the CALENDAR tab in index.html.
 
 import logging
 
-from . import auto_sync, contacts, leads, users
+from . import auto_sync, contacts, leads, store, users
 from .routes import register as _register_routes
 
 
 def register(app):
     _register_routes(app)
+    try:                                   # the first workspace takes over the old shared calendar and Google tokens now, not on first use
+        from google_oauth import store as google_store
+        store.db_path()
+        google_store._google_dir()
+    except Exception:
+        logging.getLogger(__name__).exception("could not move the shared calendar or Google tokens into the first workspace")
     users.register(app)
     try:
         users.ensure_admin()

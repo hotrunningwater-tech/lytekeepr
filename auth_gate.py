@@ -85,6 +85,8 @@ def install(app, app_dir):
 
     @app.before_request
     def require_login():
+        from profiles.store import home_profile_id, set_request_profile
+        g.profile_token = set_request_profile(home_profile_id())     # the workspace this request works in (per person in a later step)
         if request.path in PUBLIC_PATHS:
             return None
         user = current_user()
@@ -98,6 +100,13 @@ def install(app, app_dir):
         if request.method == "GET" and not request.path.startswith("/api"):
             return redirect(prefix + "/login")
         return jsonify({"error": "login required"}), 401
+
+    @app.teardown_request
+    def leave_workspace(_exc=None):
+        from profiles.store import reset_request_profile
+        token = g.pop("profile_token", None)
+        if token is not None:
+            reset_request_profile(token)
 
     @app.get("/login")
     def login_page():
