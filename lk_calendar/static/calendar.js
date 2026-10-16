@@ -154,7 +154,7 @@
     Object.keys(groups).forEach(function (k) {
       var g = groups[k], n = g.members.length;
       if (n === 1) return;
-      g.title = (g.gkind === 'dm' ? 'Send DM' : 'Follow up') + ' \u00b7 ' + n + ' ' + CHANNELS[g.channel].label + ' lead' + (n === 1 ? '' : 's');
+      g.title = (g.gkind === 'dm' ? 'Send DM' : 'Follow up') + ' \u00b7 ' + n + ' ' + channelLabel(g.channel) + ' lead' + (n === 1 ? '' : 's');
       state.groupIndex[k] = g;
     });
     return out;
@@ -179,7 +179,7 @@
     var list = h('div', { class: 'lkc-strip-list' });
     items.forEach(function (e) {
       var sel = state.selected && state.selected.id === e.id && state.selected.date === e.date;
-      var label = e.group ? ICONS[e.gkind] + ' ' + e.members.length + ' ' + CHANNELS[e.channel].label : pillLabel(e);
+      var label = e.group ? ICONS[e.gkind] + ' ' + e.members.length + ' ' + channelLabel(e.channel) : pillLabel(e);
       list.appendChild(h('button', { type: 'button', class: 'lkc-pill' + (e.group ? ' group' : '') + (e.done ? ' done' : '') + (sel ? ' sel' : ''),
         title: e.title, style: '--c:' + PROJECTS[e.project].color, onclick: function (ev) { ev.stopPropagation(); select(e.id, e.date); } }, label));
     });
@@ -474,10 +474,12 @@
     ])];
   }
 
-  var CHANNELS = { linkedin: { label: 'LinkedIn', project: 'lytekeepr' }, instagram: { label: 'Instagram', project: 'aspan' } };
+  var CHANNELS = { linkedin: { label: 'LinkedIn', project: 'lytekeepr' }, instagram: { label: 'Instagram', project: 'aspan' }, email: { label: 'Email', project: 'nexy' } };
+  function channelLabel(c) { return CHANNELS[c] ? CHANNELS[c].label : (c || 'Other'); }      // a channel the page does not know yet never breaks it
   var STATUS_LABELS = {
     instagram: { 'new': 'New', sent: 'DM sent', replied: 'Customer replied', done: 'Customer not interested' },
-    linkedin: { 'new': 'New', sent: 'Connection request sent', accepted: 'Connection accepted', message_sent: 'Message sent', replied: 'Replied' }
+    linkedin: { 'new': 'New', sent: 'Connection request sent', accepted: 'Connection accepted', message_sent: 'Message sent', replied: 'Replied' },
+    email: { 'new': 'New', sent: 'Email sent', replied: 'Replied', bounced: 'Bounced', done: 'Not interested' }
   };
   var NEXT_STEPS = {   // quick buttons only; any status can also be set from the chat
     instagram: { 'new': [['sent', 'DM sent']], sent: [['replied', 'Customer replied'], ['done', 'Not interested']], replied: [['done', 'Not interested']] },
