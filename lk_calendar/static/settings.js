@@ -727,7 +727,7 @@
       if (!u) return;
       who.replaceChildren(h('span', { class: 'lks-note' }, 'Signed in as ' + (u.email || 'the admin') + (u.role === 'admin' ? ' · Admin' : '')),
         h('a', { class: 'btn lks-soft btn-small', href: (window.LK_PREFIX || '') + '/logout' }, 'Sign out'),
-        u.is_super_admin ? h('a', { class: 'btn btn-primary btn-small', href: (window.LK_PREFIX || '') + '/superadmin' }, 'Super admin: accounts') : null);
+        u.is_super_admin ? h('a', { class: 'btn btn-primary btn-small', href: (window.LK_PREFIX || '') + '/owner' }, 'Owner console') : null);
     });
     api('GET', '/api/calendar/profile').then(function (r) {
       input.value = r.name || '';

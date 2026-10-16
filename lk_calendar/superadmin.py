@@ -1,4 +1,4 @@
-"""The owner's dashboard (super admin). For now: every account, and approving or suspending it. Grows into the full dashboard later.
+"""The owner console (for the LyteKeepr owner; "super admin" in the code). For now: every account, and approving or suspending it. Grows into the full dashboard later.
 
 Only a super admin (see directory.super_admins) who is signed in as an admin gets in; everyone else gets a plain refusal.
 """
@@ -14,6 +14,7 @@ def _allowed() -> bool:
 
 
 def register(app, app_dir):
+    @app.get("/owner")
     @app.get("/superadmin")
     def superadmin_page():
         if not _allowed():

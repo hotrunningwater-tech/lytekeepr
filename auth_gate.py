@@ -68,7 +68,7 @@ def _notify_signup(email: str, app_url: str) -> None:
             from lk_calendar import directory
             with use_profile(home_profile_id()):
                 for admin in sorted(directory.super_admins()):
-                    mime = MIMEText(f"{email} signed up for LyteKeepr and is waiting for your approval.\n\nApprove them here: {app_url}/superadmin\n")
+                    mime = MIMEText(f"{email} signed up for LyteKeepr and is waiting for your approval.\n\nApprove them in the owner console: {app_url}/owner\n")
                     mime["To"] = admin
                     mime["Subject"] = f"New LyteKeepr sign-up: {email}"
                     gmail_client.send_message(mime.as_bytes())
