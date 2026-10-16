@@ -89,7 +89,6 @@ export function renderGmailBar(container, gmailState, handlers = {}) {
           aria-label="Toggle account masking"
           title="Toggle account masking"
         ><span class="email-demo-toggle-knob" aria-hidden="true"></span></button>
-        <button class="btn btn-remove" id="connectGmailBtn" type="button" ${cropLocked ? 'disabled aria-disabled="true"' : ''}>Connect another</button>
         <button class="btn btn-dlyte" id="scanGmailBtn" type="button" ${(syncing || cropLocked) ? 'disabled aria-disabled="true"' : ''}>
           ${syncing ? 'Scanning…' : synced ? 'Scan for new mail' : 'Scan Gmail'}
         </button>
@@ -113,15 +112,6 @@ export function renderGmailBar(container, gmailState, handlers = {}) {
       demoToggleBtn.addEventListener('click', () => {
         toggleDemoMode();
         handlers.onDemoModeChange?.();
-      });
-    }
-    const connectBtn = bar.querySelector('#connectGmailBtn');
-    if (connectBtn) {
-      connectBtn.addEventListener('click', () => {
-        if (cropLock.guard('gmail-connect-another')) return;
-        connectBtn.disabled = true;
-        connectBtn.textContent = 'Connecting…';
-        handlers.onConnectClick?.();
       });
     }
     container.appendChild(bar);

@@ -479,10 +479,7 @@ def google_oauth_start():
         return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote('Only the admin can connect Gmail for now.')}")
     if getattr(_g, "account_status", "active") == "waiting":
         return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote('Your account is waiting for approval.')}")
-    from profiles.store import home_profile_id
-    # In every new workspace the mailbox must be the Google account you sign in with. The first workspace keeps its older
-    # setup (it can hold more than one Gmail).
-    email = (user.get("email") or "").lower() if get_active_profile_id() != home_profile_id() else ""
+    email = (user.get("email") or "").lower()          # the mailbox is always the Google account you sign in with
     lk_store.set_setting("gmail_autoconnect_offered", lk_store.now_local().isoformat())     # the automatic offer happens once
     try:
         url = build_authorization_url(state=_oauth_state_signer().dumps({"p": "connect", "w": get_active_profile_id(), "e": email}),

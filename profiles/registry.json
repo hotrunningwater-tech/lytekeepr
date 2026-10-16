@@ -57,8 +57,10 @@
       "shell_variant": "default",
       "created_at": "2026-10-16T20:00:00.231940+00:00",
       "last_active_at": "2026-10-16T20:00:00.231948+00:00",
-      "attached_gmail_account_ids": [],
-      "active_gmail_account_id": null,
+      "attached_gmail_account_ids": [
+        "stalepoetry@gmail.com"
+      ],
+      "active_gmail_account_id": "stalepoetry@gmail.com",
       "is_demo_profile": false
     }
   }
