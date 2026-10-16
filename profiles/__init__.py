@@ -10,12 +10,7 @@ from .store import (
     get_profile_root,
     list_profiles,
     profile_component_dir,
-    profile_counts,
-    rename_profile,
-    reset_profile_local_state,
-    seed_default_profiles,
     set_active_gmail_account_id,
-    set_active_profile_id,
 )
 
 __all__ = [
@@ -30,10 +25,5 @@ __all__ = [
     "get_profile_root",
     "list_profiles",
     "profile_component_dir",
-    "profile_counts",
-    "rename_profile",
-    "reset_profile_local_state",
-    "seed_default_profiles",
     "set_active_gmail_account_id",
-    "set_active_profile_id",
 ]

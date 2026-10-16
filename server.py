@@ -54,7 +54,6 @@ from profiles import (
     get_active_profile,
     get_active_profile_id,
     get_attached_gmail_account_ids,
-    profile_counts,
 )
 
 APP_DIR = Path(__file__).resolve().parent
@@ -445,7 +444,6 @@ def gmail_status():
     account_id = get_active_account_id()
     active_profile = get_active_profile()
     active_profile_id = active_profile.get("profile_id")
-    active_shell_variant = active_profile.get("shell_variant", "default")
     known_accounts = _gmail_account_summaries(account_id)
     default_sync_since_date = GmailSyncConfig.from_env().sync_since_date
     if not account_id:
@@ -459,7 +457,6 @@ def gmail_status():
                 "pending_count": 0,
                 "active_account_id": None,
                 "active_profile_id": active_profile_id,
-                "active_shell_variant": active_shell_variant,
                 "known_accounts": known_accounts,
                 "default_sync_since_date": default_sync_since_date,
             }
@@ -475,7 +472,6 @@ def gmail_status():
             "pending_count": len(get_pending_candidates(account_id)),
             "active_account_id": account_id,
             "active_profile_id": active_profile_id,
-            "active_shell_variant": active_shell_variant,
             "known_accounts": known_accounts,
             "default_sync_since_date": default_sync_since_date,
         }
@@ -1049,14 +1045,6 @@ def gmail_activate_account():
             "known_accounts": _gmail_account_summaries(account_id),
         }
     )
-
-
-def _profile_summary(profile: dict) -> dict:
-    profile_id = profile.get("profile_id", "")
-    return {
-        **profile,
-        "counts": profile_counts(profile_id),
-    }
 
 
 @app.get("/api/gmail/messages")

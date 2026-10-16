@@ -64,27 +64,25 @@ class GmailAccountProfilesTest(unittest.TestCase):
 
         self.assertEqual(gmail_sync.get_active_account_id(), "z@example.com")
 
-    def test_empty_demo_profile_does_not_inherit_global_active_account(self):
+    def test_empty_workspace_does_not_inherit_another_workspaces_account(self):
         profile_store.ensure_profile_bootstrap()
         oauth_store.set_active_account_id("stalepoetry@gmail.com")
-        profile_store.create_profile("HighLyter", profile_id="profile-highlyter", is_demo_profile=True)
-        profile_store.set_active_profile_id("profile-highlyter")
-
-        self.assertIsNone(oauth_store.load_active_account_id())
-        self.assertIsNone(gmail_sync.get_active_account_id())
-        self.assertFalse(oauth_store.has_refresh_token())
+        profile_store.create_profile("New account", profile_id="ws-new")
+        with profile_store.use_profile("ws-new"):
+            self.assertIsNone(oauth_store.load_active_account_id())
+            self.assertIsNone(gmail_sync.get_active_account_id())
+            self.assertFalse(oauth_store.has_refresh_token())
 
     def test_empty_account_directory_does_not_count_as_local_mailbox_state(self):
         profile_store.ensure_profile_bootstrap()
-        profile_store.create_profile("HighLyter", profile_id="profile-highlyter", is_demo_profile=True)
-        profile_store.set_active_profile_id("profile-highlyter")
+        profile_store.create_profile("New account", profile_id="ws-new")
+        with profile_store.use_profile("ws-new"):
+            empty_messages_dir = gmail_storage.account_dir("stalepoetry@gmail.com") / "messages"
+            empty_messages_dir.mkdir(parents=True, exist_ok=True)
 
-        empty_messages_dir = gmail_storage.account_dir("stalepoetry@gmail.com") / "messages"
-        empty_messages_dir.mkdir(parents=True, exist_ok=True)
-
-        self.assertEqual(gmail_storage.list_account_ids(), ["stalepoetry@gmail.com"])
-        self.assertEqual(gmail_storage.list_account_ids_with_state(), [])
-        self.assertIsNone(gmail_sync.get_active_account_id())
+            self.assertEqual(gmail_storage.list_account_ids(), ["stalepoetry@gmail.com"])
+            self.assertEqual(gmail_storage.list_account_ids_with_state(), [])
+            self.assertIsNone(gmail_sync.get_active_account_id())
 
 
 if __name__ == "__main__":

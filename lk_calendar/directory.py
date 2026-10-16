@@ -170,7 +170,7 @@ def sign_up(email: str, name: str = "") -> dict:
         label = (name or email.split("@")[0]).strip()[:60] or "Workspace"
         import re
         slug = re.sub(r"[^a-z0-9]", "", email.split("@")[0])[:12] or "user"
-        profile = profiles.create_profile(label, profile_id=f"ws-{datetime.now():%Y%m%d%H%M%S}-{slug}", is_demo_profile=False)
+        profile = profiles.create_profile(label, profile_id=f"ws-{datetime.now():%Y%m%d%H%M%S}-{slug}")
         _set_up_workspace(profile["profile_id"], email, name)
         with _conn() as conn:
             conn.execute("INSERT INTO accounts (profile_id, name, owner_email, status, created_at) VALUES (?, ?, ?, 'waiting', ?)",

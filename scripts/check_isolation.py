@@ -25,8 +25,8 @@ TMP = Path(tempfile.mkdtemp(prefix="lk-isolation-"))
 # ---- a fresh, empty installation in the temporary folder (set before anything from the app is imported)
 (TMP / "profiles" / "data" / "0001").mkdir(parents=True)
 (TMP / "profiles" / "registry.json").write_text(json.dumps({"version": 1, "profiles": {"home": {
-    "profile_id": "home", "display_name": "Home", "storage_id": "0001", "shell_variant": "default", "created_at": "2026-01-01T00:00:00+00:00",
-    "last_active_at": "2026-01-01T00:00:00+00:00", "attached_gmail_account_ids": [], "active_gmail_account_id": None, "is_demo_profile": False}}}))
+    "profile_id": "home", "display_name": "Home", "storage_id": "0001", "created_at": "2026-01-01T00:00:00+00:00",
+    "last_active_at": "2026-01-01T00:00:00+00:00", "attached_gmail_account_ids": [], "active_gmail_account_id": None}}}))
 (TMP / "profiles" / "active-profile.json").write_text(json.dumps({"profile_id": "home"}))
 (TMP / "legacy-google").mkdir()
 os.environ.update({

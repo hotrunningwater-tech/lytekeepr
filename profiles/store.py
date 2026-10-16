@@ -19,8 +19,6 @@ VALID_PROFILE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 VALID_STORAGE_ID_RE = re.compile(r"^\d{4}$")
 LEGACY_STATE_DIRS = ("email-storage", "ocr-storage", "document-registry", "chronology-data", "assistant-state")
 DEFAULT_PROFILE_ID = "profile-default"
-DEFAULT_SHELL_VARIANT = "default"
-TEST_SHELL_VARIANTS = ("variant_1", "variant_2", "variant_3")
 
 # Each customer workspace (a USER) is one profile with its own data folder. A web request works inside exactly one of them: the
 # login gate sets it at the start of the request (see auth_gate.py) and every data path (CRM, calendar, email, Google tokens,
@@ -163,17 +161,15 @@ def _profile_dir_from_payload(profile: dict) -> Path:
     return PROFILE_DATA_ROOT / _storage_dir_name(profile)
 
 
-def _profile_payload(profile_id: str, display_name: str, *, storage_id: str, is_demo_profile: bool = False) -> dict:
+def _profile_payload(profile_id: str, display_name: str, *, storage_id: str) -> dict:
     return {
         "profile_id": profile_id,
         "display_name": display_name,
         "storage_id": storage_id,
-        "shell_variant": DEFAULT_SHELL_VARIANT,
         "created_at": _utc_now(),
         "last_active_at": _utc_now(),
         "attached_gmail_account_ids": [],
         "active_gmail_account_id": None,
-        "is_demo_profile": bool(is_demo_profile),
     }
 
 
@@ -181,38 +177,6 @@ def _touch_profile(profile: dict) -> dict:
     profile["last_active_at"] = _utc_now()
     return profile
 
-
-def _assign_shell_variant(registry: dict, profile: dict) -> bool:
-    changed = False
-    current = str(profile.get("shell_variant") or "").strip()
-
-    if not current:
-        profile["shell_variant"] = DEFAULT_SHELL_VARIANT
-        current = DEFAULT_SHELL_VARIANT
-        changed = True
-
-    if profile.get("profile_id") == DEFAULT_PROFILE_ID and current != DEFAULT_SHELL_VARIANT:
-        profile["shell_variant"] = DEFAULT_SHELL_VARIANT
-        current = DEFAULT_SHELL_VARIANT
-        changed = True
-
-    if profile.get("is_demo_profile"):
-        used_variants = {
-            str(payload.get("shell_variant") or "").strip()
-            for payload in registry.get("profiles", {}).values()
-            if payload is not profile and payload.get("is_demo_profile")
-        }
-        target = current if current in TEST_SHELL_VARIANTS else ""
-        if not target or target in used_variants:
-            target = next((variant for variant in TEST_SHELL_VARIANTS if variant not in used_variants), DEFAULT_SHELL_VARIANT)
-        if profile.get("shell_variant") != target:
-            profile["shell_variant"] = target
-            changed = True
-    elif profile.get("shell_variant") != DEFAULT_SHELL_VARIANT:
-        profile["shell_variant"] = DEFAULT_SHELL_VARIANT
-        changed = True
-
-    return changed
 
 
 def ensure_profile_bootstrap() -> dict:
@@ -224,8 +188,6 @@ def ensure_profile_bootstrap() -> dict:
         changed = False
         for profile_id in sorted(profiles.keys()):
             profile = profiles[profile_id]
-            if _assign_shell_variant(registry, profile):
-                changed = True
             if not VALID_STORAGE_ID_RE.fullmatch(str(profile.get("storage_id") or "").strip()):
                 profile["storage_id"] = _next_storage_id(registry)
                 changed = True
@@ -254,7 +216,6 @@ def ensure_profile_bootstrap() -> dict:
         attached_accounts = _legacy_account_ids()
         profile["attached_gmail_account_ids"] = attached_accounts
         profile["active_gmail_account_id"] = _legacy_active_account_id() or (attached_accounts[0] if attached_accounts else None)
-        profile["shell_variant"] = DEFAULT_SHELL_VARIANT
         profiles[DEFAULT_PROFILE_ID] = profile
         target_root = _profile_dir_from_payload(profile)
         target_root.mkdir(parents=True, exist_ok=True)
@@ -267,7 +228,6 @@ def ensure_profile_bootstrap() -> dict:
         return registry
 
     profile = _profile_payload(DEFAULT_PROFILE_ID, "Default profile", storage_id="0001")
-    profile["shell_variant"] = DEFAULT_SHELL_VARIANT
     profiles[DEFAULT_PROFILE_ID] = profile
     _profile_dir_from_payload(profile).mkdir(parents=True, exist_ok=True)
     _save_registry(registry)
@@ -321,7 +281,8 @@ def profile_component_dir(component: str, profile_id: str | None = None) -> Path
     return path
 
 
-def create_profile(display_name: str, *, profile_id: str | None = None, is_demo_profile: bool = False, shell_variant: str | None = None) -> dict:
+def create_profile(display_name: str, *, profile_id: str | None = None) -> dict:
+    """A new workspace: its entry in the registry and its own empty data folder."""
     registry = ensure_profile_bootstrap()
     normalized_id = _normalize_profile_id(profile_id or _slugify(display_name))
     if normalized_id in registry["profiles"]:
@@ -330,53 +291,14 @@ def create_profile(display_name: str, *, profile_id: str | None = None, is_demo_
         normalized_id,
         (display_name or normalized_id).strip() or normalized_id,
         storage_id=_next_storage_id(registry),
-        is_demo_profile=is_demo_profile,
     )
-    if isinstance(shell_variant, str) and shell_variant.strip():
-        payload["shell_variant"] = shell_variant.strip()
-    _assign_shell_variant(registry, payload)
     registry["profiles"][normalized_id] = payload
     _profile_dir_from_payload(payload).mkdir(parents=True, exist_ok=True)
     _save_registry(registry)
     return dict(payload)
 
 
-def seed_default_profiles() -> list[dict]:
-    outputs = []
-    for profile_id, display_name in (
-        ("profile-alpha", "Alpha"),
-        ("profile-beta", "Beta"),
-        ("profile-gamma", "Gamma"),
-    ):
-        registry = ensure_profile_bootstrap()
-        if profile_id not in registry["profiles"]:
-            outputs.append(create_profile(display_name, profile_id=profile_id, is_demo_profile=True))
-        else:
-            outputs.append(dict(registry["profiles"][profile_id]))
-    return outputs
 
-
-def set_active_profile_id(profile_id: str) -> dict:
-    normalized = _normalize_profile_id(profile_id)
-    registry = ensure_profile_bootstrap()
-    profile = registry["profiles"].get(normalized)
-    if not profile:
-        raise ValueError(f"Unknown profile '{normalized}'.")
-    _save_active_profile_id(normalized)
-    registry["profiles"][normalized] = _touch_profile(profile)
-    _save_registry(registry)
-    return dict(registry["profiles"][normalized])
-
-
-def rename_profile(profile_id: str, display_name: str) -> dict:
-    normalized = _normalize_profile_id(profile_id)
-    registry = ensure_profile_bootstrap()
-    profile = registry["profiles"].get(normalized)
-    if not profile:
-        raise ValueError(f"Unknown profile '{normalized}'.")
-    profile["display_name"] = (display_name or "").strip() or profile["display_name"]
-    _save_registry(registry)
-    return dict(profile)
 
 
 def attach_gmail_account(profile_id: str | None, account_id: str) -> dict:
@@ -424,57 +346,4 @@ def set_active_gmail_account_id(account_id: str | None, profile_id: str | None =
     return dict(profile)
 
 
-def reset_profile_local_state(profile_id: str) -> dict:
-    normalized = _normalize_profile_id(profile_id)
-    registry = ensure_profile_bootstrap()
-    profile = registry["profiles"].get(normalized)
-    if not profile:
-        raise ValueError(f"Unknown profile '{normalized}'.")
-    root = _profile_dir_from_payload(profile)
-    for relative in LEGACY_STATE_DIRS:
-        shutil.rmtree(root / relative, ignore_errors=True)
-    return dict(profile)
 
-
-def profile_counts(profile_id: str) -> dict:
-    normalized = _normalize_profile_id(profile_id)
-    registry = ensure_profile_bootstrap()
-    profile = registry["profiles"].get(normalized)
-    if not profile:
-        raise ValueError(f"Unknown profile '{normalized}'.")
-    root = _profile_dir_from_payload(profile)
-    email_root = root / "email-storage" / "accounts"
-    saved_emails = 0
-    pending_emails = 0
-    if email_root.is_dir():
-        for account_dir in email_root.iterdir():
-            if not account_dir.is_dir():
-                continue
-            index_path = account_dir / "index.json"
-            if index_path.is_file():
-                payload = _read_json(index_path) or {}
-                if isinstance(payload, dict):
-                    saved_emails += len(payload)
-            pending_dir = account_dir / "pending"
-            if pending_dir.is_dir():
-                pending_emails += len(list(pending_dir.glob("*.json")))
-
-    document_count = 0
-    jobs_dir = root / "ocr-storage" / "jobs"
-    if jobs_dir.is_dir():
-        for job_dir in jobs_dir.iterdir():
-            if (job_dir / "results" / "result.json").is_file():
-                document_count += 1
-
-    chronology_count = 0
-    events_path = root / "chronology-data" / "events.json"
-    events_payload = _read_json(events_path) or {}
-    if isinstance(events_payload, dict):
-        chronology_count = len(events_payload)
-
-    return {
-        "saved_emails": saved_emails,
-        "pending_email_candidates": pending_emails,
-        "scanned_documents": document_count,
-        "chronology_events": chronology_count,
-    }

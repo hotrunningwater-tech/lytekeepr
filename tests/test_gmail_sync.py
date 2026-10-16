@@ -82,7 +82,7 @@ class GmailSyncRebuildTest(unittest.TestCase):
             mock.patch.object(gmail_sync.client, "get_message", side_effect=fake_get_message),
             mock.patch.object(gmail_sync, "normalize_message", side_effect=fake_normalize_message),
         ):
-            result = gmail_sync.scan_for_candidates(lambda messages: {m["id"]: {"is_relevant": False, "reason": "test"} for m in messages})
+            result = gmail_sync.scan_for_candidates()        # every new email now goes to review; there is no relevance check any more
 
         full_scan.assert_called_once()
         history_scan.assert_not_called()
