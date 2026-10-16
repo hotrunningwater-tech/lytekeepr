@@ -20,6 +20,8 @@ def register(app):
     except Exception:
         logging.getLogger(__name__).exception("could not move the shared calendar or Google tokens into the first workspace")
     users.register(app)
+    from . import calls
+    calls.register(app)
     from pathlib import Path
     from . import superadmin
     superadmin.register(app, str(Path(__file__).resolve().parent.parent))
@@ -44,6 +46,7 @@ def register(app):
     except Exception:
         logging.getLogger(__name__).exception("linking leads to people failed; it will retry on the next start")
     auto_sync.start()      # hourly Google sync; idle unless Google is connected on this machine
+    calls.start()          # hourly Fathom fetch in each workspace that connected it
 
 
 __all__ = ["register"]

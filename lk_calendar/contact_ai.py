@@ -187,6 +187,17 @@ def _ask_context(person_id: int) -> str:
         out += ["MESSAGES (oldest first, last 30)", "\n".join(f"[{m['timestamp'][:16]} {m['channel']} {m['direction']}] {(m['message_text'] or '')[:400]}" for m in msgs) or "(no messages yet)"]
     except Exception:
         pass
+    try:                                     # recorded calls (Fathom): the summary when there is one, else the start of the transcript
+        from . import calls
+        recent = calls.calls_for_person(person_id)[:5]
+        if recent:
+            lines = []
+            for c in recent:
+                body = c["summary"] or calls.transcript_text(c, 4000)
+                lines.append(f"[{c['started_at']}] call '{c['title']}' ({c['duration_min']} min, {c['status']})\n{body}")
+            out += ["CALLS (newest first)", "\n\n".join(lines)]
+    except Exception:
+        pass
     return "\n".join(out)
 
 

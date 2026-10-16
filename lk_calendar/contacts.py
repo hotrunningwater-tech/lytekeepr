@@ -167,15 +167,16 @@ def scan(raw: bytes, filename: str) -> dict:
 
 
 # ----------------------------------------------------------------- storage (CRM tables)
-_ready = False
+_ready: set = set()
 
 
 @contextmanager
 def _crm():
-    global _ready
-    if not _ready:
+    from profiles.store import get_active_profile_id
+    workspace = get_active_profile_id()
+    if workspace not in _ready:            # each workspace's database is brought up to date once (not just the first one used)
         crm.init_db()
-        _ready = True
+        _ready.add(workspace)
     conn = crm.get_connection()
     try:
         yield conn

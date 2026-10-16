@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LyteKeepr — Calls mockup</title>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
+<!-- the app's real stylesheets: everything below is drawn with LyteKeepr's own classes -->
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="lk_calendar/static/calendar.css">
+<link rel="stylesheet" href="lk_calendar/static/settings.css">
+<style>
+  /* ---- mockup-only helpers ---- */
+  .mk-tag { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #1f8a4c; color: #fff; font-family: var(--font-heading); font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 5px 10px; border-radius: 999px; text-transform: uppercase; }
+  .mk-views { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; background: rgba(41,67,78,.85); padding: 6px; border-radius: 999px; }
+  .mk-views button { border: none; background: transparent; border-radius: 999px; padding: 6px 12px; font-family: var(--font-heading); font-size: 11.5px; font-weight: 600; cursor: pointer; color: rgba(255,255,255,.75); }
+  .mk-views button.on { background: #fff; color: var(--ink); }
+  .mk-new { outline: 2px dashed #9b87e0; outline-offset: 4px; border-radius: 14px; position: relative; }
+  .mk-new::after { content: "NEW"; position: absolute; top: -10px; right: 10px; background: #9b87e0; color: #fff; font-family: var(--font-heading); font-size: 9.5px; font-weight: 700; letter-spacing: .1em; padding: 2px 7px; border-radius: 999px; }
+  .mk-hide { display: none !important; }
+
+  /* ---- NEW styles this feature adds (kept in the app's look) ---- */
+  .crm-channel-tag-call { background: #ece6fb; color: #5b45a8; }
+  .crm-call { width: 100%; max-width: 100%; box-sizing: border-box; background: #fff; border: 1px solid rgba(155,135,224,.35); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+  .crm-call-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .crm-call-line b { font-size: 13.5px; color: var(--ink); }
+  .crm-call-who { font-size: 12px; color: var(--ink-soft); margin: 4px 0 0; }
+  .crm-call-who .x { color: #9a4a2f; }
+  .crm-call-toggle { border: none; background: transparent; font-family: var(--font-heading); font-size: 12px; font-weight: 600; color: var(--teal); cursor: pointer; padding: 6px 0 0; }
+  .crm-call-body { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .crm-call-summary { background: #f3f7f9; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; color: var(--ink); }
+  .crm-call-summary ol { margin: 4px 0 0; padding-left: 18px; }
+  .crm-call-transcript { background: #fbfcfd; border: 1px solid rgba(127,168,184,.25); border-radius: 10px; padding: 10px 12px; max-height: 200px; overflow-y: auto; font-size: 13px; line-height: 1.55; }
+  .crm-call-transcript p { margin: 0 0 6px; } .crm-call-transcript i { font-style: normal; color: var(--ink-soft); font-size: 11.5px; margin-right: 6px; }
+  .crm-call-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .crm-call-pill { font-family: var(--font-heading); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 3px 9px; }
+  .crm-call-pill.ready { background: #ece6fb; color: #5b45a8; } .crm-call-pill.done { background: #d8eee2; color: #1f6b46; } .crm-call-pill.miss { background: #f7d9d2; color: #a3412b; }
+  .lkc-call { display: flex; flex-direction: column; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="mk-tag">Mockup — calls (made-up data) · new parts have a purple dashed outline</div>
+<div class="mk-views">
+  <button class="on" data-v="contact" type="button">1 · Contact page</button>
+  <button data-v="open" type="button">2 · Call opened</button>
+  <button data-v="summary" type="button">3 · After Summarize</button>
+  <button data-v="calendar" type="button">4 · Calendar</button>
+  <button data-v="newmeeting" type="button">5 · New meeting</button>
+  <button data-v="home" type="button">6 · Home</button>
+  <button data-v="settings" type="button">7 · Settings</button>
+</div>
+
+<div class="workspace">
+  <header class="header">
+    <button class="brand brand-button" type="button"><span class="brand-dot"></span><span class="brand-name">LyteKeepr</span></button>
+    <div class="case-identity"><span class="case-identity-label">Connected</span><span class="case-identity-sep">·</span><span class="case-identity-value">LinkedIn, Gmail, CRM</span></div>
+    <div class="header-slogan" aria-hidden="true">All communication<span>.</span> One place<span>.</span></div>
+    <div class="actions">
+      <div class="user-chip is-admin"><span class="user-avatar">P</span><span class="user-name">Petr Artemov</span><span class="user-role">Admin</span></div>
+      <button class="lk-gear" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
+  </header>
+
+  <div class="primary">
+    <div class="left-rail">
+      <div class="rail-tab rail-tab-home"><span class="rail-tab-label">HOME</span></div>
+      <div class="email-drawer rail-tab-gmail"><span class="email-drawer-label">GMAIL</span></div>
+      <div class="rail-tab rail-tab-linkedin"><span class="rail-tab-label">LINKEDIN</span></div>
+      <div class="rail-tab rail-tab-hubspot"><span class="rail-tab-label">CRM</span></div>
+      <div class="rail-tab rail-tab-calendar"><span class="rail-tab-label">CALENDAR</span></div>
+    </div>
+
+    <!-- ===================== 1-3: CONTACT PAGE (the real one, plus calls in the Messages timeline) ===================== -->
+    <section class="panel case-overview" data-s="contact open summary" style="flex:1">
+      <div class="document-viewer">
+        <div class="document-viewer-header">
+          <div class="document-viewer-heading">
+            <span class="block-label">CONTACT</span>
+            <h1>Peter</h1>
+            <div class="lks-detail-tags"><span class="crm-channel-tag crm-channel-tag-email">email</span></div>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-secondary btn-small" type="button">Edit</button>
+            <button class="btn btn-remove btn-small" type="button">Delete</button>
+            <button class="btn btn-remove document-viewer-close" type="button">Back to Home</button>
+          </div>
+        </div>
+
+        <div class="lks-page">
+          <div class="lks-page-main">
+            <div class="preview-section crm-detail-card lks-standing">
+              <p class="crm-detail-field">Funnel: Nexy Pilot — In conversation</p>
+              <div class="lks-outreach"><div><span class="crm-channel-tag crm-channel-tag-email">Email</span><b>replied</b><span class="lks-note">since 2026-10-15</span></div></div>
+              <div class="lks-row" style="margin-top:8px"><button class="btn btn-secondary btn-small" type="button">Go to funnel</button></div>
+            </div>
+            <div class="preview-section crm-detail-card">
+              <div class="lks-card lks-form">
+                <div class="lks-opt wide"><label>Company</label><input class="lks-ro" readonly value="Seattle SignShop"></div>
+                <div class="lks-opts"><div class="lks-opt"><label>Name</label><input readonly value="Peter"></div><div class="lks-opt"><label>Email</label><input readonly value="seattlesignshop@gmail.com"></div></div>
+              </div>
+            </div>
+            <div class="preview-section crm-detail-card">
+              <div class="crm-detail-card-header">
+                <span class="block-label">Messages — all channels</span>
+                <button class="subtle-link-btn" type="button">Show all 8 messages</button>
+              </div>
+              <div class="crm-msg-controls">
+                <div class="crm-msg-views"><button class="crm-msg-view on" type="button">All together</button><button class="crm-msg-view" type="button">By channel</button></div>
+                <button class="crm-channel-tag crm-channel-tag-email crm-msg-chan" type="button">☑ email</button>
+                <button class="crm-channel-tag crm-channel-tag-call crm-msg-chan mk-new" type="button">☑ call</button>
+              </div>
+
+              <div>
+                <!-- NEW: a call, in date order with the emails (newest on top), collapsed by default -->
+                <div class="crm-call mk-new">
+                  <div class="crm-call-line">
+                    <span class="crm-channel-tag crm-channel-tag-call">call</span>
+                    <b>Nexy demo with Peter</b>
+                    <span class="crm-call-pill ready" data-hide="summary">Transcript ready</span>
+                    <span class="crm-call-pill done" data-only="summary">Done · summarized</span>
+                    <span class="crm-detail-message-time">Oct 16, 2:00 PM · Google Meet · 34 min</span>
+                  </div>
+                  <p class="crm-call-who">With Peter, you, and <span class="x">sara@seattlesignshop.com (not in contacts)</span></p>
+                  <div class="crm-call-summary" data-only="summary"><b>Summary</b>
+                    <ol><li>Wants the pilot for 3 stores, starting November.</li><li>Worried about price per location; asked for a quote by Friday.</li><li>Sara (his manager) joins the next call.</li></ol>
+                  </div>
+                  <button class="crm-call-toggle" type="button" data-only="contact">▸ Show transcript</button>
+                  <button class="crm-call-toggle" type="button" data-only="summary">▸ Show transcript</button>
+                  <div class="crm-call-body" data-only="open">
+                    <div class="crm-call-transcript">
+                      <p><i>00:01</i><b>You:</b> Hi Peter, thanks for making the time.</p>
+                      <p><i>00:04</i><b>Peter:</b> We looked at the pilot outline. We'd like it for our three stores.</p>
+                      <p><i>00:15</i><b>You:</b> Great. When would you want to start?</p>
+                      <p><i>00:18</i><b>Peter:</b> November ideally. My only worry is the price per location.</p>
+                      <p><i>00:27</i><b>Sara:</b> I'd like to be on the next call before we sign.</p>
+                      <p style="color:var(--ink-soft)">… continues (scrolls) …</p>
+                    </div>
+                    <button class="crm-call-toggle" type="button" style="padding:0">▾ Hide transcript</button>
+                  </div>
+                  <div class="crm-call-actions" style="margin-top:8px">
+                    <button class="btn btn-primary btn-small" type="button" data-hide="summary">Summarize</button>
+                    <button class="btn btn-primary btn-small" type="button">Draft follow-up</button>
+                    <button class="btn btn-secondary btn-small" type="button" data-hide="summary">Mark done</button>
+                    <button class="btn btn-remove btn-small" type="button">Open in Fathom</button>
+                  </div>
+                </div>
+
+                <div class="crm-detail-message is-theirs">
+                  <div class="crm-detail-message-meta"><span class="crm-channel-tag crm-channel-tag-email">email</span><span class="crm-detail-message-sender">Peter</span><span class="crm-detail-message-time">Oct 15, 9:29 PM</span></div>
+                  <p class="crm-detail-message-subject">Subject: Re: Hi Peter</p>
+                  <p class="crm-detail-message-text">No worries!
+
+Best regards,
+Peter.</p>
+                </div>
+                <div class="crm-detail-message is-mine">
+                  <div class="crm-detail-message-meta"><span class="crm-channel-tag crm-channel-tag-email">email</span><span class="crm-detail-message-sender">You</span><span class="crm-detail-message-time">Oct 15, 9:18 PM</span></div>
+                  <p class="crm-detail-message-subject">Subject: Hi Peter</p>
+                  <p class="crm-detail-message-text">Hi Peter,
+
+Just wanted to say a quick hello and hope you're doing well.</p>
+                </div>
+
+                <!-- NEW: a call on the calendar with no recording -->
+                <div class="crm-call mk-new">
+                  <div class="crm-call-line"><span class="crm-channel-tag crm-channel-tag-call">call</span><b>Intro call</b><span class="crm-call-pill miss">No recording · no-show?</span><span class="crm-detail-message-time">Oct 9, 11:00 AM · Zoom</span></div>
+                  <div class="crm-call-actions" style="margin-top:8px"><button class="btn btn-secondary btn-small" type="button">Mark no-show</button><button class="btn btn-remove btn-small" type="button">It happened</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="lks-page-chat">
+            <div class="lks-ai">
+              <div class="lks-ai-head"><b>Ask about this contact</b><span class="lks-note">Questions, search, next steps. To change the contact, press Edit.</span></div>
+              <div class="lks-ai-log">
+                <div class="lks-ai-msg user">what did he say about pricing on the call?</div>
+                <div class="lks-ai-msg assistant">On the Oct 16 call Peter said his only worry is the price per location, and asked for a quote by Friday.</div>
+              </div>
+              <textarea placeholder="Ask about this person, their notes, messages, calls or funnel…"></textarea>
+              <div class="lks-row"><button class="btn btn-primary" type="button">Send</button><span class="lks-note">Enter sends · Shift+Enter for a new line</span></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 4-5: CALENDAR (the real one) ===================== -->
+    <section class="panel lkc-panel mk-hide" data-s="calendar newmeeting" style="flex:1">
+      <div class="lkc-head">
+        <h1>Calendar</h1>
+        <div class="lkc-nav">
+          <button class="btn" type="button">‹</button><span class="lkc-range">Oct 12 – 18, 2026</span><button class="btn" type="button">›</button>
+          <button class="btn" type="button">Today</button><button class="btn" type="button">Sync Google</button><button class="btn" type="button">Import leads</button><button class="btn btn-primary" type="button">+ New</button>
+        </div>
+      </div>
+      <div class="lkc-filter-row">
+        <div class="lkc-filters"><span class="lkc-chip"><i style="background:#7fa8b8"></i>LyteKeepr</span><span class="lkc-chip"><i style="background:#e98b74"></i>Aspan CRM</span><span class="lkc-chip"><i style="background:#21493f"></i>Nexy</span><span class="lkc-chip"><i style="background:#7b6fa8"></i>Google</span></div>
+        <button class="lkc-chip lkc-density" type="button">Fit day</button>
+      </div>
+      <div class="lkc-body">
+        <div class="lkc-grid-wrap">
+          <div class="lkc-grid" style="min-height:520px">
+            <div class="lkc-dayhead"></div>
+            <div class="lkc-dayhead">MON<b>12</b></div><div class="lkc-dayhead">TUE<b>13</b></div><div class="lkc-dayhead">WED<b>14</b></div><div class="lkc-dayhead">THU<b>15</b></div><div class="lkc-dayhead today">FRI<b>16</b></div><div class="lkc-dayhead">SAT<b>17</b></div><div class="lkc-dayhead">SUN<b>18</b></div>
+            <div class="lkc-hours" style="height:440px"></div>
+            <div class="lkc-col" style="height:440px"></div><div class="lkc-col" style="height:440px"></div><div class="lkc-col" style="height:440px"></div>
+            <div class="lkc-col" style="height:440px"><button class="lkc-ev task" type="button" style="top:60px;height:44px;left:2px;width:calc(100% - 4px);background:#21493f">Follow up · 2 Email leads<small>10:00 AM</small></button></div>
+            <div class="lkc-col" style="height:440px"><button class="lkc-ev meeting sel" type="button" style="top:240px;height:60px;left:2px;width:calc(100% - 4px);background:#7b6fa8">Nexy demo with Peter<small>2:00 PM</small></button></div>
+            <div class="lkc-col" style="height:440px"></div><div class="lkc-col" style="height:440px"></div>
+          </div>
+        </div>
+        <aside class="lkc-side">
+          <div class="lkc-side-head"><button class="lkc-collapse" type="button">›</button>
+            <div class="demo-reset-tabs"><button class="demo-reset-tab is-active" type="button">Details</button><button class="demo-reset-tab" type="button">Ask LyteKeepr</button></div></div>
+          <div class="lkc-pane">
+            <!-- 4: the real meeting detail card, plus the call block -->
+            <div class="lkc-card lkc-detail" data-only="calendar">
+              <div class="lkc-top"><span class="lkc-chip"><i style="background:#7b6fa8"></i>Google</span><button class="x" type="button">×</button></div>
+              <h2 class="lkc-title">Nexy demo with Peter</h2>
+              <div class="lkc-grid2"><label class="lkc-lbl">Type</label><div class="lkc-v">Conference call (Google Calendar, read-only)</div><label class="lkc-lbl">When</label><div class="lkc-v">Fri, Oct 16 · 2:00 – 2:34 PM</div></div>
+              <div class="lkc-call mk-new">
+                <span class="lkc-lbl">Who was on it</span>
+                <div class="lkc-member"><div class="lkc-member-main"><b>Peter</b><span class="lkc-leadmeta">Contact · Nexy Pilot — In conversation</span></div><div class="lkc-actions"><button class="btn" type="button">Open</button></div></div>
+                <div class="lkc-member"><div class="lkc-member-main"><b>sara@seattlesignshop.com</b><span class="lkc-leadmeta">Not in your contacts</span></div><div class="lkc-actions"><button class="btn" type="button">Add as contact</button></div></div>
+                <span class="lkc-lbl" style="margin-top:6px">Recording (Fathom)</span>
+                <p class="lkc-empty" style="margin:0">Transcript ready · 34 min. It also shows on Peter's contact page.</p>
+                <div class="lkc-actions"><button class="btn primary" type="button">Summarize</button><button class="btn" type="button">Draft follow-up</button><button class="btn" type="button">Show transcript</button></div>
+              </div>
+              <div class="lkc-meeting">
+                <span class="lkc-lbl">Meeting status</span>
+                <div class="lkc-actions"><button class="btn" type="button">Scheduled</button><button class="btn primary" type="button">Completed</button><button class="btn" type="button">No-show</button><button class="btn" type="button">Cancelled</button></div>
+                <p class="lkc-empty">Conference call: marking it Completed adds a follow-up reminder 24 hours after it ends. <span class="mk-new" style="display:inline-block;padding:0 4px">With a transcript it is marked Completed for you; with no recording, LyteKeepr asks "No-show?".</span></p>
+                <span class="lkc-lbl" style="margin-top:6px">My notes</span><textarea placeholder="Your notes (kept in LyteKeepr, never overwritten by Google)"></textarea><button class="btn" type="button">Save notes</button>
+              </div>
+            </div>
+            <!-- 5: the real "New item" form, Meeting tab, plus invite + Meet link -->
+            <form class="lkc-card lkc-form mk-hide" data-only="newmeeting" onsubmit="return false">
+              <div class="lkc-top"><h2 class="lkc-title">New item</h2><button class="x" type="button">×</button></div>
+              <div class="demo-reset-tabs"><button class="demo-reset-tab" type="button">Task</button><button class="demo-reset-tab is-active" type="button">Meeting</button><button class="demo-reset-tab" type="button">Reminder</button></div>
+              <div><span class="lkc-lbl">Title</span><input type="text" value="Pilot follow-up with Peter and Sara"></div>
+              <div><span class="lkc-lbl">Project</span><div class="lkc-projpick"><span class="lkc-chip"><i style="background:#7fa8b8"></i>LyteKeepr</span><span class="lkc-chip"><i style="background:#e98b74"></i>Aspan CRM</span><span class="lkc-chip on"><i style="background:#21493f"></i>Nexy</span></div></div>
+              <div class="lkc-row2"><div><span class="lkc-lbl">Date</span><input type="date" value="2026-10-21"></div><div><span class="lkc-lbl">Time</span><input type="time" value="11:00"></div></div>
+              <div><span class="lkc-lbl">Length</span><select><option>30 min</option></select></div>
+              <div class="mk-new" style="display:flex;flex-direction:column;gap:8px;padding:2px">
+                <div><span class="lkc-lbl">Invite (contacts or emails)</span><input type="text" value="Peter (seattlesignshop@gmail.com), sara@seattlesignshop.com"></div>
+                <label class="lkc-check"><input type="checkbox" checked> Add a Google Meet link (sent with the invite)</label>
+                <label class="lkc-check"><input type="checkbox" checked> Expect a Fathom recording (ask "No-show?" if none arrives)</label>
+              </div>
+              <div><span class="lkc-lbl">Repeat</span><select><option>Does not repeat</option></select></div>
+              <div><span class="lkc-lbl">Notes</span><textarea placeholder="Optional"></textarea></div>
+              <div class="lkc-actions"><button class="btn primary" type="button">Save &amp; send invite</button><button class="btn" type="button">Cancel</button></div>
+            </form>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ===================== 6: HOME (the real one, plus a calls row) ===================== -->
+    <section class="panel case-overview mk-hide" data-s="home">
+      <div>
+        <div class="overview-heading"><h1>Needs Your Attention</h1><p class="overview-sub">What LyteKeepr thinks you should act on now</p></div>
+        <div class="attention-list" style="margin-top:14px">
+          <div class="attention mk-new">
+            <span class="attention-flag">Call with Peter — transcript ready</span>
+            <p class="attention-copy">Nexy demo with Peter · today 2:00 PM · 34 min</p>
+            <div class="attention-actions"><button class="btn btn-primary btn-small" type="button">Summarize</button><button class="btn btn-secondary btn-small" type="button">Draft follow-up</button><button class="btn btn-remove btn-small" type="button">Open</button></div>
+          </div>
+          <div class="attention attention-quiet mk-new">
+            <span class="attention-flag">No recording for "Intro call"</span>
+            <p class="attention-copy">Oct 9, 11:00 AM · was it a no-show?</p>
+            <div class="attention-actions"><button class="btn btn-secondary btn-small" type="button">No-show</button><button class="btn btn-remove btn-small" type="button">It happened</button></div>
+          </div>
+        </div>
+        <div class="block" style="margin-top:18px"><span class="block-label">LinkedIn Follow-ups</span><p class="lks-note">(unchanged)</p></div>
+      </div>
+    </section>
+    <section class="panel ai-panel mk-hide" data-s="home">
+      <div class="assistant-heading"><div class="assistant-title-row"><h1>Ask LyteKeepr</h1><span class="availability"><span class="availability-dot"></span>Assistant online</span><button class="clear-chat-btn" type="button">Clear chat</button></div><p class="assistant-sub">Whenever you want more context, just ask</p></div>
+      <div class="conversation">
+        <div class="chat-message user"><div class="chat-bubble user">summarize my call with Peter and draft the follow-up</div></div>
+        <div class="chat-message"><div class="chat-bubble">Summary saved on Peter's page. Your follow-up email is ready below to edit and send.</div></div>
+      </div>
+    </section>
+
+    <!-- ===================== 7: SETTINGS (the real window, plus a Fathom section) ===================== -->
+    <section class="panel lks-panel mk-hide" data-s="settings" style="flex:1">
+      <div class="lks-head"><h1>Settings</h1><button class="btn lks-soft" type="button">Close</button></div>
+      <div class="lks-wrap">
+        <nav class="lks-nav"><button type="button">Profile</button><button type="button">Saved mappings</button><button type="button">Team</button><button type="button" class="on mk-new">Calls (Fathom)</button></nav>
+        <div class="lks-main">
+          <div class="lks-card mk-new">
+            <h2>Calls (Fathom)</h2>
+            <p>LyteKeepr picks up the transcript of every call Fathom records and puts it on the contact's page, in date order with their emails.</p>
+            <div class="lks-row"><span class="lks-badge on">Connected</span><span class="lks-note">Last call received today, 2:40 PM</span></div>
+            <div class="lks-opt"><label>Your Fathom API key</label><input type="text" value="••••••••••••••••••••3f9a"></div>
+            <div class="lks-row"><button class="btn btn-primary" type="button">Save key</button><button class="btn lks-soft" type="button">Disconnect</button></div>
+            <div class="lks-hint"><b>One-time setup:</b> in Fathom open Settings → API Access → Generate API key, copy it and paste it above. Recording itself is set in Fathom (Settings → Recording → auto-record all calls); LyteKeepr cannot switch Fathom's recording on or off.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  var btns = document.querySelectorAll('.mk-views button');
+  function show(v) {
+    btns.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-v') === v); });
+    document.querySelectorAll('[data-s]').forEach(function (s) { s.classList.toggle('mk-hide', s.getAttribute('data-s').split(' ').indexOf(v) === -1); });
+    document.querySelectorAll('[data-only]').forEach(function (e) { e.classList.toggle('mk-hide', e.getAttribute('data-only') !== v); });
+    document.querySelectorAll('[data-hide]').forEach(function (e) { e.classList.toggle('mk-hide', e.getAttribute('data-hide') === v); });
+  }
+  btns.forEach(function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-v')); }); });
+  show('contact');
+})();
+</script>
+</body>
+</html>
