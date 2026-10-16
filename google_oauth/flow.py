@@ -25,7 +25,7 @@ CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 REQUESTED_SCOPES = (GMAIL_MODIFY_SCOPE, CALENDAR_READONLY_SCOPE)
 
 
-def build_authorization_url(state: str | None = None) -> str:
+def build_authorization_url(state: str | None = None, login_hint: str | None = None) -> str:
     config = GoogleOAuthConfig.from_env().require()
     params = {
         "client_id": config.client_id,
@@ -41,6 +41,8 @@ def build_authorization_url(state: str | None = None) -> str:
     }
     if state:
         params["state"] = state      # signed by the app; the callback refuses requests without a valid one
+    if login_hint:
+        params["login_hint"] = login_hint      # Google opens with this account already chosen (no account picker)
     return f"{AUTH_ENDPOINT}?{urllib.parse.urlencode(params)}"
 
 

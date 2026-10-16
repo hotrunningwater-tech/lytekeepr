@@ -199,7 +199,7 @@ async function handleScanClick() {
 }
 
 function handleConnectGmailClick() {
-  window.location.href = '/auth/google/start';
+  window.location.href = (window.LK_PREFIX || '') + '/auth/google/start';
 }
 
 async function handleActivateAccount(accountId) {

@@ -648,6 +648,7 @@
     document.body.classList.toggle('is-team-member', u.role !== 'admin');      // team members do not see Gmail, LinkedIn or the assistant yet
     document.body.classList.toggle('no-linkedin', !(u.features && u.features.linkedin));   // LinkedIn is the first workspace's only
     if (u.account_status === 'waiting') showWaiting(u);
+    if (u.gmail_connect_now) location.href = (window.LK_PREFIX || '') + '/auth/google/start';     // once: connect the mailbox you signed in with
   }
   function showWaiting(u) {                            // a new sign-up: signed in, but nothing works until the account is approved
     if (document.getElementById('lkWaiting')) return;

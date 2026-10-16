@@ -470,9 +470,23 @@ def _app_home() -> str:
 def google_oauth_start():
     # Kicks off the flow: browser navigates here, we 302 straight to
     # Google's consent screen. All client_id/secret handling stays server-side.
+    # Only a workspace's admin connects its mailbox, and it is always the Google account they sign in with.
+    from flask import g as _g
+    from profiles.store import get_active_profile_id
+    from lk_calendar import store as lk_store
+    user = getattr(_g, "user", None) or {}
+    if user and user.get("role") != "admin":
+        return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote('Only the admin can connect Gmail for now.')}")
+    if getattr(_g, "account_status", "active") == "waiting":
+        return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote('Your account is waiting for approval.')}")
+    from profiles.store import home_profile_id
+    # In every new workspace the mailbox must be the Google account you sign in with. The first workspace keeps its older
+    # setup (it can hold more than one Gmail).
+    email = (user.get("email") or "").lower() if get_active_profile_id() != home_profile_id() else ""
+    lk_store.set_setting("gmail_autoconnect_offered", lk_store.now_local().isoformat())     # the automatic offer happens once
     try:
-        from profiles.store import get_active_profile_id
-        url = build_authorization_url(state=_oauth_state_signer().dumps({"p": "connect", "w": get_active_profile_id()}))   # which workspace to save the Gmail to
+        url = build_authorization_url(state=_oauth_state_signer().dumps({"p": "connect", "w": get_active_profile_id(), "e": email}),
+                                      login_hint=email or None)
     except GoogleOAuthError as exc:
         return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote(str(exc))}")
     return redirect(url)
@@ -507,10 +521,10 @@ def google_oauth_callback():
     if workspace not in {p["profile_id"] for p in list_profiles()}:
         return redirect(f"{_app_home()}?gmail=error&reason=unknown_workspace")
     with use_profile(workspace):
-        return _finish_gmail_connect(code)
+        return _finish_gmail_connect(code, (purpose.get("e") or "") if isinstance(purpose, dict) else "")
 
 
-def _finish_gmail_connect(code):
+def _finish_gmail_connect(code, expected_email=""):
 
     try:
         tokens = exchange_code_for_tokens(code)
@@ -521,6 +535,9 @@ def _finish_gmail_connect(code):
     account_id = profile.get("emailAddress")
     if not account_id:
         return redirect(f"{_app_home()}?gmail=error&reason=missing_account_email")
+    if expected_email and account_id.lower() != expected_email.lower():      # the mailbox must be the account you sign in with
+        clear_legacy_tokens()                                                 # the refused account's tokens are not kept
+        return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote('Connect the Gmail you sign in with: ' + expected_email)}")
 
     save_tokens(tokens, account_id=account_id)
     set_active_account_id(account_id)

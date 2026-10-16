@@ -265,6 +265,14 @@ def register(app):
         out["workspace"] = acct.get("name", "")
         out["is_super_admin"] = directory.is_super_admin(out.get("email") or "") and user.get("role") == "admin"
         out["features"] = {"linkedin": get_active_profile_id() == home_profile_id()}       # LinkedIn is the first workspace's only
+        # An approved admin with no mailbox yet is taken to Google once, with their own account chosen (see /auth/google/start).
+        try:
+            from google_oauth.store import has_refresh_token
+            out["gmail_connected"] = has_refresh_token()
+        except Exception:
+            out["gmail_connected"] = False
+        out["gmail_connect_now"] = (user.get("role") == "admin" and out["account_status"] == "active" and not out["gmail_connected"]
+                                    and not store.get_setting("gmail_autoconnect_offered"))
         return jsonify(out)
 
     @app.get("/api/team")
