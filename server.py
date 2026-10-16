@@ -2083,7 +2083,8 @@ def _gmail_daily_loop():
     time.sleep(60)
     while True:
         try:
-            _gmail_daily_tick()
+            from lk_calendar import directory
+            directory.run_in_each_workspace(_gmail_daily_tick, "daily Gmail sync")      # each workspace's own Gmail, into its own folder
         except Exception:
             logging.getLogger(__name__).exception("daily Gmail sync failed; it will try again tomorrow")
         time.sleep(600)

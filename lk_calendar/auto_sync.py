@@ -45,7 +45,8 @@ def _loop() -> None:
     time.sleep(delay)
     while True:
         try:
-            run_if_due()
+            from . import directory
+            directory.run_in_each_workspace(run_if_due, "Google Calendar sync")       # each workspace's own Google account
         except Exception:                      # a scheduler must never die
             log.exception("Google auto-sync tick crashed")
         time.sleep(tick)

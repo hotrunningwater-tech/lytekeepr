@@ -172,3 +172,27 @@ def set_status(account_id: int, status: str) -> dict:
         conn.execute("UPDATE accounts SET status = ?, approved_at = CASE WHEN ? = 'active' AND approved_at = '' THEN ? ELSE approved_at END WHERE id = ?",
                      (status, status, _now(), account_id))
         return dict(conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone())
+
+
+# ------------------------------------------------------------------ background jobs
+def active_workspaces() -> list[str]:
+    """Every workspace a background job should visit: the first workspace and every approved account (never waiting or suspended)."""
+    home = profiles.home_profile_id()
+    with _conn() as conn:
+        rows = [r["profile_id"] for r in conn.execute("SELECT profile_id FROM accounts WHERE status = 'active' ORDER BY id")]
+    known = {p["profile_id"] for p in profiles.list_profiles()}
+    return [home] + [p for p in rows if p != home and p in known]
+
+
+def run_in_each_workspace(job, label: str) -> dict:
+    """Run job() once inside each approved workspace, one after the other. A failure in one workspace is logged and never stops the rest."""
+    import logging
+    results = {}
+    for profile_id in active_workspaces():
+        try:
+            with profiles.use_profile(profile_id):
+                results[profile_id] = job()
+        except Exception:
+            logging.getLogger(__name__).exception("%s failed in workspace %s", label, profile_id)
+            results[profile_id] = "failed"
+    return results

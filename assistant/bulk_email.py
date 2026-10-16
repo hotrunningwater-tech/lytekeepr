@@ -309,8 +309,17 @@ def start_send(batch_id: str, pause: int | None = None) -> dict:
                "results": [{"person_id": r["person_id"], "name": r["name"], "email": r["email"], "status": "waiting", "message": ""} for r in todo]}
         _save(_job_path(), job)
         clear_pending()
-        threading.Thread(target=_run, args=(job, p, todo, gap), name="bulk-email-send", daemon=True).start()
+        from profiles.store import get_active_profile_id
+        threading.Thread(target=_run_in, args=(get_active_profile_id(), job, p, todo, gap), name="bulk-email-send", daemon=True).start()
         return {"status": "started", "total": len(todo), "pause": gap}
+
+
+def _run_in(profile_id: str, *args) -> None:
+    """A new thread does not know which workspace it belongs to: it works inside the workspace that started the batch
+    (its Gmail, its contacts, its job file)."""
+    from profiles.store import use_profile
+    with use_profile(profile_id):
+        _run(*args)
 
 
 def _run(job: dict, p: dict, todo: list[dict], gap: int) -> None:
