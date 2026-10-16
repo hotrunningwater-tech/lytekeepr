@@ -7,61 +7,304 @@
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
 <link rel="stylesheet" href="styles.css">
 <style>
-  body { padding: 24px; }
-  .sa { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-  .sa-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: rgba(255,255,255,.7); border-radius: 18px; padding: 16px 22px; }
-  .sa-top h1 { margin: 0; font-size: 22px; } .sa-top small { color: var(--coral); font-family: var(--font-heading); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 11px; display: block; }
-  .card { background: rgba(255,255,255,.7); border-radius: 18px; padding: 20px 22px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  body { margin: 0; }
+  .sa { display: flex; gap: 16px; min-height: 100vh; padding: 16px; box-sizing: border-box; }
+  .sa-nav { width: 230px; flex: none; background: var(--ink); color: var(--surface); border-radius: 22px; padding: 22px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .sa-brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 14px; font-family: var(--font-heading); font-weight: 700; font-size: 17px; }
+  .sa-brand i { width: 16px; height: 16px; border-radius: 50%; background: var(--coral); display: inline-block; }
+  .sa-brand small { display: block; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--coral); margin-top: 2px; }
+  .sa-nav button { text-align: left; border: none; background: transparent; color: rgba(255,255,255,.7); padding: 11px 14px; border-radius: 12px; font-family: var(--font-heading); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .sa-nav button:hover { background: rgba(255,255,255,.08); color: #fff; }
+  .sa-nav button.on { background: rgba(255,255,255,.14); color: #fff; }
+  .sa-nav .count { background: var(--coral); color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 8px; }
+  .sa-nav .me { margin-top: auto; padding: 12px 10px 4px; font-size: 12px; color: rgba(255,255,255,.65); line-height: 1.5; border-top: 1px solid rgba(255,255,255,.12); }
+  .sa-nav .me b { color: #fff; display: block; word-break: break-all; }
+  .sa-nav .me a { color: #fff; }
+  .sa-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .sa-top { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; background: rgba(255,255,255,.7); border-radius: 18px; padding: 14px 22px; }
+  .sa-top h1 { margin: 0; font-size: 22px; }
+  .pill { font-family: var(--font-heading); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 4px 10px; background: rgba(127,168,184,.2); color: var(--ink); white-space: nowrap; }
+  .pill.ok { background: #d8eee2; color: #1f6b46; } .pill.warn { background: #f6e6c9; color: #8a5a10; } .pill.bad { background: #f7d9d2; color: #a3412b; } .pill.off { background: #e3e8ea; color: #7b8b92; } .pill.coral { background: var(--coral); color: #fff; }
+  .card { background: rgba(255,255,255,.7); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+  .card h2 { font-family: var(--font-heading); font-size: 16px; margin: 0; }
+  .card p, .note { margin: 0; font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .kpi { background: #fff; border-radius: 16px; padding: 16px 18px; } .kpi b { display: block; font-family: var(--font-heading); font-size: 28px; } .kpi span { font-size: 12px; color: var(--ink-soft); } .kpi em { font-style: normal; font-size: 11.5px; color: #1f6b46; display: block; margin-top: 4px; }
+  .kpi.bad b { color: #a3412b; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th { text-align: left; font-family: var(--font-heading); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); padding: 8px 10px; }
-  td { padding: 12px 10px; border-top: 1px solid rgba(41,67,78,.08); vertical-align: middle; } td small { display: block; color: var(--ink-soft); font-size: 12px; }
-  .pill { font-family: var(--font-heading); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
-  .pill.waiting { background: #f6e6c9; color: #8a5a10; } .pill.active { background: #d8eee2; color: #1f6b46; } .pill.suspended { background: #f7d9d2; color: #a3412b; } .pill.waived { background: #e3e8ea; color: #7b8b92; }
-  .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-  .note { font-size: 12.5px; color: var(--ink-soft); }
-  @media (max-width: 700px) { body { padding: 12px; } th:nth-child(3), td:nth-child(3), th:nth-child(4), td:nth-child(4) { display: none; } }
+  td { padding: 11px 10px; border-top: 1px solid rgba(41,67,78,.08); vertical-align: middle; }
+  tr.click { cursor: pointer; } tr.click:hover td { background: rgba(230,237,240,.5); }
+  td b { display: block; } td small { color: var(--ink-soft); font-size: 12px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn-soft { background: rgba(230,237,240,.9); color: var(--ink); }
+  .search { border: none; background: rgba(230,237,240,.9); border-radius: 10px; padding: 9px 13px; font-family: var(--font-body); font-size: 13px; color: var(--ink); min-width: 240px; }
+  .hide { display: none !important; }
+  .cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; } @media (max-width: 1100px) { .cols { grid-template-columns: 1fr; } }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .toggle-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; background: #fff; border-radius: 14px; padding: 13px 16px; }
+  .toggle-row b { display: block; font-size: 13.5px; } .toggle-row span { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
+  .sw { width: 38px; height: 22px; border-radius: 999px; background: #c5d0d5; position: relative; flex: none; cursor: pointer; border: none; padding: 0; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: .15s; }
+  .sw.on { background: var(--teal); } .sw.on::after { left: 19px; }
+  .field label { display: block; font-family: var(--font-heading); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 5px; }
+  .field input, .field select, .field textarea { width: 100%; box-sizing: border-box; border: none; background: rgba(230,237,240,.9); border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); font-size: 13.5px; color: var(--ink); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .svc { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; border-radius: 12px; padding: 11px 14px; font-size: 13px; }
+  .svc small { color: var(--ink-soft); display: block; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; } .dot.ok { background: #3f9d73; } .dot.warn { background: #e0a030; } .dot.bad { background: #d4553a; }
+  .err { display: grid; grid-template-columns: 120px 1fr auto; gap: 12px; align-items: center; background: #fff; border-radius: 12px; padding: 11px 14px; font-size: 13px; }
+  .err small { color: var(--ink-soft); display: block; font-size: 12px; } .err code { font-size: 12px; background: rgba(230,237,240,.9); border-radius: 6px; padding: 1px 6px; }
+  .spark { display: flex; align-items: flex-end; gap: 4px; height: 70px; } .spark i { flex: 1; background: var(--teal); border-radius: 4px 4px 0 0; opacity: .85; min-height: 3px; }
+  .privacy { background: rgba(127,168,184,.15); border-radius: 12px; padding: 11px 14px; font-size: 12.5px; color: var(--ink); line-height: 1.5; }
+  .back { border: none; background: transparent; font-family: var(--font-heading); font-weight: 600; font-size: 13px; color: var(--ink-soft); cursor: pointer; padding: 0; }
+  .link { border: none; background: transparent; font-family: var(--font-heading); font-size: 12px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+  .link:hover { color: var(--ink); }
+  .empty { color: var(--ink-soft); font-size: 13px; padding: 8px 0; }
+  @media (max-width: 800px) { .sa { flex-direction: column; padding: 10px; } .sa-nav { width: auto; flex-direction: row; flex-wrap: wrap; } .sa-nav .me { display: none; } .err { grid-template-columns: 1fr; } .grid2 { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <div class="sa">
-  <div class="sa-top"><div><small>Owner console</small><h1>Accounts</h1></div><a class="btn btn-secondary" href="./">Back to LyteKeepr</a></div>
-  <div class="card">
-    <p class="note" id="note">Loading…</p>
-    <table id="tbl" hidden><thead><tr><th>Account</th><th>Status</th><th>People</th><th>Signed up</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+  <nav class="sa-nav" id="nav">
+    <div class="sa-brand"><i></i><div>LyteKeepr<small>Owner console</small></div></div>
+    <button class="on" data-v="overview" type="button">Overview</button>
+    <button data-v="accounts" type="button">Accounts <span class="count hide" id="navWaiting"></span></button>
+    <button data-v="billing" type="button">Billing &amp; pricing</button>
+    <button data-v="health" type="button">Health &amp; errors <span class="count hide" id="navErrors"></span></button>
+    <button data-v="activity" type="button">Activity log</button>
+    <div class="me"><b id="meEmail"></b>Owner · <a href="./">back to my LyteKeepr</a></div>
+  </nav>
+
+  <div class="sa-main">
+    <section data-s="overview" class="sa-main">
+      <div class="sa-top"><h1>Overview</h1><span class="note">Only counts are shown here, never anyone's contacts or emails.</span></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="cols">
+        <div class="card"><h2>Sign-ups, last 14 days</h2><div class="spark" id="spark"></div><p>Each bar is one day. Taller = more new accounts.</p></div>
+        <div class="card"><h2>Needs your attention</h2><div id="attention" class="stack" style="gap:8px"></div></div>
+      </div>
+    </section>
+
+    <section data-s="accounts" class="sa-main hide">
+      <div class="sa-top"><h1>Accounts</h1><input class="search" id="search" placeholder="Search account or email"></div>
+      <div class="card">
+        <p>One account = one company: an admin and the team they add. Click a row to open it.</p>
+        <table><thead><tr><th>Account</th><th>People</th><th>Contacts</th><th>Billing</th><th>Gmail</th><th>Last active</th><th>Status</th><th></th></tr></thead>
+          <tbody id="accRows"></tbody></table>
+      </div>
+    </section>
+
+    <section data-s="detail" class="sa-main hide">
+      <div class="sa-top"><div><button class="back" type="button" id="backBtn">← All accounts</button><h1 id="dName"></h1></div><div class="row" id="dPills"></div></div>
+      <div class="cols">
+        <div class="stack">
+          <div class="card"><h2>Billing for this account</h2>
+            <div class="toggle-row"><div><b>Charge this account</b><span id="chargeNote">Off = free.</span></div><button class="sw" id="swCharge" type="button" aria-label="Charge this account"></button></div>
+            <div class="toggle-row"><div><b>Require a card on file, even while free</b><span>Takes effect once payments (Stripe) are set up.</span></div><button class="sw" id="swCard" type="button" aria-label="Require a card"></button></div>
+            <div class="grid2"><div class="field"><label>Plan</label><select id="dPlan"><option>Team</option><option>Solo</option><option>Custom</option></select></div>
+              <div class="field"><label>Price per month</label><input id="dPrice" placeholder="e.g. $29"></div></div>
+            <div class="row"><button class="btn btn-soft" type="button" id="savePlan">Save plan and price</button><span class="note" id="planMsg"></span></div>
+            <p class="note">Nothing is charged until payments are connected. Card numbers will never be stored by LyteKeepr.</p>
+          </div>
+          <div class="card"><h2>People in this account</h2>
+            <table><thead><tr><th>Email</th><th>Role</th><th>Last sign-in</th><th></th></tr></thead><tbody id="dPeople"></tbody></table>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="card"><h2>Usage</h2><table><tbody id="dUsage"></tbody></table>
+            <div class="privacy">Only these counts are shown. You cannot see their contacts, emails or notes.</div></div>
+          <div class="card"><h2>Account actions</h2><div class="row" id="dActions"></div>
+            <p class="note">Suspending blocks sign-in for everyone in the account. Their data is kept; nothing is deleted.</p>
+            <div class="field"><label>Private notes (only you see these)</label><textarea rows="4" id="dNotes"></textarea></div>
+            <div class="row"><button class="btn btn-soft" type="button" id="saveNotes">Save notes</button><span class="note" id="notesMsg"></span></div>
+          </div>
+          <div class="card"><h2>Recent changes for this account</h2><div id="dActivity" class="note"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="billing" class="sa-main hide">
+      <div class="sa-top"><h1>Billing &amp; pricing</h1><span class="pill warn">Payments: not connected yet</span></div>
+      <div class="cols">
+        <div class="card"><h2>Launch settings (every account)</h2>
+          <div class="toggle-row"><div><b>Waive all charges</b><span>While on, nobody is charged, whatever each account's own switch says.</span></div><button class="sw" data-set="waive_all" type="button" aria-label="Waive all charges"></button></div>
+          <div class="toggle-row"><div><b>Ask every new account for a card, even while free</b><span>Takes effect once payments are connected.</span></div><button class="sw" data-set="card_for_new" type="button" aria-label="Ask new accounts for a card"></button></div>
+          <div class="toggle-row"><div><b>Free trial for new accounts (days)</b><span>Only matters once charging is on.</span></div><div class="field" style="width:90px"><input id="trialDays" inputmode="numeric"></div></div>
+        </div>
+        <div class="card"><h2>Set up payments</h2>
+          <p>Payments will go through Stripe, so card numbers never touch LyteKeepr. This is the last step of the plan: until then everything stays free and no card is collected.</p>
+          <div class="privacy">Nothing to do here yet. When you are ready to charge, I connect Stripe with you.</div>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="health" class="sa-main hide">
+      <div class="sa-top"><h1>Health &amp; errors</h1><button class="btn btn-soft" type="button" id="refreshHealth">Check again</button></div>
+      <div class="cols">
+        <div class="card"><h2>Services</h2><div id="services" class="stack" style="gap:8px"></div></div>
+        <div class="card"><h2>Alerts</h2>
+          <div class="toggle-row"><div><b>Email me when something breaks</b><span>At most one email per kind of problem per day, ten a day in total.</span></div><button class="sw" data-set="alert_errors" type="button" aria-label="Email me about errors"></button></div>
+        </div>
+      </div>
+      <div class="card"><h2>Open errors</h2><div id="errors" class="stack" style="gap:8px"></div>
+        <p class="note">Each error shows which account and what kind of problem. Email addresses are removed; message contents are never stored.</p></div>
+    </section>
+
+    <section data-s="activity" class="sa-main hide">
+      <div class="sa-top"><h1>Activity log</h1><span class="note">Everything changed in this console, and new sign-ups</span></div>
+      <div class="card"><table><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody id="actRows"></tbody></table></div>
+    </section>
   </div>
 </div>
+
 <script>
 (function () {
-  var rows = document.getElementById('rows'), note = document.getElementById('note'), tbl = document.getElementById('tbl');
+  var $ = function (id) { return document.getElementById(id); };
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-  function post(id, status) {
-    return fetch('api/superadmin/accounts/' + id + '/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: status }) })
-      .then(function (r) { return r.json(); }).then(load);
+  function api(method, url, body) {
+    return fetch('api/superadmin/' + url, { method: method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Something went wrong'); return d; }); });
   }
-  function load() {
-    fetch('api/superadmin/accounts').then(function (r) { return r.json(); }).then(function (data) {
-      if (!data.accounts) { note.textContent = data.error || 'Could not load.'; return; }
-      var waiting = data.accounts.filter(function (a) { return a.status === 'waiting'; }).length;
-      note.textContent = data.accounts.length + ' accounts' + (waiting ? ', ' + waiting + ' waiting for approval' : '') + '. Charges are waived for everyone.';
-      rows.replaceChildren();
-      data.accounts.forEach(function (a) {
-        var tr = el('tr');
-        var who = el('td'); who.appendChild(el('b', null, a.name || a.owner_email)); who.appendChild(el('small', null, a.owner_email));
-        var st = el('td'); st.appendChild(el('span', 'pill ' + a.status, a.status === 'waiting' ? 'Waiting' : a.status === 'active' ? 'Active' : 'Suspended'));
-        st.appendChild(document.createTextNode(' ')); st.appendChild(el('span', 'pill waived', a.billing === 'waived' ? 'Waived' : a.billing));
-        var acts = el('td'); var box = el('div', 'acts');
-        function btn(label, cls, status) { var b = el('button', 'btn ' + cls, label); b.type = 'button'; b.onclick = function () { b.disabled = true; post(a.id, status); }; box.appendChild(b); }
-        if (a.status === 'waiting') btn('Approve', 'btn-primary', 'active');
-        if (a.status === 'active') btn('Suspend', 'btn-secondary', 'suspended');
-        if (a.status === 'suspended') btn('Reactivate', 'btn-primary', 'active');
-        acts.appendChild(box);
-        tr.append(who, st, el('td', null, String(a.people)), el('td', null, (a.created_at || '').replace('T', ' ').slice(0, 16)), acts);
-        rows.appendChild(tr);
+  function when(iso) { if (!iso) return 'Never'; var d = new Date(iso.length === 10 ? iso + 'T00:00' : iso); return isNaN(d) ? iso : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  function statusPill(s) { return el('span', 'pill ' + (s === 'active' ? 'ok' : s === 'waiting' ? 'warn' : 'bad'), s === 'active' ? 'Active' : s === 'waiting' ? 'Waiting' : 'Suspended'); }
+  function billPill(b) { return el('span', 'pill ' + (b === 'charged' ? 'ok' : 'off'), b === 'charged' ? 'Charged' : 'Waived'); }
+
+  var current = 'overview', openAccount = null, accounts = [], settings = {};
+  function show(view, navKey) {
+    current = view;
+    document.querySelectorAll('section[data-s]').forEach(function (s) { s.classList.toggle('hide', s.getAttribute('data-s') !== view); });
+    document.querySelectorAll('#nav button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-v') === (navKey || view)); });
+    ({ overview: loadOverview, accounts: loadAccounts, billing: loadSettings, health: loadHealth, activity: loadActivity })[view] && ({ overview: loadOverview, accounts: loadAccounts, billing: loadSettings, health: loadHealth, activity: loadActivity })[view]();
+  }
+  document.querySelectorAll('#nav button').forEach(function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-v')); }); });
+
+  function loadOverview() {
+    api('GET', 'overview').then(function (o) {
+      $('navWaiting').textContent = o.waiting; $('navWaiting').classList.toggle('hide', !o.waiting);
+      $('navErrors').textContent = o.open_errors; $('navErrors').classList.toggle('hide', !o.open_errors);
+      var k = $('kpis'); k.replaceChildren();
+      [[o.accounts, 'Accounts', o.waiting ? o.waiting + ' waiting for approval' : 'none waiting'],
+       [o.people, 'People (admins + team)', o.active_7d + ' accounts active in the last 7 days'],
+       [o.charged, 'Paying', o.waive_all ? 'charges waived for everyone' : 'charging is on'],
+       [o.suspended, 'Suspended', ''],
+       [o.open_errors, 'Open errors', o.open_errors ? 'see Health & errors' : 'all clear']].forEach(function (x, i) {
+        var d = el('div', 'kpi' + (i === 4 && x[0] ? ' bad' : '')); d.append(el('b', null, String(x[0])), el('span', null, x[1])); if (x[2]) d.appendChild(el('em', null, x[2])); k.appendChild(d);
       });
-      tbl.hidden = false;
-    }).catch(function () { note.textContent = 'Could not load.'; });
+      var max = Math.max.apply(null, o.signups.map(function (s) { return s.count; }).concat([1])), sp = $('spark'); sp.replaceChildren();
+      o.signups.forEach(function (s) { var i = el('i'); i.style.height = Math.round(100 * s.count / max) + '%'; i.title = s.day + ': ' + s.count; sp.appendChild(i); });
+      var at = $('attention'); at.replaceChildren();
+      if (!o.attention.length) at.appendChild(el('div', 'empty', 'Nothing right now.'));
+      o.attention.forEach(function (a) {
+        var row = el('div', 'svc'); var t = el('span'); t.append(el('span', 'dot ' + (a.kind === 'error' ? 'bad' : 'warn')), document.createTextNode(a.text)); row.appendChild(t);
+        if (a.account_id) { var b = el('button', 'link', 'Open'); b.type = 'button'; b.onclick = function () { openDetail(a.account_id); }; row.appendChild(b); }
+        at.appendChild(row);
+      });
+    }).catch(function (e) { $('kpis').textContent = e.message; });
   }
-  load();
+
+  function loadAccounts() {
+    api('GET', 'accounts').then(function (r) { accounts = r.accounts; drawAccounts(); }).catch(function (e) { $('accRows').textContent = e.message; });
+  }
+  function drawAccounts() {
+    var q = $('search').value.trim().toLowerCase(), rows = $('accRows'); rows.replaceChildren();
+    accounts.filter(function (a) { return !q || (a.name + ' ' + a.owner_email).toLowerCase().indexOf(q) !== -1; }).forEach(function (a) {
+      var tr = el('tr', 'click'); tr.onclick = function (e) { if (e.target.tagName !== 'BUTTON') openDetail(a.id); };
+      var who = el('td'); who.append(el('b', null, a.name || a.owner_email), el('small', null, a.owner_email + ' · admin'));
+      var bill = el('td'); bill.appendChild(billPill(a.billing_effective));
+      var st = el('td'); st.appendChild(statusPill(a.status));
+      var act = el('td'); if (a.status === 'waiting') { var b = el('button', 'btn btn-primary', 'Approve'); b.type = 'button'; b.onclick = function () { setStatus(a.id, 'active'); }; act.appendChild(b); }
+      tr.append(who, el('td', null, String(a.team)), el('td', null, String(a.contacts)), bill, el('td', null, a.gmail ? 'Connected' : '—'), el('td', null, when(a.last_active)), st, act);
+      rows.appendChild(tr);
+    });
+    if (!rows.children.length) { var tr = el('tr'); var td = el('td', 'empty', 'No accounts match.'); td.colSpan = 8; tr.appendChild(td); rows.appendChild(tr); }
+  }
+  $('search').addEventListener('input', drawAccounts);
+  function setStatus(id, status) {
+    return api('POST', 'accounts/' + id + '/status', { status: status }).then(function () { if (current === 'detail') openDetail(id); else loadAccounts(); loadOverview(); }).catch(function (e) { alert(e.message); });
+  }
+
+  function openDetail(id) {
+    openAccount = id; show('detail', 'accounts');
+    api('GET', 'accounts/' + id).then(function (r) {
+      var a = r.account, u = r.usage;
+      $('dName').textContent = a.name || a.owner_email;
+      $('dPills').replaceChildren(statusPill(a.status), billPill(a.billing_effective));
+      $('swCharge').classList.toggle('on', !!a.charge); $('swCard').classList.toggle('on', !!a.card_required);
+      $('chargeNote').textContent = settings.waive_all === '1' ? 'Off = free. Right now "Waive all charges" is on, so nobody is charged anyway.' : 'Off = free.';
+      $('dPlan').value = a.plan || 'Team'; $('dPrice').value = a.monthly_price || '';
+      var pp = $('dPeople'); pp.replaceChildren();
+      r.people.forEach(function (p) {
+        var tr = el('tr'); var role = el('td'); role.appendChild(el('span', 'pill ' + (p.role === 'admin' ? 'coral' : ''), p.role === 'admin' ? 'Admin' : 'Team member'));
+        var act = el('td');
+        if (p.role !== 'admin') { var b = el('button', 'link', p.active ? 'Turn off' : 'Turn on'); b.type = 'button'; b.onclick = function () { api('POST', 'accounts/' + id + '/people/' + p.id + '/active', { active: !p.active }).then(function () { openDetail(id); }).catch(function (e) { alert(e.message); }); }; act.appendChild(b); }
+        tr.append(el('td', null, p.email + (p.active ? '' : ' (off)')), role, el('td', null, when(p.last_login_at)), act); pp.appendChild(tr);
+      });
+      var us = $('dUsage'); us.replaceChildren();
+      [['Contacts', u.contacts], ['Funnels', u.funnels], ['Emails sent, last 30 days', u.emails_30d], ['People', u.team], ['Gmail', u.gmail ? 'Connected' : 'Not connected'],
+       ['Last daily Gmail sync', u.last_gmail_sync ? when(u.last_gmail_sync) : '—'], ['Google', u.google_reconnect ? 'Needs reconnecting' : 'OK']].forEach(function (x) {
+        var tr = el('tr'); var v = el('td'); v.style.textAlign = 'right'; v.appendChild(el('b', null, String(x[1]))); tr.append(el('td', null, x[0]), v); us.appendChild(tr);
+      });
+      var ac = $('dActions'); ac.replaceChildren();
+      function btn(label, cls, status) { var b = el('button', 'btn ' + cls, label); b.type = 'button'; b.onclick = function () { b.disabled = true; setStatus(id, status); }; ac.appendChild(b); }
+      if (a.status === 'waiting') btn('Approve', 'btn-primary', 'active');
+      if (a.status === 'active') btn('Suspend account', 'btn-soft', 'suspended');
+      if (a.status === 'suspended') btn('Reactivate', 'btn-primary', 'active');
+      $('dNotes').value = a.notes || ''; $('notesMsg').textContent = ''; $('planMsg').textContent = '';
+      var da = $('dActivity'); da.replaceChildren();
+      if (!r.activity.length) da.textContent = 'No changes yet.';
+      r.activity.forEach(function (x) { da.appendChild(el('div', null, when(x.at) + ' · ' + x.actor + ' · ' + x.action)); });
+    }).catch(function (e) { $('dName').textContent = e.message; });
+  }
+  $('backBtn').addEventListener('click', function () { show('accounts'); });
+  $('swCharge').addEventListener('click', function () { api('POST', 'accounts/' + openAccount + '/billing', { charge: !$('swCharge').classList.contains('on') }).then(function () { openDetail(openAccount); }).catch(function (e) { alert(e.message); }); });
+  $('swCard').addEventListener('click', function () { api('POST', 'accounts/' + openAccount + '/billing', { card_required: !$('swCard').classList.contains('on') }).then(function () { openDetail(openAccount); }).catch(function (e) { alert(e.message); }); });
+  $('savePlan').addEventListener('click', function () { api('POST', 'accounts/' + openAccount + '/billing', { plan: $('dPlan').value, monthly_price: $('dPrice').value }).then(function () { $('planMsg').textContent = 'Saved.'; }).catch(function (e) { $('planMsg').textContent = e.message; }); });
+  $('saveNotes').addEventListener('click', function () { api('POST', 'accounts/' + openAccount + '/notes', { notes: $('dNotes').value }).then(function () { $('notesMsg').textContent = 'Saved.'; }).catch(function (e) { $('notesMsg').textContent = e.message; }); });
+
+  function loadSettings() {
+    return api('GET', 'settings').then(function (r) {
+      settings = r.settings;
+      document.querySelectorAll('[data-set]').forEach(function (b) { b.classList.toggle('on', settings[b.getAttribute('data-set')] === '1'); });
+      $('trialDays').value = settings.trial_days;
+    });
+  }
+  document.querySelectorAll('[data-set]').forEach(function (b) {
+    b.addEventListener('click', function () { var body = {}; body[b.getAttribute('data-set')] = b.classList.contains('on') ? '0' : '1'; api('PUT', 'settings', body).then(loadSettings).catch(function (e) { alert(e.message); }); });
+  });
+  $('trialDays').addEventListener('change', function () { var v = parseInt($('trialDays').value, 10); if (isNaN(v) || v < 0) return; api('PUT', 'settings', { trial_days: String(v) }).then(loadSettings); });
+
+  function loadHealth() {
+    loadSettings();
+    api('GET', 'health').then(function (h) {
+      var sv = $('services'); sv.replaceChildren();
+      h.services.forEach(function (s) {
+        var row = el('div', 'svc'); var t = el('span'); t.append(el('span', 'dot ' + s.state), document.createTextNode(s.name)); t.appendChild(el('small', null, s.detail));
+        row.append(t, el('span', 'pill ' + s.state, s.state === 'ok' ? 'OK' : s.state === 'warn' ? 'Check' : 'Problem')); sv.appendChild(row);
+      });
+      var er = $('errors'); er.replaceChildren();
+      if (!h.errors.length) er.appendChild(el('div', 'empty', 'No open errors.'));
+      h.errors.forEach(function (x) {
+        var row = el('div', 'err'); row.appendChild(el('span', 'pill bad', when(x.last_at)));
+        var d = el('div'); d.appendChild(document.createTextNode(x.kind + (x.count > 1 ? ' (' + x.count + ' times)' : '')));
+        var sm = el('small', null, (x.account_name || x.owner_email || 'whole app') + ' · '); sm.appendChild(el('code', null, x.message)); d.appendChild(sm); row.appendChild(d);
+        var b = el('button', 'btn btn-soft', 'Mark handled'); b.type = 'button'; b.onclick = function () { api('POST', 'errors/' + x.id + '/handled').then(loadHealth); }; row.appendChild(b);
+        er.appendChild(row);
+      });
+    }).catch(function (e) { $('services').textContent = e.message; });
+  }
+  $('refreshHealth').addEventListener('click', loadHealth);
+
+  function loadActivity() {
+    api('GET', 'activity').then(function (r) {
+      var rows = $('actRows'); rows.replaceChildren();
+      if (!r.activity.length) { var tr = el('tr'); var td = el('td', 'empty', 'Nothing yet.'); td.colSpan = 3; tr.appendChild(td); rows.appendChild(tr); }
+      r.activity.forEach(function (x) { var tr = el('tr'); tr.append(el('td', null, when(x.at)), el('td', null, x.actor), el('td', null, x.action)); rows.appendChild(tr); });
+    });
+  }
+
+  fetch('api/me').then(function (r) { return r.json(); }).then(function (m) { $('meEmail').textContent = m.email || ''; });
+  loadSettings().then(function () { show('overview'); });
 })();
 </script>
 </body>

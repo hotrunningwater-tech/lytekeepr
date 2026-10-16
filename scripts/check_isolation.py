@@ -32,7 +32,7 @@ TMP = Path(tempfile.mkdtemp(prefix="lk-isolation-"))
 os.environ.update({
     "LK_PROFILES_ROOT": str(TMP / "profiles"), "LK_CALENDAR_DB": str(TMP / "no-legacy-calendar.db"),
     "LYTEKEEPR_PASSWORD": "isolation-test", "LYTEKEEPR_SECRET_KEY": "isolation-test",
-    "LYTEKEEPR_ADMIN_EMAIL": "owner-a@example.com", "LYTEKEEPR_SUPER_ADMINS": "owner-a@example.com",
+    "LYTEKEEPR_ADMIN_EMAIL": "owner-a@example.com", "LYTEKEEPR_SUPER_ADMINS": "console-owner@example.com",      # neither attacker may open the owner console
     "LK_GMAIL_DAILY": "0", "LK_GOOGLE_AUTOSYNC": "0", "OPENAI_API_KEY": "", "LK_URL_PREFIX": "",
 })
 sys.path.insert(0, str(APP_DIR))
@@ -53,6 +53,8 @@ gstore.LEGACY_DIR = TMP / "legacy-google"          # never copy the real Google 
 import auth_gate  # noqa: E402
 auth_gate._notify_signup = lambda email, url: None   # never send the sign-up email
 import server  # noqa: E402
+from lk_calendar import superadmin as _console  # noqa: E402
+_console._alert = lambda *args: None                 # never email an error alert from a test
 from profiles.store import use_profile  # noqa: E402
 from lk_calendar import directory  # noqa: E402
 
@@ -202,8 +204,10 @@ def main():
     assert a_admin.post("/login", data={"password": "isolation-test"}).status_code == 302
     b_admin = client()
     google_login(b_admin, "owner-b@example.com")
-    accounts = {x["owner_email"]: x for x in a_admin.get("/api/superadmin/accounts").get_json()["accounts"]}
-    a_admin.post(f"/api/superadmin/accounts/{accounts['owner-b@example.com']['id']}/status", json={"status": "active"})
+    if a_admin.get("/api/superadmin/accounts").status_code != 403 or b_admin.get("/owner").status_code != 403:
+        problems.append("OWNER CONSOLE: an account admin who is not the owner could open it")
+    accounts = {x["owner_email"]: x for x in directory.list_accounts()}
+    directory.set_status(accounts["owner-b@example.com"]["id"], "active")           # what the owner's Approve button does
     ws_a, ws_b = accounts["owner-a@example.com"]["profile_id"], accounts["owner-b@example.com"]["profile_id"]
     ids_a = seed(a_admin, "zzleaka", "owner-a@example.com", ws_a)
     ids_b = seed(b_admin, "zzleakb", "owner-b@example.com", ws_b, padding=6)

@@ -30,6 +30,30 @@ CREATE TABLE IF NOT EXISTS members (
     created_at TEXT NOT NULL DEFAULT ''
 );
 """
+# The owner console's own records (also only here, never in a workspace): launch settings, what the owner changed, and errors.
+CONSOLE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS console_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    actor TEXT NOT NULL DEFAULT '',
+    account_id INTEGER,
+    action TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS errors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    first_at TEXT NOT NULL,
+    last_at TEXT NOT NULL,
+    account_id INTEGER,
+    kind TEXT NOT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    count INTEGER NOT NULL DEFAULT 1,
+    handled INTEGER NOT NULL DEFAULT 0
+);
+"""
+ACCOUNT_COLUMNS = {"notes": "TEXT NOT NULL DEFAULT ''", "charge": "INTEGER NOT NULL DEFAULT 0", "card_required": "INTEGER NOT NULL DEFAULT 0",
+                   "plan": "TEXT NOT NULL DEFAULT 'Team'", "monthly_price": "TEXT NOT NULL DEFAULT ''"}
+CONSOLE_DEFAULTS = {"waive_all": "1", "card_for_new": "0", "trial_days": "14", "alert_errors": "1"}
 STATUSES = ("waiting", "active", "suspended")
 MAX_SIGNUPS_PER_HOUR = 20                 # a brake against someone creating workspaces in bulk
 _lock = threading.Lock()
@@ -48,7 +72,11 @@ def _conn():
     conn = sqlite3.connect(_path(), timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
-    conn.executescript(SCHEMA)
+    conn.executescript(SCHEMA + CONSOLE_SCHEMA)
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(accounts)")}
+    for column, ddl in ACCOUNT_COLUMNS.items():
+        if column not in have:
+            conn.execute(f"ALTER TABLE accounts ADD COLUMN {column} {ddl}")
     return conn
 
 
@@ -149,6 +177,7 @@ def sign_up(email: str, name: str = "") -> dict:
                          (profile["profile_id"], label, email, _now()))
             acct = conn.execute("SELECT * FROM accounts WHERE profile_id = ?", (profile["profile_id"],)).fetchone()
             conn.execute("INSERT INTO members (email, account_id, role, created_at) VALUES (?, ?, 'owner', ?)", (email, acct["id"], _now()))
+            conn.execute("INSERT INTO activity (at, actor, account_id, action) VALUES (?, 'System', ?, ?)", (_now(), acct["id"], f"New sign-up: {email}"))
             return dict(acct)
 
 
@@ -196,3 +225,76 @@ def run_in_each_workspace(job, label: str) -> dict:
             logging.getLogger(__name__).exception("%s failed in workspace %s", label, profile_id)
             results[profile_id] = "failed"
     return results
+
+
+# ------------------------------------------------------------------ owner console records
+def log_activity(actor: str, action: str, account_id: int | None = None) -> None:
+    with _conn() as conn:
+        conn.execute("INSERT INTO activity (at, actor, account_id, action) VALUES (?, ?, ?, ?)", (_now(), actor, account_id, action[:300]))
+
+
+def list_activity(limit: int = 200) -> list[dict]:
+    with _conn() as conn:
+        return [dict(r) for r in conn.execute("""SELECT a.*, ac.name AS account_name, ac.owner_email FROM activity a
+                                                  LEFT JOIN accounts ac ON ac.id = a.account_id ORDER BY a.id DESC LIMIT ?""", (limit,))]
+
+
+def console_settings() -> dict:
+    with _conn() as conn:
+        saved = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM console_settings")}
+    return {**CONSOLE_DEFAULTS, **saved}
+
+
+def set_console_setting(key: str, value: str) -> dict:
+    if key not in CONSOLE_DEFAULTS:
+        raise DirectoryError("unknown setting")
+    with _conn() as conn:
+        conn.execute("INSERT OR REPLACE INTO console_settings (key, value) VALUES (?, ?)", (key, str(value)[:20]))
+    return console_settings()
+
+
+def get_account(account_id: int) -> dict | None:
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        if not row:
+            return None
+        members = [dict(r) for r in conn.execute("SELECT email, role, created_at FROM members WHERE account_id = ? ORDER BY role = 'owner' DESC, email", (account_id,))]
+    return {**dict(row), "members": members}
+
+
+def update_account(account_id: int, **fields) -> dict:
+    allowed = {k: v for k, v in fields.items() if k in ("notes", "charge", "card_required", "plan", "monthly_price", "name")}
+    if not allowed:
+        raise DirectoryError("nothing to change")
+    with _lock, _conn() as conn:
+        if not conn.execute("SELECT 1 FROM accounts WHERE id = ?", (account_id,)).fetchone():
+            raise DirectoryError("no such account")
+        conn.execute(f"UPDATE accounts SET {', '.join(k + ' = ?' for k in allowed)} WHERE id = ?", (*allowed.values(), account_id))
+        return dict(conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone())
+
+
+def record_error(kind: str, message: str, profile_id: str | None) -> tuple[int, bool]:
+    """Keep one row per kind of problem per account (repeats are counted). Returns (error id, True when this kind is new today)."""
+    account = account_for_profile(profile_id) if profile_id else None
+    account_id = account["id"] if account else None
+    today = _now()[:10]
+    with _conn() as conn:
+        row = conn.execute("SELECT id, last_at, handled FROM errors WHERE kind = ? AND message = ? AND IFNULL(account_id, 0) = IFNULL(?, 0)",
+                           (kind, message, account_id)).fetchone()
+        if row:
+            conn.execute("UPDATE errors SET count = count + 1, last_at = ?, handled = 0 WHERE id = ?", (_now(), row["id"]))
+            return row["id"], row["last_at"][:10] != today or bool(row["handled"])
+        cur = conn.execute("INSERT INTO errors (first_at, last_at, account_id, kind, message) VALUES (?, ?, ?, ?, ?)", (_now(), _now(), account_id, kind, message))
+        return cur.lastrowid, True
+
+
+def list_errors(include_handled: bool = False, limit: int = 100) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(f"""SELECT e.*, a.name AS account_name, a.owner_email FROM errors e LEFT JOIN accounts a ON a.id = e.account_id
+                                {'' if include_handled else 'WHERE e.handled = 0'} ORDER BY e.last_at DESC LIMIT ?""", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_error_handled(error_id: int) -> None:
+    with _conn() as conn:
+        conn.execute("UPDATE errors SET handled = 1 WHERE id = ?", (error_id,))
