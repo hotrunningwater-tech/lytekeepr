@@ -41,6 +41,16 @@
   function minutes(hhmm) { var p = hhmm.split(':'); return +p[0] * 60 + +p[1]; }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function hhmm(min) { return pad(Math.floor(min / 60) % 24) + ':' + pad(min % 60); }
+  function timeText(hhmmStr) { var m = minutes(hhmmStr), h = Math.floor(m / 60); return ((h + 11) % 12 + 1) + ':' + pad(m % 60) + ' ' + (h >= 12 ? 'PM' : 'AM'); }
+  function parseTime(text) {   // "2pm", "2:30 pm", "14:30", "930" -> "14:30"; null if it isn't a time
+    var t = String(text || '').trim().toLowerCase().replace(/\s+/g, ''), m = t.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?$/);
+    if (!m) return null;
+    var h = +m[1], mi = +(m[2] || 0), ap = m[3] ? m[3][0] : '';
+    if (mi > 59 || h > 23 || (ap && (h < 1 || h > 12))) return null;
+    if (ap === 'p' && h < 12) h += 12;
+    if (ap === 'a' && h === 12) h = 0;
+    return pad(h) + ':' + pad(mi);
+  }
   function label12(hhmmStr) {
     var m = minutes(hhmmStr), h = Math.floor(m / 60), ap = h >= 12 ? 'PM' : 'AM';
     return ((h + 11) % 12 + 1) + (m % 60 ? ':' + pad(m % 60) : '') + ' ' + ap;
@@ -649,7 +659,7 @@
       repeat: seed.repeat || 'none',
       days: seed.repeat_days ? seed.repeat_days.split(',').filter(Boolean).map(Number) : [],
       notes: seed.notes || '',
-      invite: '', meet: true, expect: true,          // new meetings only: sent from Google Calendar with a Meet link
+      invite: '', people: [], meet: true, expect: true,          // new meetings only: sent from Google Calendar with a Meet link
       error: ''
     };
     state.pane = 'info'; state.mode = 'form';
@@ -689,20 +699,17 @@
       h('div', { class: 'lkc-row2' }, [
         h('div', {}, [h('span', { class: 'lkc-lbl' }, f.repeat === 'none' ? 'Date' : 'Starts'), h('input', { type: 'date', id: 'lkcDate', value: f.start_date })]),
         f.untimed ? h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Time'), h('p', { class: 'lkc-empty', style: 'margin:9px 0 0' }, 'No specific time')])
-          : h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Time'), h('input', { type: 'time', id: 'lkcTime', value: f.start_time })])
+          : h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Time'), timeField(f)])
       ]),
       h('label', { class: 'lkc-check' }, [h('input', { type: 'checkbox', id: 'lkcUntimed', checked: !!f.untimed, onchange: function () { sync(); render(); } }),
         'No specific time (shows in the top strip)']),
       f.untimed ? null : h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Length'), durSel]),
-      f.kind === 'meeting' && !f.id ? h('div', { class: 'lkc-meetbox' }, [
-        h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Invite (contacts or emails)'), h('input', { type: 'text', id: 'lkcInvite', value: f.invite, placeholder: 'e.g. Peter, sara@company.com' })]),
-        h('label', { class: 'lkc-check' }, [h('input', { type: 'checkbox', id: 'lkcMeet', checked: !!f.meet }), 'Add a Google Meet link (sent with the invite)']),
-        h('label', { class: 'lkc-check' }, [h('input', { type: 'checkbox', id: 'lkcExpect', checked: !!f.expect }), 'Expect a Fathom recording (ask "No-show?" if none arrives)'])
-      ]) : null,
+      f.kind === 'meeting' && !f.id ? meetBox(f) : null,
       h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Repeat'), repeatSel]),
       daysRow,
       h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Notes'), h('textarea', { id: 'lkcNotes', placeholder: 'Optional' }, f.notes)]),
       f.error ? h('p', { class: 'lkc-err' }, f.error) : null,
+      f.error && /Reconnect Google/.test(f.error) ? reconnectButton() : null,
       h('div', { class: 'lkc-actions' }, [
         h('button', { class: 'btn primary', type: 'submit' }, 'Save'),
         h('button', { class: 'btn', type: 'button', onclick: closeSide }, 'Cancel')
@@ -710,19 +717,98 @@
     ])];
   }
 
+  function reconnectButton() { return h('a', { class: 'btn lkc-reconnect-btn', href: (window.LK_PREFIX || '') + '/auth/google/start' }, 'Reconnect Google'); }
+
+  // Time: type it ("2pm", "14:30") or pick from a list in 15-minute steps
+  function timeField(f) {
+    var input = h('input', { type: 'text', id: 'lkcTime', value: timeText(f.start_time), autocomplete: 'off', inputmode: 'text' });
+    var list = h('div', { class: 'lkc-pop lkc-timelist', hidden: true });
+    for (var m = 0; m < 24 * 60; m += 15) (function (v) {
+      list.appendChild(h('button', { type: 'button', class: 'lkc-pop-item' + (v === f.start_time ? ' on' : ''), 'data-v': v,
+        onmousedown: function (ev) { ev.preventDefault(); f.start_time = v; input.value = timeText(v); list.hidden = true; } }, timeText(v)));
+    })(hhmm(m));
+    function open() {
+      list.hidden = false;
+      var cur = minutes(parseTime(input.value) || f.start_time), near = list.children[Math.min(95, Math.round(cur / 15))];
+      [].forEach.call(list.children, function (b) { b.classList.toggle('on', b === near); });
+      list.scrollTop = near.offsetTop - 60;
+    }
+    input.addEventListener('focus', open);
+    input.addEventListener('click', open);
+    input.addEventListener('input', function () { var v = parseTime(input.value); if (v) open(); });
+    input.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === 'Escape') { ev.preventDefault(); input.blur(); } });
+    input.addEventListener('blur', function () {
+      list.hidden = true;
+      var v = parseTime(input.value); if (v) f.start_time = v;
+      input.value = timeText(f.start_time);
+    });
+    return h('div', { class: 'lkc-timepick' }, [input, list]);
+  }
+
+  // New meeting: who to invite (contacts suggested as you type, or any email), a Meet link, a Fathom recording
+  function meetBox(f) {
+    var g = state.google || {};
+    var chips = h('div', { class: 'lkc-invitees' }, f.people.map(function (p, i) {
+      return h('span', { class: 'lkc-invitee', title: p.email }, [p.name || p.email,
+        h('button', { type: 'button', 'aria-label': 'Remove', onclick: function () { sync(); f.people.splice(i, 1); render(); } }, '\u00d7')]);
+    }));
+    var input = h('input', { type: 'text', id: 'lkcInvite', value: f.invite, autocomplete: 'off', placeholder: f.people.length ? 'Add someone else' : 'Type a contact\u2019s name or an email' });
+    var list = h('div', { class: 'lkc-pop lkc-suggest', hidden: true });
+    var timer = null;
+    function add(p) {
+      sync(); if (!f.people.some(function (x) { return x.email === p.email; })) f.people.push(p);
+      f.invite = ''; render(); var again = $('#lkcInvite'); if (again) again.focus();
+    }
+    function suggest() {
+      var q = input.value.trim();
+      if (q.length < 2) { list.hidden = true; return; }
+      api('GET', '/api/calendar/meetings/people?q=' + encodeURIComponent(q)).then(function (r) {
+        if (input.value.trim() !== q) return;
+        list.innerHTML = '';
+        var looksLikeEmail = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(q);
+        r.people.forEach(function (p) {
+          list.appendChild(h('button', { type: 'button', class: 'lkc-pop-item', onmousedown: function (ev) { ev.preventDefault(); add({ name: p.name, email: p.email }); } },
+            [h('b', {}, p.name || p.email), h('span', {}, p.email)]));
+        });
+        if (looksLikeEmail && !r.people.some(function (p) { return p.email === q.toLowerCase(); })) {
+          list.appendChild(h('button', { type: 'button', class: 'lkc-pop-item', onmousedown: function (ev) { ev.preventDefault(); add({ name: '', email: q.toLowerCase() }); } },
+            [h('b', {}, 'Invite ' + q.toLowerCase())]));
+        }
+        if (!list.children.length) list.appendChild(h('p', { class: 'lkc-pop-empty' }, 'No contact with an email matches. Type their email instead.'));
+        list.hidden = false;
+      }).catch(function () { list.hidden = true; });
+    }
+    input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(suggest, 180); });
+    input.addEventListener('blur', function () { setTimeout(function () { list.hidden = true; }, 120); });
+    input.addEventListener('keydown', function (ev) {
+      var v = input.value.trim().replace(/[,;]$/, '');
+      if ((ev.key === 'Enter' || ev.key === ',' || ev.key === ';') && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { ev.preventDefault(); add({ name: '', email: v.toLowerCase() }); }
+      else if (ev.key === 'Enter' && list.firstChild && list.firstChild.tagName === 'BUTTON' && !list.hidden) { ev.preventDefault(); list.firstChild.dispatchEvent(new MouseEvent('mousedown')); }
+      else if (ev.key === 'Backspace' && !input.value && f.people.length) { sync(); f.people.pop(); render(); var again = $('#lkcInvite'); if (again) again.focus(); }
+    });
+    function toggle(key, label) {
+      return h('button', { type: 'button', class: 'lkc-toggle' + (f[key] ? ' on' : ''), 'aria-pressed': f[key] ? 'true' : 'false',
+        onclick: function () { sync(); f[key] = !f[key]; render(); } }, [h('i', {}), label]);
+    }
+    var needsPermission = g.connected && g.can_create_meetings === false && (f.meet || f.people.length);
+    return h('div', { class: 'lkc-meetbox' }, [
+      h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Invite'), h('div', { class: 'lkc-invitebox' }, [chips, input, list])]),
+      h('div', { class: 'lkc-toggles' }, [toggle('meet', 'Google Meet link'), toggle('expect', 'Record with Fathom')]),
+      needsPermission ? h('div', { class: 'lkc-permission' }, [h('span', {}, 'Google needs one more permission before LyteKeepr can send invites.'), reconnectButton()]) : null
+    ]);
+  }
+
   function sync() {   // copy field values into state before any re-render
     var f = state.form; if (!f) return;
     var g = function (id) { var el = document.getElementById(id); return el ? el.value : null; };
     if (g('lkcTitleInput') != null) f.title = g('lkcTitleInput');
     if (g('lkcDate')) f.start_date = g('lkcDate');
-    if (g('lkcTime')) f.start_time = g('lkcTime');
+    if (g('lkcTime') && parseTime(g('lkcTime'))) f.start_time = parseTime(g('lkcTime'));
     if (g('lkcDur')) f.duration_min = +g('lkcDur');
     if (g('lkcRepeat')) f.repeat = g('lkcRepeat');
     if (g('lkcNotes') != null) f.notes = g('lkcNotes');
     var un = document.getElementById('lkcUntimed'); if (un) f.untimed = un.checked;
     if (g('lkcInvite') != null) f.invite = g('lkcInvite');
-    var mt = document.getElementById('lkcMeet'); if (mt) f.meet = mt.checked;
-    var ex = document.getElementById('lkcExpect'); if (ex) f.expect = ex.checked;
   }
 
   function save() {
@@ -735,10 +821,11 @@
       title: f.title.trim(), project: f.project, kind: f.kind, start_date: f.start_date, start_time: f.untimed ? '08:00' : f.start_time, untimed: !!f.untimed,
       duration_min: f.duration_min, repeat: f.repeat, repeat_days: f.days.slice().sort().join(','), notes: f.notes
     };
-    if (!f.id && f.kind === 'meeting' && (f.meet || (f.invite || '').trim())) {
+    var invite = f.people.map(function (p) { return p.email; }).concat((f.invite || '').trim() ? [f.invite.trim()] : []).join(', ');
+    if (!f.id && f.kind === 'meeting' && (f.meet || invite)) {
       // A real meeting: created in Google Calendar with the invites (and a Meet link), then shown here like any Google meeting.
       api('POST', '/api/calendar/meetings', { title: body.title, start_date: body.start_date, start_time: body.start_time, duration_min: body.duration_min || 30,
-        invite: f.invite, meet: f.meet, expect_recording: f.expect, notes: body.notes }).then(function (m) {
+        invite: invite, meet: f.meet, expect_recording: f.expect, notes: body.notes }).then(function (m) {
         state.weekStart = mondayOf(m.start_date); state.selected = { id: m.id, date: m.start_date }; state.mode = 'detail'; state.form = null;
         return load();
       }).catch(function (e) { f.error = e.message; render(); });

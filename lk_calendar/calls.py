@@ -480,6 +480,15 @@ def register(app):
     def calls_event(event_id):
         return jsonify({"call": call_for_event(event_id), "attendees": event_attendees(event_id)})
 
+    @app.get("/api/calendar/meetings/people")
+    @guarded
+    def meetings_people():
+        """Contacts with an email that match what is typed in the Invite box (for the suggestions list)."""
+        from assistant.contact_lookup import find_people
+        q = request.args.get("q", "").strip()
+        people = find_people(q, email_only=True) if len(q) >= 2 else []
+        return jsonify({"people": [{"name": p["name"], "email": p["email"].lower(), "company": p.get("company") or ""} for p in people[:6]]})
+
     @app.post("/api/calendar/meetings")
     @guarded
     def meetings_create():

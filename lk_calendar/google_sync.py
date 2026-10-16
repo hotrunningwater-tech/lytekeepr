@@ -54,6 +54,16 @@ def is_connected() -> bool:
         return False
 
 
+def can_create_meetings() -> bool:
+    """True if the saved Google connection includes the "create calendar events" permission (connections made before it was added do not)."""
+    try:
+        from google_oauth.store import load_tokens
+        scopes = ((load_tokens() or {}).get("scope") or "").split()
+    except Exception:
+        return False
+    return any(s.endswith("/auth/calendar.events") or s.endswith("/auth/calendar") for s in scopes)
+
+
 def _access_token() -> str:
     try:
         from google_oauth.errors import GoogleOAuthError      # imported here so a machine without Google set up still runs
@@ -226,7 +236,8 @@ def status() -> dict:
     last = json.loads(raw) if raw else {}
     return {"last_sync": store.get_state("last_google_sync"), "connected": is_connected(),
             "last_attempt": last.get("at"), "last_trigger": last.get("trigger"), "last_ok": last.get("ok"),
-            "message": last.get("message", ""), "needs_reconnect": bool(last.get("needs_reconnect"))}
+            "message": last.get("message", ""), "needs_reconnect": bool(last.get("needs_reconnect")),
+            "can_create_meetings": can_create_meetings()}
 
 
 # ------------------------------------------------------------------ creating a meeting (needs the "create calendar events" permission)
@@ -257,8 +268,8 @@ def create_meeting(title: str, start_date: str, start_time: str, duration_min: i
     except urllib.error.HTTPError as exc:
         low = exc.read().decode(errors="replace").lower()
         if exc.code == 401 or (exc.code == 403 and ("insufficient" in low or "scope" in low)):
-            raise GoogleAuthError("LyteKeepr may not create meetings in your Google Calendar yet. Reconnect Google once (open "
-                                  "/auth/google/start) and allow calendar access, then try again.") from exc
+            raise GoogleAuthError("Google hasn't allowed LyteKeepr to create meetings yet. Press Reconnect Google and tick "
+                                  "every box, then save again.") from exc
         raise GoogleSyncError(f"Google could not create the meeting (error {exc.code}).") from exc
     except urllib.error.URLError as exc:
         raise GoogleSyncError(f"Could not reach Google: {exc}") from exc

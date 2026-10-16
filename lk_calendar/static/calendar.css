@@ -179,3 +179,32 @@
 .lkc-clear:hover { color: var(--ink); }
 .lkc-call { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(41,67,78,.08); padding-top: 10px; }
 .lkc-meetbox { display: flex; flex-direction: column; gap: 8px; background: rgba(230,237,240,.55); border-radius: 12px; padding: 10px 12px; }
+
+/* New-item form: time list, invite box, Meet/Fathom toggles (same fields, pills and pop-outs as the rest of the calendar) */
+.lkc-timepick, .lkc-invitebox { position: relative; }
+.lkc-pop { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 40; background: #fff; border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(41,67,78,.24); padding: 5px; max-height: 220px; overflow-y: auto; }
+.lkc-pop[hidden] { display: none; }
+.lkc-pop-item { display: flex; flex-direction: column; align-items: flex-start; width: 100%; border: none; background: none; border-radius: 8px;
+  padding: 7px 10px; font-family: var(--font-body); font-size: 12.5px; color: var(--ink); cursor: pointer; text-align: left; }
+.lkc-pop-item:hover { background: rgba(230,237,240,.8); }
+.lkc-pop-item.on { background: var(--ink); color: var(--surface); }
+.lkc-pop-item b { font-weight: 600; }
+.lkc-pop-item span { color: var(--ink-soft); font-size: 11.5px; }
+.lkc-pop-empty { margin: 0; padding: 7px 10px; font-size: 12px; color: var(--ink-soft); }
+.lkc-timelist { max-height: 200px; }
+.lkc-invitebox { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; background: rgba(230,237,240,.8); border-radius: 9px; padding: 5px 6px; }
+.lkc-invitebox input[type=text] { flex: 1; min-width: 120px; width: auto; background: transparent !important; padding: 3px 4px !important; }
+.lkc-invitees { display: contents; }
+.lkc-invitee { display: inline-flex; align-items: center; gap: 4px; background: #fff; border-radius: 999px; padding: 3px 4px 3px 10px;
+  font-size: 12px; color: var(--ink); box-shadow: 0 1px 3px rgba(41,67,78,.14); }
+.lkc-invitee button { border: none; background: none; color: var(--ink-soft); font-size: 14px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.lkc-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+.lkc-toggle { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; border: 2px solid transparent;
+  background: rgba(230,237,240,.8); font-family: var(--font-body); font-size: 12.5px; color: var(--ink-soft); cursor: pointer; }
+.lkc-toggle i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid currentColor; display: inline-block; }
+.lkc-toggle.on { border-color: var(--ink); background: #fff; color: var(--ink); }
+.lkc-toggle.on i { background: var(--ink); border-color: var(--ink); }
+.lkc-meetbox { gap: 10px; }
+.lkc-permission { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); }
+.lkc-reconnect-btn { align-self: flex-start; padding: 7px 13px; background: var(--ink); color: var(--surface); font-size: 12px; text-decoration: none; }
