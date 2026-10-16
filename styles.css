@@ -2645,3 +2645,19 @@ html[data-photo-crop-lock="active"] .email-panel {
 .bulk-mail-edit input { font-weight: 700; }
 .bulk-mail-edit textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .bulk-flag.edited { color: var(--teal); }
+
+/* Top bar: slogan in the middle, the signed-in person next to the settings button */
+.header { position: relative; }
+.header-slogan { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; white-space: nowrap;
+  font-family: var(--font-heading); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink); }
+.header-slogan span { color: var(--coral); }
+@media (max-width: 1200px) { .header-slogan { display: none; } }
+.user-chip { display: inline-flex; align-items: center; gap: 9px; padding: 5px 14px 5px 5px; border-radius: 999px; background: rgba(255,255,255,.75); box-shadow: 0 2px 8px rgba(41,67,78,.1); max-width: 260px; }
+.user-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--teal); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-weight: 700; font-size: 13px; flex: none; }
+.user-chip.is-admin .user-avatar { background: var(--coral); }
+.user-name { font-family: var(--font-heading); font-weight: 700; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-role { font-family: var(--font-heading); font-weight: 700; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; background: var(--coral); color: #fff; border-radius: 999px; padding: 3px 8px; flex: none; }
+@media (max-width: 700px) { .user-name { display: none; } }
+
+/* Team members (not the admin) do not see the admin's Gmail, LinkedIn or the AI assistant until those work per person */
+body.is-team-member #emailTab, body.is-team-member #linkedinTab, body.is-team-member #aiPanel { display: none !important; }

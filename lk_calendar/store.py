@@ -146,6 +146,24 @@ CREATE TABLE IF NOT EXISTS lead_history (
   kind TEXT NOT NULL DEFAULT 'status',
   old_event_date TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    name TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT 'user',
+    active INTEGER NOT NULL DEFAULT 1,
+    access TEXT NOT NULL DEFAULT 'funnels',
+    share_emails INTEGER NOT NULL DEFAULT 0,
+    last_login_at TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS funnel_shares (
+    user_id INTEGER NOT NULL,
+    funnel_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, funnel_id)
+);
+
 CREATE TABLE IF NOT EXISTS completions (
   event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   occ_date TEXT NOT NULL,
@@ -186,6 +204,7 @@ def _conn():
         ("lead_history", "old_event_date", "TEXT NOT NULL DEFAULT ''"),
         ("events", "external_id", "TEXT NOT NULL DEFAULT ''"),
         ("events", "my_notes", "TEXT NOT NULL DEFAULT ''"),
+        ("events", "owner_id", "INTEGER"),
         ("events", "meeting_status", "TEXT NOT NULL DEFAULT ''"),
         ("events", "has_call", "INTEGER NOT NULL DEFAULT 0"),
         ("events", "untimed", "INTEGER NOT NULL DEFAULT 0"),

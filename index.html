@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
 <link rel="stylesheet" href="styles.css?v=24">
 <link rel="stylesheet" href="lk-calendar/calendar.css">
-<link rel="stylesheet" href="lk-calendar/settings.css">
+<link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
 <body>
 
@@ -39,7 +39,13 @@
       <span class="case-identity-sep">·</span>
       <span class="case-identity-value" id="shellIdentityValue">LinkedIn, Gmail, CRM</span>
     </div>
+    <div class="header-slogan" aria-hidden="true">All communication<span>.</span> One place<span>.</span></div>
     <div class="actions">
+      <div class="user-chip" id="userChip" hidden title="">
+        <span class="user-avatar" id="userAvatar"></span>
+        <span class="user-name" id="userName"></span>
+        <span class="user-role" id="userRole" hidden>Admin</span>
+      </div>
       <button class="demo-recorder-quick-btn" id="demoRecorderQuickBtn" type="button" aria-label="Start screen recording" title="Start screen recording" hidden></button>
       <button class="lk-gear" id="settingsBtn" type="button" aria-label="Settings" title="Settings: import contacts, companies">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -413,6 +419,7 @@
         <nav class="lks-nav" id="lksNav">
           <button type="button" class="on" data-view="details">Profile</button>
           <button type="button" data-view="mappings">Saved mappings</button>
+          <button type="button" data-view="team" hidden>Team</button>
         </nav>
         <div class="lks-main" id="lksMain"></div>
       </div>
@@ -698,7 +705,7 @@
 <script src="crop-lock.js"></script>
 <script src="chat.js"></script>
 <script src="lk-calendar/calendar.js"></script>
-<script src="lk-calendar/settings.js"></script>
+<script src="lk-calendar/settings.js?v=team6"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
 <script type="module" src="demo/reset.js"></script>

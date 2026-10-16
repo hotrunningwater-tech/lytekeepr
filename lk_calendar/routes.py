@@ -2,7 +2,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_from_directory
 
-from . import chat, contact_ai, contacts, google_sync, leads, profile, store
+from . import access, users, chat, contact_ai, contacts, google_sync, leads, profile, store
 
 bp = Blueprint("lk_calendar", __name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -23,8 +23,8 @@ def list_events():
     start, end = request.args.get("start"), request.args.get("end")
     if not start or not end:
         return jsonify({"error": "start and end are required"}), 400
-    return jsonify({"now": store.now_local().strftime("%Y-%m-%dT%H:%M"),
-                    "events": store.occurrences(start, end)})
+    events = [e for e in store.occurrences(start, end) if access.can_event(e) and (users.is_admin() or e.get("source") != "google")]
+    return jsonify({"now": store.now_local().strftime("%Y-%m-%dT%H:%M"), "events": events})
 
 
 @bp.post("/api/calendar/overdue/move")
@@ -34,12 +34,22 @@ def move_overdue():
 
 @bp.get("/api/calendar/agenda")
 def agenda():
-    return jsonify(store.agenda())
+    data = store.agenda()
+    if not (users.is_admin() and access.is_full()):
+        for key in ("overdue", "today", "upcoming"):
+            data[key] = [e for e in data[key] if access.can_event(e) and (users.is_admin() or e.get("source") != "google")]
+        data["badge"] = len(data["overdue"]) + sum(1 for o in data["today"] if not o["done"])
+    return jsonify(data)
 
 
 @bp.post("/api/calendar/events")
 def create_event():
-    return jsonify(store.create_event(_payload())), 201
+    event = store.create_event(_payload())
+    mine = users.current_id()
+    if mine and event.get("id"):                       # who created it: they always see their own events
+        with store._conn() as conn:
+            conn.execute("UPDATE events SET owner_id = ? WHERE id = ?", (mine, event["id"]))
+    return jsonify(event), 201
 
 
 @bp.put("/api/calendar/events/<int:event_id>")
@@ -82,7 +92,11 @@ def followups_move():
 
 @bp.get("/api/calendar/leads")
 def list_leads():
-    return jsonify({"leads": leads.list_leads(request.args.get("channel"))})
+    rows = leads.list_leads(request.args.get("channel"))
+    ids = access.person_ids()
+    if ids is not None:
+        rows = [r for r in rows if r.get("person_id") in ids]
+    return jsonify({"leads": rows})
 
 
 @bp.post("/api/calendar/leads/import")
@@ -225,7 +239,13 @@ def import_mapping_delete(mapping_id):
 
 @bp.get("/api/calendar/companies")
 def companies_list():
-    return jsonify(contacts.list_companies(request.args.get("q", "")))
+    out = contacts.list_companies(request.args.get("q", ""))
+    if not access.is_full():
+        key = "companies" if isinstance(out, dict) and "companies" in out else None
+        rows = out[key] if key else out
+        rows = [c for c in rows if access.can_company(c.get("id") or c.get("company_id"))]
+        out = {**out, key: rows} if key else rows
+    return jsonify(out)
 
 
 @bp.post("/api/calendar/companies")
@@ -246,7 +266,11 @@ def company_update(company_id):
 
 @bp.get("/api/calendar/contacts")
 def contacts_list():
-    return jsonify({"contacts": contacts.list_contacts(request.args.get("q", ""), request.args.get("company_id"), request.args.get("limit", 200))})
+    rows = contacts.list_contacts(request.args.get("q", ""), request.args.get("company_id"), request.args.get("limit", 200))
+    ids = access.person_ids()
+    if ids is not None:
+        rows = [c for c in rows if c.get("id") in ids]
+    return jsonify({"contacts": rows})
 
 
 @bp.post("/api/calendar/contacts")
@@ -257,12 +281,19 @@ def contact_create():
 @bp.get("/api/calendar/contacts/duplicate")
 def contact_duplicate():
     exclude = request.args.get("exclude", type=int)
-    return jsonify({"duplicate": contacts.find_duplicate(request.args.get("email", ""), request.args.get("url", ""), exclude, request.args.get("phone", ""))})
+    dup = contacts.find_duplicate(request.args.get("email", ""), request.args.get("url", ""), exclude, request.args.get("phone", ""))
+    if dup and not access.can_person(dup["id"]):       # it exists, but this person may not see it: say so without showing who it is
+        dup = {"id": dup["id"], "name": "a contact you cannot see", "company": "", "raw_notes": "", "reason": dup.get("reason", ""), "hidden": True}
+    return jsonify({"duplicate": dup})
 
 
 @bp.get("/api/calendar/duplicates")
 def duplicates_list():
-    return jsonify({"groups": contacts.find_duplicate_groups()})
+    groups = contacts.find_duplicate_groups()
+    ids = access.person_ids()
+    if ids is not None:
+        groups = [g for g in groups if all(i in ids for i in g["ids"])]
+    return jsonify({"groups": groups})
 
 
 @bp.post("/api/calendar/duplicates/dismiss")

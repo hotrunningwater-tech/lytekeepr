@@ -34,7 +34,7 @@ from demo_state.redactions import render_redacted_recording
 from services.ocr.photo_review import finalize_photo_review, get_asset_path, regenerate_preview, start_photo_review
 from services.ocr.adapter import get_original_file_path, list_recent_scans, rename_saved_document, scan_upload
 from google_oauth.errors import GoogleOAuthError
-from google_oauth.flow import build_authorization_url, exchange_code_for_tokens
+from google_oauth.flow import build_authorization_url, exchange_code_for_tokens, login_identity
 from google_oauth.store import (
     account_has_refresh_token,
     clear_legacy_tokens,
@@ -89,6 +89,13 @@ app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024  # local demo uploads and r
 
 import auth_gate
 auth_gate.install(app, APP_DIR)
+
+
+@app.before_request
+def _access_guard():
+    # Who may see which contacts: the one place every contact-related request is checked (runs after the login gate).
+    from lk_calendar import access
+    return access.guard(request.path, request.method, request.get_json(silent=True) or {} if request.method in ("POST", "PUT", "DELETE") else {})
 
 import lk_calendar
 lk_calendar.register(app)
@@ -477,11 +484,19 @@ def google_oauth_callback():
         return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote(error)}")
 
     try:
-        _oauth_state_signer().loads(request.args.get("state", ""), max_age=600)
+        purpose = _oauth_state_signer().loads(request.args.get("state", ""), max_age=600)
     except Exception:
         return redirect(f"{_app_home()}?gmail=error&reason=invalid_or_expired_state")
 
     code = request.args.get("code")
+    if purpose == "google-login":               # "Sign in with Google": only who they are is asked; nothing is saved
+        if not code:
+            return redirect(f"{_app_home()}login?e=4")
+        try:
+            who = login_identity(code)
+        except GoogleOAuthError:
+            return redirect(f"{_app_home()}login?e=4")
+        return auth_gate.finish_google_login(who["email"], who["email_verified"], who["name"])
     if not code:
         return redirect(f"{_app_home()}?gmail=error&reason=missing_code")
 
@@ -560,9 +575,23 @@ def crm_overview():
     crm_db.init_db()
     conn = crm_db.get_connection()
     try:
-        return jsonify(crm_db.get_overview(conn))
+        data = crm_db.get_overview(conn)
     finally:
         conn.close()
+    from lk_calendar import access, users as lk_users
+    if not lk_users.is_admin():                       # message previews belong to whoever owns the mailbox
+        for person in data.get("people", []):
+            for key in [k for k in person if k.startswith("last_message")]:
+                person[key] = None
+    ids = access.person_ids()
+    if ids is not None:                               # only the contacts this person may see, and the companies they belong to
+        data["people"] = [p for p in data.get("people", []) if p["person_id"] in ids]
+        counts: dict = {}
+        for p in data["people"]:
+            counts[p.get("company_name")] = counts.get(p.get("company_name"), 0) + 1
+        data["companies"] = [{**c, "people_count": counts[c["company_name"]]} for c in data.get("companies", []) if counts.get(c["company_name"])]
+        data["counts"] = {**data.get("counts", {}), "people": len(data["people"]), "companies": len(data["companies"])}
+    return jsonify(data)
 
 
 @app.get("/api/crm/recent-activity")
@@ -586,7 +615,12 @@ def crm_person_detail(person_id):
     if detail is None:
         return jsonify({"error": "No such person."}), 404
     from lk_calendar import contacts as lk_contacts
-    detail["messages"] = lk_contacts.messages_with_saved_emails(person_id, detail.get("messages") or [])     # + emails saved in the Gmail tab
+    from lk_calendar import users as lk_users
+    if lk_users.is_admin():
+        detail["messages"] = lk_contacts.messages_with_saved_emails(person_id, detail.get("messages") or [])     # + emails saved in the Gmail tab
+    else:                                              # team members do not read the admin's messages (the shared timeline is a later step)
+        detail["messages"] = []
+        detail["follow_ups"] = []
     return jsonify(detail)
 
 
@@ -594,9 +628,14 @@ def crm_person_detail(person_id):
 def crm_list_funnels():
     conn = crm_db.get_connection()
     try:
-        return jsonify({"funnels": crm_db.list_funnels(conn)})
+        funnels = crm_db.list_funnels(conn)
     finally:
         conn.close()
+    from lk_calendar import access
+    allowed = access.funnel_ids()
+    if allowed is not None:                           # only the funnels shared with this person
+        funnels = [f for f in funnels if f["funnel_id"] in allowed]
+    return jsonify({"funnels": funnels})
 
 
 @app.post("/api/crm/funnels")
@@ -611,6 +650,10 @@ def crm_create_funnel():
         conn.commit()
     finally:
         conn.close()
+    from lk_calendar import access, users as lk_users
+    creator = lk_users.current_id()
+    if creator and not access.is_full():             # the person who makes a funnel always sees it
+        lk_users.share_funnel(creator, funnel_id)
     return jsonify({"ok": True, "funnel_id": funnel_id})
 
 
@@ -622,6 +665,8 @@ def crm_delete_funnel(funnel_id):
         conn.commit()
     finally:
         conn.close()
+    from lk_calendar import users as lk_users
+    lk_users.unshare_funnel_everywhere(funnel_id)
     return jsonify({"ok": True})
 
 

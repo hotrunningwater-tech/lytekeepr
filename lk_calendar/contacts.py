@@ -261,6 +261,12 @@ def _insert_person(conn, vals: dict, *, channel: str, company_id, company_name: 
                source_file=source_file[:200], batch=batch[:100], created_at=_now())
     cols = list(row)
     pid = conn.execute(f"INSERT INTO people ({', '.join(cols)}) VALUES ({', '.join(':' + c for c in cols)})", row).lastrowid
+    try:
+        from . import users
+        conn.execute("UPDATE people SET owner_id = ? WHERE person_id = ?", (users.current_id(), pid))      # who added it: they always see their own contacts
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("could not record who added the new contact")
     if channel or url:
         ident = _identifier(channel, url) or f"name:{name or company_name}"
         conn.execute("INSERT INTO channel_accounts (person_id, channel, channel_identifier, display_name, url) VALUES (?, ?, ?, ?, ?)",

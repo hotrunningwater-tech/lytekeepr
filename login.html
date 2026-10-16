@@ -23,24 +23,46 @@
   .login .err { display: none; font-size: 12.5px; color: #b5503a; margin: -6px 0 0; }
   .login.bad .err { display: block; }
   .login.bad input { border-color: var(--coral); }
+  .google-btn { display: flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; }
+  .google-btn svg { background: #fff; border-radius: 50%; padding: 3px; box-sizing: content-box; }
+  .admin-pw summary { cursor: pointer; font-size: 12.5px; color: var(--ink-soft); text-align: center; list-style: none; }
+  .admin-pw form { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .login .pwerr { display: none; }
+  .login.badpw .pwerr { display: block; }
+  .login .err.show { display: block; }
   .login small { text-align: center; color: var(--ink-soft); font-size: 12px; }
 </style>
 </head>
 <body>
-<form class="panel login" id="f" method="post" action="login">
+<div class="panel login">
   <div class="login-brand"><span class="brand-dot"></span><span>LyteKeepr</span></div>
   <div>
     <h1>Sign in</h1>
-    <p class="overview-sub">Enter your password to continue</p>
+    <p class="overview-sub">Use the Google account the admin added</p>
   </div>
-  <div>
-    <label for="pw">Password</label>
-    <input id="pw" name="password" type="password" placeholder="••••••••" autofocus required>
-  </div>
-  <p class="err">Wrong password. Try again.</p>
-  <button class="btn btn-primary" type="submit">Sign in</button>
+  <p class="err" id="gerr"></p>
+  <a class="btn btn-primary google-btn" href="auth/google/login">
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+    Sign in with Google
+  </a>
+  <details class="admin-pw">
+    <summary>Admin password</summary>
+    <form id="f" method="post" action="login">
+      <label for="pw">Password</label>
+      <input id="pw" name="password" type="password" placeholder="••••••••" required>
+      <p class="err pwerr">Wrong password. Try again.</p>
+      <button class="btn btn-secondary" type="submit">Sign in with password</button>
+    </form>
+  </details>
   <small>Private workspace</small>
-</form>
-<script>(function(){var q=location.search,f=document.getElementById("f");if(q.includes("e=1")||q.includes("e=2")){f.classList.add("bad");}if(q.includes("e=2")){document.querySelector(".err").textContent="Too many wrong passwords. Try again in 15 minutes.";}})();</script>
+</div>
+<script>(function(){
+  var q=location.search, box=document.querySelector(".login");
+  var msg={"3":"That Google account has not been added. Ask the admin to add your email.","4":"Google sign-in did not work. Try again."};
+  var m=q.match(/e=(\d)/);
+  if(m&&msg[m[1]]){var g=document.getElementById("gerr");g.textContent=msg[m[1]];g.classList.add("show");}
+  if(q.includes("e=1")||q.includes("e=2")){box.classList.add("badpw");document.querySelector(".admin-pw").open=true;}
+  if(q.includes("e=2")){document.querySelector(".pwerr").textContent="Too many wrong passwords. Try again in 15 minutes.";}
+})();</script>
 </body>
 </html>

@@ -98,3 +98,42 @@ def refresh_access_token(refresh_token: str) -> dict:
 
     tokens["expires_at"] = time.time() + tokens.get("expires_in", 3600)
     return tokens
+
+
+# ---- Sign-in with Google ("who is this?"): only the email and name are asked for, and nothing is stored ----
+LOGIN_SCOPES = ("openid", "email", "profile")
+USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
+
+
+def build_login_url(state: str) -> str:
+    config = GoogleOAuthConfig.from_env().require()
+    params = {
+        "client_id": config.client_id,
+        "redirect_uri": config.redirect_uri,
+        "response_type": "code",
+        "scope": " ".join(LOGIN_SCOPES),
+        "prompt": "select_account",
+        "state": state,
+    }
+    return f"{AUTH_ENDPOINT}?{urllib.parse.urlencode(params)}"
+
+
+def login_identity(code: str) -> dict:
+    """Trade the sign-in code for {email, email_verified, name}. The tokens are used once and thrown away (never saved)."""
+    config = GoogleOAuthConfig.from_env().require()
+    data = urllib.parse.urlencode({
+        "code": code, "client_id": config.client_id, "client_secret": config.client_secret,
+        "redirect_uri": config.redirect_uri, "grant_type": "authorization_code",
+    }).encode()
+    req = urllib.request.Request(TOKEN_ENDPOINT, data=data, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            tokens = json.loads(response.read().decode())
+        info_req = urllib.request.Request(USERINFO_ENDPOINT)
+        info_req.add_header("Authorization", f"Bearer {tokens['access_token']}")
+        with urllib.request.urlopen(info_req, timeout=15) as response:
+            info = json.loads(response.read().decode())
+    except (urllib.error.HTTPError, urllib.error.URLError, KeyError, ValueError) as exc:
+        raise GoogleOAuthError(f"Google sign-in failed: {exc}") from exc
+    return {"email": (info.get("email") or "").strip().lower(), "email_verified": bool(info.get("email_verified")), "name": info.get("name") or ""}

@@ -635,11 +635,32 @@
   /* =========================== SETTINGS PANEL (gear) =========================== */
   var panel = document.getElementById('settingsPanel'), btn = document.getElementById('settingsBtn'), main = document.getElementById('lksMain'), nav = document.getElementById('lksNav');
   if (!panel || !btn || !main) return;
+  var me = null;
+  function showChip(u) {                               // the signed-in person, top right next to the gear
+    var chip = document.getElementById('userChip'); if (!chip || !u) return;
+    var label = (u.name || '').trim() || (u.email || '').split('@')[0] || 'Admin';
+    document.getElementById('userAvatar').textContent = (label[0] || '?').toUpperCase();
+    document.getElementById('userName').textContent = label;
+    document.getElementById('userRole').hidden = u.role !== 'admin';
+    chip.classList.toggle('is-admin', u.role === 'admin');
+    chip.title = u.email || '';
+    chip.hidden = false;
+    document.body.classList.toggle('is-team-member', u.role !== 'admin');      // team members do not see Gmail, LinkedIn or the assistant yet
+  }
+  function loadMe() {                                  // who is signed in; the Team section is only for the admin
+    return api('GET', '/api/me').then(function (r) { me = r; showChip(r); var tb = nav.querySelector('[data-view=team]'); if (tb) tb.hidden = r.role !== 'admin'; return r; }).catch(function () { return null; });
+  }
+  setTimeout(loadMe, 300);
   function openPanel() {
-    ['caseOverviewContent', 'aiPanel', 'calendarPanel', 'crmPanel', 'linkedinPanel', 'crmPersonDetailView'].forEach(function (id) { var el = document.getElementById(id); if (el) el.hidden = true; });
+    loadMe().then(function () { if (!panel.hidden) showSettings(currentSettingsView); });
+    ['caseOverviewPanel', 'caseOverviewContent', 'aiPanel', 'calendarPanel', 'crmPanel', 'linkedinPanel', 'crmPersonDetailView'].forEach(function (id) { var el = document.getElementById(id); if (el) el.hidden = true; });
     panel.hidden = false; btn.classList.add('on'); showSettings(currentSettingsView);
   }
-  function closePanel() { if (panel.hidden) return; panel.hidden = true; btn.classList.remove('on'); }
+  function closePanel() {
+    if (panel.hidden) return; panel.hidden = true; btn.classList.remove('on');
+    var overview = document.getElementById('caseOverviewPanel'), cal = document.getElementById('calendarPanel');
+    if (overview && !(cal && !cal.hidden)) overview.hidden = false;       // the left card comes back (the Calendar hides it again itself)
+  }
   btn.addEventListener('click', function () {
     if (panel.hidden) openPanel(); else { var home = document.getElementById('homeTab'); closePanel(); if (home) home.click(); }
   });
@@ -671,11 +692,17 @@
   function showSettings(view) {
     currentSettingsView = view;
     nav.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.view === view); });
-    if (view === 'mappings') mappingsView(); else detailsView();
+    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else detailsView();
   }
   nav.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { showSettings(b.dataset.view); }); });
 
+  function memberProfileView() {                      // team members: who they are; the signing name belongs to the admin's mailbox for now
+    main.replaceChildren(h('div', { class: 'lks-card' }, [h('h2', {}, 'Your account'),
+      h('p', {}, 'You are signed in with Google as ' + (me.email || '') + '.'),
+      h('div', { class: 'lks-row' }, [h('a', { class: 'btn lks-soft btn-small', href: (window.LK_PREFIX || '') + '/logout' }, 'Sign out')])]));
+  }
   function detailsView() {
+    if (me && me.role !== 'admin') return memberProfileView();
     main.replaceChildren();
     var input = h('input', { type: 'text', placeholder: 'e.g. Peter', maxlength: 80 }), msg = h('span', { class: 'lks-note' });
     main.appendChild(h('div', { class: 'lks-card' }, [h('h2', {}, 'Profile'),
@@ -684,11 +711,90 @@
       h('div', { class: 'lks-row' }, [h('button', { class: 'btn btn-primary', type: 'button', onclick: function () {
         api('PUT', '/api/calendar/profile', { name: input.value }).then(function (r) { input.value = r.name || ''; msg.textContent = r.name ? 'Saved. Your emails are signed "' + r.name + '".' : 'Cleared.'; }).catch(function (e) { msg.textContent = e.message; });
       } }, 'Save'), msg])]));
+    var who = h('div', { class: 'lks-row' });
+    main.firstChild.appendChild(who);
+    loadMe().then(function (u) {
+      if (!u) return;
+      who.replaceChildren(h('span', { class: 'lks-note' }, 'Signed in as ' + (u.email || 'the admin') + (u.role === 'admin' ? ' · Admin' : '')),
+        h('a', { class: 'btn lks-soft btn-small', href: (window.LK_PREFIX || '') + '/logout' }, 'Sign out'));
+    });
     api('GET', '/api/calendar/profile').then(function (r) {
       input.value = r.name || '';
       if (r.name) msg.textContent = 'Your emails are signed "' + r.name + '".';
       else if (r.suggested) msg.textContent = 'From your Google account: “' + r.suggested + '”. Type it above and Save to confirm.';
     });
+  }
+
+  /* Team: the admin adds people by Google email; they sign in with Google. Nobody else gets in. */
+  function initial(u) { return ((u.name || u.email || '?').trim()[0] || '?').toUpperCase(); }
+  function shortDate(iso) { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+  function teamView(freshEmail) {
+    main.replaceChildren();
+    var list = h('div', { class: 'lks-card' }, [h('h2', {}, 'Team'), h('p', {}, 'Loading…')]);
+    main.appendChild(list);
+    Promise.all([api('GET', '/api/team'), api('GET', '/api/team/funnels')]).then(function (res) {
+      var r = res[0], funnels = res[1].funnels;
+      var kids = [h('div', { class: 'lks-teamhead' }, [h('div', {}, [h('h2', {}, 'Team'),
+        h('p', { style: 'margin-top:4px' }, 'People you add can sign in with their Google account. Everyone works in the same LyteKeepr data.')]),
+        h('button', { class: 'btn btn-primary', type: 'button', onclick: addUserDialog }, '+ Add user')])];
+      if (freshEmail) kids.push(h('div', { class: 'lks-banner' }, [h('b', {}, freshEmail + ' was added. '), 'Tell them to open LyteKeepr and press “Sign in with Google” with that email.']));
+      r.users.forEach(function (u) {
+        var isAdmin = u.role === 'admin', isMe = me && u.id === me.id;
+        var status = isAdmin ? 'Admin' : !u.active ? 'Off' : u.last_login_at ? 'Active' : 'Waiting for first sign-in';
+        var line = u.email + ' · ' + (!u.active && !isAdmin ? 'turned off' : u.last_login_at ? 'last signed in ' + shortDate(u.last_login_at) : isAdmin ? 'admin' : 'has not signed in yet');
+        var actions = [];
+        if (!isAdmin) {
+          actions.push(h('button', { class: 'lks-toggle' + (u.share_emails ? ' on' : ''), type: 'button', title: 'They can read, but not change, the emails you exchanged with shared contacts',
+            onclick: function () { api('POST', '/api/team/' + u.id + '/share', { share: !u.share_emails }).then(function () { teamView(); }).catch(function (e) { notice(e.message); }); } },
+            [h('span', { class: 'lks-sw' }), 'Sees my emails']));
+          actions.push(h('button', { class: 'lks-link', type: 'button', onclick: function () { api('POST', '/api/team/' + u.id + '/active', { active: !u.active }).then(function () { teamView(); }).catch(function (e) { notice(e.message); }); } }, u.active ? 'Turn off' : 'Turn on'));
+          actions.push(h('button', { class: 'lks-link danger', type: 'button', onclick: function () {
+            askConfirm('Remove ' + u.email + '? They will no longer be able to sign in. Nothing they added is deleted.', 'Remove').then(function (yes) {
+              if (yes) api('DELETE', '/api/team/' + u.id).then(function () { teamView(); }).catch(function (e) { notice(e.message); });
+            });
+          } }, 'Remove'));
+        } else actions.push(h('span', { class: 'lks-note' }, 'Cannot be turned off'));
+        var memberRow = h('div', { class: 'lks-member' + (freshEmail && u.email === freshEmail ? ' fresh' : '') }, [
+          h('div', { class: 'lks-avatar' + (isAdmin ? ' admin' : !u.active ? ' off' : '') }, initial(u)),
+          h('div', { class: 'lks-who' }, [h('b', {}, isMe ? 'You' : (u.name || u.email)), h('span', {}, line)]),
+          h('span', { class: 'lks-badge ' + (isAdmin ? 'admin' : !u.active ? 'off' : u.last_login_at ? 'on' : 'wait') }, status),
+          h('div', { class: 'lks-member-actions' }, actions)]);
+        kids.push(memberRow);
+        if (!isAdmin) {
+          var sel = h('select', { class: 'lks-select', onchange: function () {
+            api('POST', '/api/team/' + u.id + '/access', { access: sel.value }).then(function () { teamView(); }).catch(function (e) { notice(e.message); }); } },
+            [h('option', { value: 'funnels' }, 'Selected funnels'), h('option', { value: 'all' }, 'Everything (the whole database)')]);
+          sel.value = u.access;
+          var chips = funnels.length ? funnels.map(function (f) {
+            var on = u.funnel_ids.indexOf(f.funnel_id) !== -1;
+            return h('button', { class: 'lks-chipbtn' + (on ? ' on' : ''), type: 'button', title: f.people_count + ' contacts', onclick: function () {
+              var ids = on ? u.funnel_ids.filter(function (x) { return x !== f.funnel_id; }) : u.funnel_ids.concat([f.funnel_id]);
+              api('POST', '/api/team/' + u.id + '/funnels', { funnel_ids: ids }).then(function () { teamView(); }).catch(function (e) { notice(e.message); }); } }, [(on ? '✓ ' : '') + f.name]);
+          }) : [h('span', { class: 'lks-note' }, 'No funnels yet.')];
+          kids.push(h('div', { class: 'lks-access' }, [h('span', { class: 'lks-note' }, 'Sees'), sel,
+            u.access === 'all' ? h('span', { class: 'lks-note' }, 'Every contact, funnel and task.') : h('div', { class: 'lks-chips' }, chips),
+            u.access === 'funnels' ? h('span', { class: 'lks-note' }, '+ the contacts they add themselves') : null]));
+        }
+      });
+      list.replaceChildren.apply(list, kids);
+    }).catch(function (e) { list.replaceChildren(h('h2', {}, 'Team'), h('p', {}, e.message)); });
+  }
+  function addUserDialog() {
+    var email = h('input', { type: 'email', placeholder: 'their Google email', autocomplete: 'off' }), name = h('input', { type: 'text', placeholder: 'optional', maxlength: 100 });
+    var share = false, sw = h('button', { class: 'lks-toggle', type: 'button', onclick: function () { share = !share; sw.classList.toggle('on', share); } }, [h('span', { class: 'lks-sw' }), 'Let them read the emails I exchanged with shared contacts']);
+    var err = h('p', { class: 'lks-err', hidden: true });
+    var add = h('button', { class: 'btn btn-primary', type: 'button' }, 'Add user');
+    add.addEventListener('click', function () {
+      err.hidden = true;
+      api('POST', '/api/team', { email: email.value, name: name.value, share_emails: share }).then(function (r) { closeModal(true); teamView(r.user.email); })
+        .catch(function (e) { err.textContent = e.message; err.hidden = false; });
+    });
+    modal(h('div', { class: 'lks-card' }, [h('h2', {}, 'Add a user'),
+      h('div', { class: 'lks-opt' }, [h('label', {}, 'Their Google email'), email]),
+      h('div', { class: 'lks-opt' }, [h('label', {}, 'Name (optional)'), name]), sw,
+      h('div', { class: 'lks-hint' }, ['No password. They open LyteKeepr, press ', h('b', {}, 'Sign in with Google'), ' and choose this email. Anyone whose email is not on this list is refused.']), err,
+      h('div', { class: 'lks-row' }, [add, h('button', { class: 'btn lks-soft', type: 'button', onclick: function () { closeModal(true); } }, 'Cancel')])]));
+    email.focus();
   }
 
   function mappingsView() {

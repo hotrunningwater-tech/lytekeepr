@@ -7,12 +7,17 @@ register(app) in server.py and the CALENDAR tab in index.html.
 
 import logging
 
-from . import auto_sync, contacts, leads
+from . import auto_sync, contacts, leads, users
 from .routes import register as _register_routes
 
 
 def register(app):
     _register_routes(app)
+    users.register(app)
+    try:
+        users.ensure_admin()
+    except Exception:
+        logging.getLogger(__name__).exception("could not add the admin to the team list; it will retry on the next sign-in")
     try:
         leads.migrate_buckets()
     except Exception:

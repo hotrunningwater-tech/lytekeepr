@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LyteKeepr — Super admin mockup</title>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
+<link rel="stylesheet" href="styles.css?v=24">
+<style>
+  /* Mockup-only scaffolding: colours, fonts and shadows come from styles.css. ALL NAMES AND NUMBERS BELOW ARE MADE UP. */
+  .mockup-tag { position: fixed; top: 10px; left: 10px; z-index: 9999; background: #1f8a4c; color: #fff; font-family: var(--font-heading);
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 5px 10px; border-radius: 999px; text-transform: uppercase; }
+  body { margin: 0; }
+  .sa { display: flex; gap: 16px; min-height: 100vh; padding: 16px; box-sizing: border-box; }
+  .sa-nav { width: 230px; flex: none; background: var(--ink); color: var(--surface); border-radius: 22px; padding: 22px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .sa-brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 14px; font-family: var(--font-heading); font-weight: 700; font-size: 17px; }
+  .sa-brand i { width: 16px; height: 16px; border-radius: 50%; background: var(--coral); display: inline-block; }
+  .sa-brand small { display: block; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--coral); margin-top: 2px; }
+  .sa-nav button { text-align: left; border: none; background: transparent; color: rgba(255,255,255,.7); padding: 11px 14px; border-radius: 12px; font-family: var(--font-heading); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .sa-nav button:hover { background: rgba(255,255,255,.08); color: #fff; }
+  .sa-nav button.on { background: rgba(255,255,255,.14); color: #fff; }
+  .sa-nav .count { background: var(--coral); color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 8px; }
+  .sa-nav .me { margin-top: auto; padding: 12px 10px 4px; font-size: 12px; color: rgba(255,255,255,.65); line-height: 1.5; border-top: 1px solid rgba(255,255,255,.12); }
+  .sa-nav .me b { color: #fff; display: block; }
+  .sa-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .sa-top { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; background: rgba(255,255,255,.7); border-radius: 18px; padding: 14px 22px; }
+  .sa-top h1 { margin: 0; font-size: 22px; }
+  .pill { font-family: var(--font-heading); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 4px 10px; background: rgba(127,168,184,.2); color: var(--ink); white-space: nowrap; }
+  .pill.ok { background: #d8eee2; color: #1f6b46; } .pill.warn { background: #f6e6c9; color: #8a5a10; } .pill.bad { background: #f7d9d2; color: #a3412b; } .pill.off { background: #e3e8ea; color: #7b8b92; } .pill.coral { background: var(--coral); color: #fff; }
+  .card { background: rgba(255,255,255,.7); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+  .card h2 { font-family: var(--font-heading); font-size: 16px; margin: 0; }
+  .card p, .note { margin: 0; font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .kpi { background: #fff; border-radius: 16px; padding: 16px 18px; } .kpi b { display: block; font-family: var(--font-heading); font-size: 28px; } .kpi span { font-size: 12px; color: var(--ink-soft); } .kpi em { font-style: normal; font-size: 11.5px; color: #1f6b46; display: block; margin-top: 4px; }
+  .kpi.bad b { color: #a3412b; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-family: var(--font-heading); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); padding: 8px 10px; }
+  td { padding: 11px 10px; border-top: 1px solid rgba(41,67,78,.08); vertical-align: middle; }
+  tr.click { cursor: pointer; } tr.click:hover td { background: rgba(230,237,240,.5); }
+  td b { display: block; } td small { color: var(--ink-soft); font-size: 12px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn-soft { background: rgba(230,237,240,.9); color: var(--ink); }
+  .search { border: none; background: rgba(230,237,240,.9); border-radius: 10px; padding: 9px 13px; font-family: var(--font-body); font-size: 13px; color: var(--ink); min-width: 240px; }
+  .hide { display: none !important; }
+  .cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; } @media (max-width: 1100px) { .cols { grid-template-columns: 1fr; } }
+  .toggle-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; background: #fff; border-radius: 14px; padding: 13px 16px; }
+  .toggle-row b { display: block; font-size: 13.5px; } .toggle-row span { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
+  .sw { width: 38px; height: 22px; border-radius: 999px; background: #c5d0d5; position: relative; flex: none; cursor: pointer; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: .15s; }
+  .sw.on { background: var(--teal); } .sw.on::after { left: 19px; }
+  .field label { display: block; font-family: var(--font-heading); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 5px; }
+  .field input, .field select, .field textarea { width: 100%; box-sizing: border-box; border: none; background: rgba(230,237,240,.9); border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); font-size: 13.5px; color: var(--ink); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .svc { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; border-radius: 12px; padding: 11px 14px; font-size: 13px; }
+  .svc small { color: var(--ink-soft); display: block; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; } .dot.ok { background: #3f9d73; } .dot.warn { background: #e0a030; } .dot.bad { background: #d4553a; }
+  .err { display: grid; grid-template-columns: 110px 1fr auto; gap: 12px; align-items: center; background: #fff; border-radius: 12px; padding: 11px 14px; font-size: 13px; }
+  .err small { color: var(--ink-soft); display: block; font-size: 12px; } .err code { font-size: 12px; background: rgba(230,237,240,.9); border-radius: 6px; padding: 1px 6px; }
+  .spark { display: flex; align-items: flex-end; gap: 4px; height: 70px; } .spark i { flex: 1; background: var(--teal); border-radius: 4px 4px 0 0; opacity: .85; } .spark i.e { background: #d4553a; }
+  .privacy { background: rgba(127,168,184,.15); border-radius: 12px; padding: 11px 14px; font-size: 12.5px; color: var(--ink); line-height: 1.5; }
+  .back { border: none; background: transparent; font-family: var(--font-heading); font-weight: 600; font-size: 13px; color: var(--ink-soft); cursor: pointer; padding: 0; }
+  .login-demo { max-width: 380px; margin: 60px auto; text-align: center; }
+</style>
+</head>
+<body>
+<div class="mockup-tag">Mockup — Super admin (sample data)</div>
+
+<div class="sa">
+  <nav class="sa-nav">
+    <div class="sa-brand"><i></i><div>LyteKeepr<small>Super admin</small></div></div>
+    <button class="on" data-v="overview" type="button">Overview</button>
+    <button data-v="accounts" type="button">Accounts <span class="count">4</span></button>
+    <button data-v="billing" type="button">Billing &amp; pricing</button>
+    <button data-v="health" type="button">Health &amp; errors <span class="count">3</span></button>
+    <button data-v="audit" type="button">Activity log</button>
+    <button data-v="login" type="button">Sign-in screen</button>
+    <div class="me"><b>hotrunningwater@gmail.com</b>Signed in with Google · the only account allowed here</div>
+  </nav>
+
+  <div class="sa-main">
+
+    <!-- OVERVIEW -->
+    <section data-s="overview" class="sa-main">
+      <div class="sa-top"><h1>Overview</h1><span class="note">Updated just now · only counts are stored here, never anyone's contacts or emails</span></div>
+      <div class="kpis">
+        <div class="kpi"><b>4</b><span>Accounts</span><em>+1 this week</em></div>
+        <div class="kpi"><b>9</b><span>People signed up (admins + team)</span><em>6 active in the last 7 days</em></div>
+        <div class="kpi"><b>0</b><span>Paying</span><em>charges waived for all (launch)</em></div>
+        <div class="kpi"><b>3 / 4</b><span>Cards on file</span><em>1 account has none</em></div>
+        <div class="kpi bad"><b>3</b><span>Errors in the last 24 hours</span><em style="color:#a3412b">2 need a look</em></div>
+      </div>
+      <div class="cols">
+        <div class="card"><h2>Sign-ups and activity, last 14 days</h2>
+          <div class="spark"><i style="height:20%"></i><i style="height:35%"></i><i style="height:30%"></i><i style="height:50%"></i><i style="height:45%"></i><i style="height:60%"></i><i style="height:40%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:65%"></i><i style="height:80%"></i><i style="height:60%"></i><i style="height:90%"></i><i style="height:75%"></i></div>
+          <p>Each bar is the number of people who used LyteKeepr that day.</p></div>
+        <div class="card"><h2>Needs your attention</h2>
+          <div class="svc"><span><span class="dot bad"></span>Gmail sync failed for Windowly</span><span class="pill bad">2 h ago</span></div>
+          <div class="svc"><span><span class="dot warn"></span>Nexy Pilot has no card on file</span><span class="pill warn">free for now</span></div>
+          <div class="svc"><span><span class="dot warn"></span>Google sign-in expires for 1 account in 2 days</span><span class="pill warn">reminder</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACCOUNTS -->
+    <section data-s="accounts" class="sa-main hide">
+      <div class="sa-top"><h1>Accounts</h1><div class="row"><input class="search" placeholder="Search account or email"><button class="btn btn-soft" type="button">Export CSV</button></div></div>
+      <div class="card">
+        <p>One account = one company (an admin and the team under them). Click a row to open it.</p>
+        <table>
+          <thead><tr><th>Account</th><th>People</th><th>Contacts</th><th>Billing</th><th>Card</th><th>Last active</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr class="click" data-open="1"><td><b>Nexy Pilot</b><small>petr@nexypilot.com · admin</small></td><td>3</td><td>412</td><td><span class="pill off">Waived</span></td><td>Visa •••• 4242</td><td>Today</td><td><span class="pill ok">Active</span></td></tr>
+            <tr class="click" data-open="1"><td><b>Windowly</b><small>sergiy@windowly.io · admin</small></td><td>2</td><td>88</td><td><span class="pill off">Waived</span></td><td>Mastercard •••• 1881</td><td>Yesterday</td><td><span class="pill warn">Sync error</span></td></tr>
+            <tr class="click" data-open="1"><td><b>Brightline Studio</b><small>anna@brightline.co · admin</small></td><td>3</td><td>230</td><td><span class="pill ok">Paid · $29/mo</span></td><td>Visa •••• 0005</td><td>Today</td><td><span class="pill ok">Active</span></td></tr>
+            <tr class="click" data-open="1"><td><b>Kaya Consulting</b><small>kaya@kayaconsulting.com · admin</small></td><td>1</td><td>12</td><td><span class="pill off">Waived</span></td><td><span class="pill warn">None</span></td><td>6 days ago</td><td><span class="pill off">Trial</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ACCOUNT DETAIL -->
+    <section data-s="detail" class="sa-main hide">
+      <div class="sa-top"><div><button class="back" type="button" id="backBtn">← All accounts</button><h1>Nexy Pilot</h1></div><div class="row"><span class="pill ok">Active</span><span class="pill off">Billing waived</span></div></div>
+      <div class="cols">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card"><h2>Billing for this account</h2>
+            <div class="toggle-row"><div><b>Charge this account</b><span>Off = free. You can turn it on at any time; it starts at their next billing date.</span></div><div class="sw"></div></div>
+            <div class="toggle-row"><div><b>Require a card on file, even while free</b><span>They add a card when they sign up, but nothing is charged. Handy for when you switch charging on.</span></div><div class="sw on"></div></div>
+            <div class="grid2"><div class="field"><label>Plan</label><select><option>Team</option><option>Solo</option><option>Custom</option></select></div>
+              <div class="field"><label>Price (per month)</label><input value="$29.00"></div></div>
+            <div class="grid2"><div class="field"><label>Card on file</label><input value="Visa •••• 4242 · exp 08/28" disabled></div>
+              <div class="field"><label>Next charge</label><input value="None (waived)" disabled></div></div>
+            <p class="note">Card numbers are never stored by LyteKeepr. They live with Stripe; we keep only the brand and the last four digits.</p>
+          </div>
+          <div class="card"><h2>People in this account</h2>
+            <table><thead><tr><th>Email</th><th>Role</th><th>Last sign-in</th><th></th></tr></thead><tbody>
+              <tr><td>petr@nexypilot.com</td><td><span class="pill coral">Admin</span></td><td>Today</td><td></td></tr>
+              <tr><td>anna.petrova@gmail.com</td><td><span class="pill">Team</span></td><td>Yesterday</td><td><a class="note" href="#">Turn off</a></td></tr>
+              <tr><td>marco.r@gmail.com</td><td><span class="pill">Team</span></td><td>Never</td><td><a class="note" href="#">Turn off</a></td></tr>
+            </tbody></table>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card"><h2>Usage, last 30 days</h2>
+            <table><tbody>
+              <tr><td>Contacts</td><td style="text-align:right"><b>412</b></td></tr>
+              <tr><td>Emails sent</td><td style="text-align:right"><b>186</b></td></tr>
+              <tr><td>AI messages</td><td style="text-align:right"><b>540</b></td></tr>
+              <tr><td>Errors</td><td style="text-align:right"><b>0</b></td></tr>
+            </tbody></table>
+            <div class="privacy">Only these counts are shown. You cannot see their contacts, emails or notes.</div>
+          </div>
+          <div class="card"><h2>Account actions</h2>
+            <div class="row"><button class="btn btn-soft" type="button">Suspend account</button><button class="btn btn-soft" type="button">Send a message to the admin</button></div>
+            <p class="note">Suspending blocks sign-in for everyone in the account. Their data is kept and nothing is deleted.</p>
+            <div class="field"><label>Private notes (only you see these)</label><textarea rows="3">Pilot customer. Wants Instagram messages added.</textarea></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BILLING -->
+    <section data-s="billing" class="sa-main hide">
+      <div class="sa-top"><h1>Billing &amp; pricing</h1><span class="pill warn">Stripe: not connected yet</span></div>
+      <div class="cols">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card"><h2>Launch settings (apply to every account)</h2>
+            <div class="toggle-row"><div><b>Waive all charges</b><span>While on, nobody is charged. Each account can still be switched individually.</span></div><div class="sw on"></div></div>
+            <div class="toggle-row"><div><b>Ask every new account for a card, even while free</b><span>Nothing is charged; the card is just kept ready.</span></div><div class="sw on"></div></div>
+            <div class="toggle-row"><div><b>Free trial for new accounts</b><span>Days before billing starts (only matters once charging is on).</span></div><div class="field" style="width:90px"><input value="14"></div></div>
+          </div>
+          <div class="card"><h2>Plans (what you charge)</h2>
+            <table><thead><tr><th>Plan</th><th>Price</th><th>Includes</th><th></th></tr></thead><tbody>
+              <tr><td><b>Solo</b></td><td>$15 / month</td><td>1 person</td><td><a class="note" href="#">Edit</a></td></tr>
+              <tr><td><b>Team</b></td><td>$29 / month</td><td>up to 5 people</td><td><a class="note" href="#">Edit</a></td></tr>
+            </tbody></table>
+            <div class="row"><button class="btn btn-soft" type="button">+ Add plan</button></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card"><h2>Set up payments</h2>
+            <p>Payments go through Stripe, so card numbers never touch LyteKeepr. Two steps, once:</p>
+            <div class="svc"><span><b>1 · Connect your Stripe account</b><small>Paste the two keys from your Stripe dashboard.</small></span><button class="btn btn-primary" type="button">Connect Stripe</button></div>
+            <div class="svc"><span><b>2 · Create your plans in Stripe</b><small>One click creates the Solo and Team prices above.</small></span><button class="btn btn-soft" type="button">Create</button></div>
+            <div class="privacy">Until Stripe is connected, nothing can be charged. Cards cannot be collected either, so "ask for a card" stays inactive.</div>
+          </div>
+          <div class="card"><h2>Money, this month</h2>
+            <table><tbody>
+              <tr><td>Paid</td><td style="text-align:right"><b>$29.00</b></td></tr>
+              <tr><td>Waived (would have been)</td><td style="text-align:right"><b>$73.00</b></td></tr>
+              <tr><td>Failed payments</td><td style="text-align:right"><b>0</b></td></tr>
+            </tbody></table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HEALTH -->
+    <section data-s="health" class="sa-main hide">
+      <div class="sa-top"><h1>Health &amp; errors</h1><span class="pill warn">3 open</span></div>
+      <div class="cols">
+        <div class="card"><h2>Services</h2>
+          <div class="svc"><span><span class="dot ok"></span>LyteKeepr app<small>responding in 120 ms</small></span><span class="pill ok">Up</span></div>
+          <div class="svc"><span><span class="dot ok"></span>Nightly backup<small>last run 07:00, 14 copies kept</small></span><span class="pill ok">OK</span></div>
+          <div class="svc"><span><span class="dot ok"></span>Google sign-in<small>last success 9 minutes ago</small></span><span class="pill ok">OK</span></div>
+          <div class="svc"><span><span class="dot warn"></span>Gmail sync<small>1 of 4 accounts failed today</small></span><span class="pill warn">Check</span></div>
+          <div class="svc"><span><span class="dot ok"></span>AI provider<small>no errors in 24 h</small></span><span class="pill ok">OK</span></div>
+          <div class="svc"><span><span class="dot ok"></span>Disk and memory<small>disk 38% full</small></span><span class="pill ok">OK</span></div>
+        </div>
+        <div class="card"><h2>Alerts</h2>
+          <div class="toggle-row"><div><b>Email me when something breaks</b><span>Goes to hotrunningwater@gmail.com, at most one a day per problem.</span></div><div class="sw on"></div></div>
+          <div class="toggle-row"><div><b>Email me about failed payments</b><span>Only once Stripe is connected.</span></div><div class="sw on"></div></div>
+          <div class="toggle-row"><div><b>Weekly summary</b><span>Mondays: new accounts, active people, errors.</span></div><div class="sw"></div></div>
+        </div>
+      </div>
+      <div class="card"><h2>Recent errors</h2>
+        <div class="err"><span class="pill bad">2 h ago</span><div>Gmail sync failed<small>Windowly · Google sign-in expired · <code>invalid_grant</code></small></div><button class="btn btn-soft" type="button">Mark handled</button></div>
+        <div class="err"><span class="pill bad">Yesterday</span><div>Email could not be sent<small>Brightline Studio · recipient address rejected · <code>550 5.1.1</code></small></div><button class="btn btn-soft" type="button">Mark handled</button></div>
+        <div class="err"><span class="pill warn">Yesterday</span><div>Slow response (4.1 s)<small>Nexy Pilot · contacts list · <code>GET /api/crm/overview</code></small></div><button class="btn btn-soft" type="button">Mark handled</button></div>
+        <p class="note">Error details contain the type of problem and which account, never the contents of anyone's emails or contacts.</p>
+      </div>
+    </section>
+
+    <!-- AUDIT -->
+    <section data-s="audit" class="sa-main hide">
+      <div class="sa-top"><h1>Activity log</h1><span class="note">Everything you change here is recorded</span></div>
+      <div class="card">
+        <table><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody>
+          <tr><td>Today 09:12</td><td>You</td><td>Turned "Require a card" on for Nexy Pilot</td></tr>
+          <tr><td>Yesterday 17:40</td><td>You</td><td>Waived charges for Kaya Consulting</td></tr>
+          <tr><td>Oct 14, 11:05</td><td>System</td><td>New account: Kaya Consulting</td></tr>
+          <tr><td>Oct 12, 08:30</td><td>You</td><td>Changed Team plan price to $29</td></tr>
+        </tbody></table>
+      </div>
+    </section>
+
+    <!-- LOGIN -->
+    <section data-s="login" class="sa-main hide">
+      <div class="card login-demo"><h2 style="font-size:20px">LyteKeepr super admin</h2><p>Only the owner can enter. Sign in with the owner's Google account.</p>
+        <button class="btn btn-primary" type="button">Sign in with Google</button>
+        <div class="privacy" style="text-align:left">Any other Google account sees: "This account is not allowed here." There is no password and no list of other admins.</div></div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var nav = document.querySelectorAll('.sa-nav button'), secs = document.querySelectorAll('section[data-s]');
+  function show(v, navKey) {
+    secs.forEach(function (s) { s.classList.toggle('hide', s.getAttribute('data-s') !== v); });
+    nav.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-v') === (navKey || v)); });
+  }
+  nav.forEach(function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-v')); }); });
+  document.querySelectorAll('[data-open]').forEach(function (r) { r.addEventListener('click', function () { show('detail', 'accounts'); }); });
+  document.getElementById('backBtn').addEventListener('click', function () { show('accounts'); });
+  document.querySelectorAll('.sw').forEach(function (s) { s.addEventListener('click', function () { s.classList.toggle('on'); }); });
+})();
+</script>
+</body>
+</html>

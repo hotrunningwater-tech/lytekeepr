@@ -267,7 +267,8 @@ def init_db() -> None:
             ("companies", {"website": "TEXT", "created_at": "TEXT", "source_file": "TEXT"}),
             ("people", {"headline": "TEXT", "location": "TEXT", "industry": "TEXT", "audience": "TEXT", "phone": "TEXT", "telegram": "TEXT",
                         "email": "TEXT", "website": "TEXT", "verified": "TEXT", "date_found": "TEXT", "extras": "TEXT", "source_file": "TEXT",
-                        "batch": "TEXT", "created_at": "TEXT", "raw_notes": "TEXT"}),
+                        "batch": "TEXT", "created_at": "TEXT", "raw_notes": "TEXT",
+                        "owner_id": "INTEGER"}),       # who added the contact (empty = the admin)
             ("channel_accounts", {"url": "TEXT"}),
         ):
             have = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
