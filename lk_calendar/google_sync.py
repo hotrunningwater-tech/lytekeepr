@@ -26,7 +26,7 @@ API = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 PAST_DAYS, FUTURE_DAYS = 30, 180
 CALL_RE = re.compile(r"(zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|gotomeeting\.com|gotomeet\.me)", re.I)
 FIELDS = ("nextPageToken,items(id,status,summary,description,location,hangoutLink,start,end,"
-          "conferenceData(entryPoints(uri,entryPointType)))")
+          "conferenceData(entryPoints(uri,entryPointType)),attendees(email,displayName,self,organizer))")
 
 
 class GoogleSyncError(Exception):
@@ -132,9 +132,12 @@ def _convert(item: dict) -> dict | None:
     has_call = bool(join) or bool(CALL_RE.search(f"{location} {description}"))
     notes = "\n".join(x for x in (f"Join: {join}" if join else "", f"Location: {location}" if location else "") if x)
     notes = (notes + "\n\n" + description).strip() if description else notes
+    attendees = [{"email": (a.get("email") or "").lower(), "name": a.get("displayName") or ""}
+                 for a in item.get("attendees") or [] if a.get("email") and not a.get("self")]      # everyone invited except you
     return {"external_id": "google:primary:" + item["id"], "title": (item.get("summary") or "(no title)").strip()[:200],
             "start_date": s.date().isoformat(), "start_time": s.strftime("%H:%M"),
-            "duration_min": min(max(minutes, 5), 24 * 60), "notes": notes[:2000], "has_call": 1 if has_call else 0}
+            "duration_min": min(max(minutes, 5), 24 * 60), "notes": notes[:2000], "has_call": 1 if has_call else 0,
+            "attendees": json.dumps(attendees), "join_url": join[:500]}
 
 
 def _sync_locked() -> dict:
@@ -160,19 +163,21 @@ def _sync_locked() -> dict:
             fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google"})
             if cur is None:
                 conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
-                                notes, source, lead_ref, created_at, external_id, has_call)
+                                notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url)
                                 VALUES (:title, :project, :kind, :start_date, :start_time, :duration_min, :repeat, :repeat_days,
-                                :notes, 'google', '', :created_at, :external_id, :has_call)""",
-                             {**fields, "created_at": store.now_local().isoformat(), "external_id": ext, "has_call": row["has_call"]})
+                                :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url)""",
+                             {**fields, "created_at": store.now_local().isoformat(), "external_id": ext, "has_call": row["has_call"],
+                              "attendees": row["attendees"], "join_url": row["join_url"]})
                 result["added"] += 1       # INSERT OR IGNORE + the unique index mean two racing syncs can never create a duplicate
                 continue
-            same = all(cur[k] == fields[k] for k in ("title", "start_date", "start_time", "duration_min", "notes")) and cur["has_call"] == row["has_call"]
+            same = (all(cur[k] == fields[k] for k in ("title", "start_date", "start_time", "duration_min", "notes")) and cur["has_call"] == row["has_call"]
+                    and cur["attendees"] == row["attendees"] and cur["join_url"] == row["join_url"])
             if same:
                 result["unchanged"] += 1
                 continue
-            conn.execute("UPDATE events SET title=?, start_date=?, start_time=?, duration_min=?, notes=?, has_call=? WHERE id=?",
+            conn.execute("UPDATE events SET title=?, start_date=?, start_time=?, duration_min=?, notes=?, has_call=?, attendees=?, join_url=? WHERE id=?",
                          (fields["title"], fields["start_date"], fields["start_time"], fields["duration_min"], fields["notes"],
-                          row["has_call"], cur["id"]))
+                          row["has_call"], row["attendees"], row["join_url"], cur["id"]))
             result["updated"] += 1
             store.meeting_follow_up(conn, dict(conn.execute("SELECT * FROM events WHERE id = ?", (cur["id"],)).fetchone()))
 
@@ -222,3 +227,52 @@ def status() -> dict:
     return {"last_sync": store.get_state("last_google_sync"), "connected": is_connected(),
             "last_attempt": last.get("at"), "last_trigger": last.get("trigger"), "last_ok": last.get("ok"),
             "message": last.get("message", ""), "needs_reconnect": bool(last.get("needs_reconnect"))}
+
+
+# ------------------------------------------------------------------ creating a meeting (needs the "create calendar events" permission)
+def create_meeting(title: str, start_date: str, start_time: str, duration_min: int, invitees: list, add_meet: bool = True,
+                   notes: str = "", expect_recording: bool = True, project: str = "google") -> dict:
+    """Put a meeting in the user's Google Calendar, with a Google Meet link if asked, and send the invites. It is then kept here like
+    any synced Google meeting (with its invitees), and marked to expect a Fathom recording."""
+    import uuid
+    if not title.strip():
+        raise GoogleSyncError("Please enter a title.")
+    start = datetime.fromisoformat(f"{start_date}T{start_time}")
+    end = start + timedelta(minutes=int(duration_min or 30))
+    zone = str(store.TZ)
+    body = {"summary": title.strip()[:200], "description": notes or "",
+            "start": {"dateTime": start.strftime("%Y-%m-%dT%H:%M:00"), "timeZone": zone},
+            "end": {"dateTime": end.strftime("%Y-%m-%dT%H:%M:00"), "timeZone": zone},
+            "attendees": [{"email": e} for e in invitees]}
+    if add_meet:
+        body["conferenceData"] = {"createRequest": {"requestId": uuid.uuid4().hex, "conferenceSolutionKey": {"type": "hangoutsMeet"}}}
+    token = _access_token()
+    params = urllib.parse.urlencode({"conferenceDataVersion": 1 if add_meet else 0, "sendUpdates": "all" if invitees else "none"})
+    req = urllib.request.Request(f"{API}?{params}", data=json.dumps(body).encode(), method="POST")
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            item = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        low = exc.read().decode(errors="replace").lower()
+        if exc.code == 401 or (exc.code == 403 and ("insufficient" in low or "scope" in low)):
+            raise GoogleAuthError("LyteKeepr may not create meetings in your Google Calendar yet. Reconnect Google once (open "
+                                  "/auth/google/start) and allow calendar access, then try again.") from exc
+        raise GoogleSyncError(f"Google could not create the meeting (error {exc.code}).") from exc
+    except urllib.error.URLError as exc:
+        raise GoogleSyncError(f"Could not reach Google: {exc}") from exc
+    row = _convert(item)
+    if not row:
+        raise GoogleSyncError("Google created the meeting but sent back something unreadable; it will appear after the next sync.")
+    with store._conn() as conn:
+        fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google", "notes": row["notes"]})
+        conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
+                        notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, expect_recording)
+                        VALUES (:title, :project, :kind, :start_date, :start_time, :duration_min, :repeat, :repeat_days,
+                        :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :expect)""",
+                     {**fields, "created_at": store.now_local().isoformat(), "external_id": row["external_id"], "has_call": row["has_call"],
+                      "attendees": row["attendees"], "join_url": row["join_url"], "expect": 1 if expect_recording else 0})
+        ev = conn.execute("SELECT * FROM events WHERE external_id = ?", (row["external_id"],)).fetchone()
+    return {"id": ev["id"], "title": ev["title"], "start_date": ev["start_date"], "start_time": ev["start_time"], "join_url": ev["join_url"],
+            "attendees": json.loads(ev["attendees"] or "[]")}

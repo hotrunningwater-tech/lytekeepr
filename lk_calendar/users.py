@@ -107,7 +107,8 @@ def sign_in_with_google(email: str, verified: bool, name: str = "") -> dict | No
 # Left out for now: Gmail, LinkedIn, documents, the AI chats (they read the admin's mailbox and messages), the Google Calendar sync and the
 # app-wide profile name. Each comes back when it works per person.
 USER_API_ALLOWED = ("/api/me", "/api/crm/", "/api/calendar/")
-USER_API_BLOCKED = ("/api/calendar/chat", "/api/calendar/contact-ai", "/api/calendar/google", "/api/calendar/profile", "/api/crm/recent-activity")
+USER_API_BLOCKED = ("/api/calendar/chat", "/api/calendar/contact-ai", "/api/calendar/google", "/api/calendar/profile", "/api/crm/recent-activity",
+                    "/api/calendar/meetings")
 
 
 def api_allowed_for_user(path: str) -> bool:

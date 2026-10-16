@@ -385,22 +385,31 @@
     if (!(e.has_call || e.kind === 'meeting' || e.expect_recording)) return null;
     if (!(e.id in callCache)) {
       callCache[e.id] = 'loading';
-      api('GET', '/api/calls/event/' + e.id).then(function (r) { callCache[e.id] = r.call || null; render(); })
-        .catch(function () { callCache[e.id] = null; render(); });
+      api('GET', '/api/calls/event/' + e.id).then(function (r) { callCache[e.id] = r; render(); })
+        .catch(function () { callCache[e.id] = { call: null, attendees: [] }; render(); });
     }
-    var c = callCache[e.id];
-    if (c === 'loading') return null;
-    if (!c) return h('div', { class: 'lkc-call' }, [h('span', { class: 'lkc-lbl' }, 'Recording (Fathom)'),
-      h('p', { class: 'lkc-empty', style: 'margin:0' }, 'No recording from Fathom for this meeting yet. If it did not happen, mark it No-show below.')]);
+    var cached = callCache[e.id];
+    if (cached === 'loading') return null;
+    var c = cached.call;
+    var invited = (cached.attendees || []).length ? [h('span', { class: 'lkc-lbl' }, 'Invited')].concat(cached.attendees.map(function (a) {
+      return h('div', { class: 'lkc-member' }, [h('div', { class: 'lkc-member-main' }, [h('b', {}, a.contact_name || a.name || a.email),
+        h('span', { class: 'lkc-leadmeta' }, a.person_id ? 'Contact' + (a.funnel ? ' · ' + a.funnel + (a.stage ? ' — ' + a.stage : '') : '') : a.email + ' · not in your contacts')]),
+        h('div', { class: 'lkc-actions' }, [a.person_id
+          ? h('button', { class: 'btn', type: 'button', onclick: function () { if (window.lkOpenPerson) window.lkOpenPerson(a.person_id); } }, 'Open')
+          : h('button', { class: 'btn', type: 'button', onclick: function () { if (window.lkContacts) window.lkContacts.addContact({ email: a.email, name: a.name || '', channel: 'email' }, function () { delete callCache[e.id]; render(); }); } }, 'Add as contact')])]);
+    })) : [];
+    if (e.join_url) invited.push(h('p', { class: 'lkc-empty', style: 'margin:0' }, ['Join: ', h('a', { href: e.join_url, target: '_blank', rel: 'noopener' }, e.join_url)]));
+    if (!c) return h('div', { class: 'lkc-call' }, invited.concat([h('span', { class: 'lkc-lbl' }, 'Recording (Fathom)'),
+      h('p', { class: 'lkc-empty', style: 'margin:0' }, 'No recording from Fathom for this meeting yet. If it did not happen, mark it No-show below.')]));
     function post(url, body, btn, busy, after) {
       btn.disabled = true; btn.textContent = busy;
       api('POST', url, body || {}).then(after).catch(function (err) { showError(err.message); btn.disabled = false; });
     }
-    var people = [h('span', { class: 'lkc-lbl' }, 'Who was on it')].concat((c.contacts || []).map(function (p) {
+    var people = invited.length ? invited : [h('span', { class: 'lkc-lbl' }, 'Who was on it')].concat((c.contacts || []).map(function (p) {
       return h('div', { class: 'lkc-member' }, [h('div', { class: 'lkc-member-main' }, [h('b', {}, p.name || 'Contact'), h('span', { class: 'lkc-leadmeta' }, 'Contact')]),
         h('div', { class: 'lkc-actions' }, [h('button', { class: 'btn', type: 'button', onclick: function () { if (window.lkOpenPerson) window.lkOpenPerson(p.person_id); } }, 'Open')])]);
     }));
-    if ((c.invitees || []).length) people.push(h('p', { class: 'lkc-empty', style: 'margin:0' }, 'Invited: ' + c.invitees.map(function (i) { return i.name || i.email; }).join(', ')));
+    if (!invited.length && (c.invitees || []).length) people.push(h('p', { class: 'lkc-empty', style: 'margin:0' }, 'Invited: ' + c.invitees.map(function (i) { return i.name || i.email; }).join(', ')));
     var transcript = callOpen[c.call_id] ? h('div', { class: 'crm-call-transcript' }, (c.transcript || []).map(function (t) {
       return h('p', {}, [h('i', {}, t.at), h('b', {}, (t.speaker || 'Someone') + ': '), t.text]);
     })) : null;
@@ -640,6 +649,7 @@
       repeat: seed.repeat || 'none',
       days: seed.repeat_days ? seed.repeat_days.split(',').filter(Boolean).map(Number) : [],
       notes: seed.notes || '',
+      invite: '', meet: true, expect: true,          // new meetings only: sent from Google Calendar with a Meet link
       error: ''
     };
     state.pane = 'info'; state.mode = 'form';
@@ -684,6 +694,11 @@
       h('label', { class: 'lkc-check' }, [h('input', { type: 'checkbox', id: 'lkcUntimed', checked: !!f.untimed, onchange: function () { sync(); render(); } }),
         'No specific time (shows in the top strip)']),
       f.untimed ? null : h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Length'), durSel]),
+      f.kind === 'meeting' && !f.id ? h('div', { class: 'lkc-meetbox' }, [
+        h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Invite (contacts or emails)'), h('input', { type: 'text', id: 'lkcInvite', value: f.invite, placeholder: 'e.g. Peter, sara@company.com' })]),
+        h('label', { class: 'lkc-check' }, [h('input', { type: 'checkbox', id: 'lkcMeet', checked: !!f.meet }), 'Add a Google Meet link (sent with the invite)']),
+        h('label', { class: 'lkc-check' }, [h('input', { type: 'checkbox', id: 'lkcExpect', checked: !!f.expect }), 'Expect a Fathom recording (ask "No-show?" if none arrives)'])
+      ]) : null,
       h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Repeat'), repeatSel]),
       daysRow,
       h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Notes'), h('textarea', { id: 'lkcNotes', placeholder: 'Optional' }, f.notes)]),
@@ -705,6 +720,9 @@
     if (g('lkcRepeat')) f.repeat = g('lkcRepeat');
     if (g('lkcNotes') != null) f.notes = g('lkcNotes');
     var un = document.getElementById('lkcUntimed'); if (un) f.untimed = un.checked;
+    if (g('lkcInvite') != null) f.invite = g('lkcInvite');
+    var mt = document.getElementById('lkcMeet'); if (mt) f.meet = mt.checked;
+    var ex = document.getElementById('lkcExpect'); if (ex) f.expect = ex.checked;
   }
 
   function save() {
@@ -717,6 +735,15 @@
       title: f.title.trim(), project: f.project, kind: f.kind, start_date: f.start_date, start_time: f.untimed ? '08:00' : f.start_time, untimed: !!f.untimed,
       duration_min: f.duration_min, repeat: f.repeat, repeat_days: f.days.slice().sort().join(','), notes: f.notes
     };
+    if (!f.id && f.kind === 'meeting' && (f.meet || (f.invite || '').trim())) {
+      // A real meeting: created in Google Calendar with the invites (and a Meet link), then shown here like any Google meeting.
+      api('POST', '/api/calendar/meetings', { title: body.title, start_date: body.start_date, start_time: body.start_time, duration_min: body.duration_min || 30,
+        invite: f.invite, meet: f.meet, expect_recording: f.expect, notes: body.notes }).then(function (m) {
+        state.weekStart = mondayOf(m.start_date); state.selected = { id: m.id, date: m.start_date }; state.mode = 'detail'; state.form = null;
+        return load();
+      }).catch(function (e) { f.error = e.message; render(); });
+      return;
+    }
     var req = f.id ? api('PUT', '/api/calendar/events/' + f.id, body) : api('POST', '/api/calendar/events', body);
     req.then(function (saved) {
       var first = firstOccurrence(saved);

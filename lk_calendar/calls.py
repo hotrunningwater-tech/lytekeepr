@@ -272,6 +272,39 @@ def transcript_text(call: dict, limit: int = MAX_TRANSCRIPT_CHARS_FOR_AI) -> str
     return text if len(text) <= limit else text[:limit] + "\n[... transcript cut here ...]"
 
 
+def event_attendees(event_id: int) -> list[dict]:
+    """Who was invited to a calendar meeting, each matched to a contact when their email belongs to one."""
+    with store._conn() as cal:
+        row = cal.execute("SELECT attendees FROM events WHERE id = ?", (event_id,)).fetchone()
+    people = json.loads(row["attendees"] or "[]") if row else []
+    out = []
+    with _crm() as conn:
+        for a in people:
+            match = conn.execute("""SELECT p.person_id, p.name, f.name AS funnel, s.name AS stage FROM channel_accounts ca JOIN people p ON p.person_id = ca.person_id
+                                    LEFT JOIN funnels f ON f.funnel_id = p.funnel_id LEFT JOIN funnel_stages s ON s.stage_id = p.funnel_stage_id
+                                    WHERE ca.channel = 'email' AND lower(ca.channel_identifier) = ? LIMIT 1""", (a["email"],)).fetchone()
+            out.append({**a, "person_id": match["person_id"] if match else None, "contact_name": match["name"] if match else "",
+                        "funnel": (match["funnel"] or "") if match else "", "stage": (match["stage"] or "") if match else ""})
+    return out
+
+
+def parse_invitees(text: str) -> tuple[list, list]:
+    """'Peter, sara@x.com' -> ([emails], [names not found]). A name is looked up among contacts that have an email."""
+    emails, unknown = [], []
+    for part in [p.strip() for p in re.split(r"[,;\n]", text or "") if p.strip()]:
+        found = re.findall(r"[\w.+-]+@[\w-]+\.[\w.-]+", part)
+        if found:
+            emails += [f.lower() for f in found]
+            continue
+        from assistant.contact_lookup import find_people
+        people = find_people(part, email_only=True)
+        if len(people) == 1:
+            emails.append(people[0]["email"].lower())
+        else:
+            unknown.append(part)
+    return list(dict.fromkeys(emails)), unknown
+
+
 # ------------------------------------------------------------------ actions
 def set_status(call_id: int, status: str) -> dict:
     if status not in STATUSES:
@@ -445,7 +478,24 @@ def register(app):
     @app.get("/api/calls/event/<int:event_id>")
     @guarded
     def calls_event(event_id):
-        return jsonify({"call": call_for_event(event_id)})
+        return jsonify({"call": call_for_event(event_id), "attendees": event_attendees(event_id)})
+
+    @app.post("/api/calendar/meetings")
+    @guarded
+    def meetings_create():
+        """Create a meeting in Google Calendar (optionally with a Meet link) and send the invites."""
+        from . import google_sync
+        body = request.get_json(silent=True) or {}
+        emails, unknown = parse_invitees(str(body.get("invite", "")))
+        if unknown:
+            raise CallsError("Not found as a contact with an email: " + ", ".join(unknown) + ". Type their email address instead.")
+        try:
+            meeting = google_sync.create_meeting(str(body.get("title", "")), str(body.get("start_date", "")), str(body.get("start_time", "")),
+                                                 int(body.get("duration_min") or 30), emails, bool(body.get("meet", True)), str(body.get("notes", "")),
+                                                 bool(body.get("expect_recording", True)))
+        except google_sync.GoogleSyncError as exc:
+            raise CallsError(str(exc))
+        return jsonify(meeting), 201
 
     @app.get("/api/calls/<int:call_id>")
     @guarded

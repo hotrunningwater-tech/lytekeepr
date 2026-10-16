@@ -178,3 +178,4 @@
 .lkc-clear { background: none; border: none; padding: 2px 4px; font-family: var(--font-body); font-size: 11.5px; color: var(--ink-soft); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .lkc-clear:hover { color: var(--ink); }
 .lkc-call { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(41,67,78,.08); padding-top: 10px; }
+.lkc-meetbox { display: flex; flex-direction: column; gap: 8px; background: rgba(230,237,240,.55); border-radius: 12px; padding: 10px 12px; }

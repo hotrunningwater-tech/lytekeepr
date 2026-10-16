@@ -20,9 +20,9 @@ AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify"
 CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
-# Everything requested at sign-in, space-separated as Google expects. Existing Gmail
-# access is unchanged; Calendar is read-only and nothing uses it yet.
-REQUESTED_SCOPES = (GMAIL_MODIFY_SCOPE, CALENDAR_READONLY_SCOPE)
+CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events"      # create meetings (with a Meet link) from LyteKeepr
+# Everything requested when Gmail/Google is connected, space-separated as Google expects. (Signing in only asks who you are.)
+REQUESTED_SCOPES = (GMAIL_MODIFY_SCOPE, CALENDAR_READONLY_SCOPE, CALENDAR_EVENTS_SCOPE)
 
 
 def build_authorization_url(state: str | None = None, login_hint: str | None = None) -> str:
