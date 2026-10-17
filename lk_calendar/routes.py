@@ -34,13 +34,25 @@ def _one_per_meeting(events: list) -> list:
     return [e for e in events if not e.get("ical_uid") or best.get((e["ical_uid"], e.get("date") or e.get("start_date"))) is e]
 
 
+def _with_people(events: list) -> list:
+    """Whose each item is (who_id, who_name): the person who created it or whose Google Calendar it came from; the admin's otherwise."""
+    with store._conn() as conn:
+        rows = conn.execute("SELECT id, name, email, role FROM users").fetchall()
+    names = {r["id"]: (r["name"] or (r["email"] or "").split("@")[0]) for r in rows}
+    admin_id = next((r["id"] for r in rows if r["role"] == "admin"), None)
+    for e in events:
+        e["who_id"] = e.get("owner_id") or admin_id
+        e["who_name"] = names.get(e["who_id"], "")
+    return events
+
+
 @bp.get("/api/calendar/events")
 def list_events():
     start, end = request.args.get("start"), request.args.get("end")
     if not start or not end:
         return jsonify({"error": "start and end are required"}), 400
     events = _one_per_meeting([e for e in store.occurrences(start, end) if access.can_event(e)])      # "Everything" sees the admin's Google meetings too
-    return jsonify({"now": store.now_local().strftime("%Y-%m-%dT%H:%M"), "events": events})
+    return jsonify({"now": store.now_local().strftime("%Y-%m-%dT%H:%M"), "events": _with_people(events), "me": users.current_id()})
 
 
 @bp.post("/api/calendar/overdue/move")
@@ -52,7 +64,7 @@ def move_overdue():
 def agenda():
     data = store.agenda()
     for key in ("overdue", "today", "upcoming"):
-        data[key] = _one_per_meeting([e for e in data[key] if access.can_event(e)])
+        data[key] = _with_people(_one_per_meeting([e for e in data[key] if access.can_event(e)]))
     data["badge"] = len(data["overdue"]) + sum(1 for o in data["today"] if not o["done"])
     return jsonify(data)
 

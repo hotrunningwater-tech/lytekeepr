@@ -237,3 +237,6 @@
 .lkc-calpick { margin-left: 8px; }
 .lkc-calname { display: inline-flex; align-items: center; gap: 8px; }
 .lkc-calname i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.lkc-filter-sep { width: 1px; align-self: stretch; background: rgba(41,67,78,.15); margin: 4px 4px; }
+.lkc-person b { width: 18px; height: 18px; border-radius: 50%; background: var(--ink); color: var(--surface); display: inline-flex; align-items: center;
+  justify-content: center; font-size: 10px; font-family: var(--font-heading); }

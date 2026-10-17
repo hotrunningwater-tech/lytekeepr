@@ -124,7 +124,7 @@
       api('GET', '/api/calendar/google/status').catch(function () { return null; })
     ]).then(function (r) {
       state.google = r[2];
-      state.events = r[0].events;
+      state.events = r[0].events; state.me = r[0].me;
       state.now = r[0].now;
       state.agenda = r[1];
       render();
@@ -194,7 +194,7 @@
   }
 
   function stripCell(dayIso) {
-    var items = buildItems(state.events.filter(function (e) { return e.untimed && e.date === dayIso && !state.hidden[e.project]; }));
+    var items = buildItems(state.events.filter(function (e) { return e.untimed && e.date === dayIso && shown(e); }));
     var cell = h('div', { class: 'lkc-strip-cell' + (items.length > 2 ? ' has-more' : '') + (dayIso === today() ? ' today' : '') });
     var list = h('div', { class: 'lkc-strip-list' });
     items.forEach(function (e) {
@@ -215,7 +215,7 @@
     var wrap = $('#lkcGridWrap');
     var prevScroll = wrap ? wrap.scrollTop : null;
     state.groupIndex = {};
-    var visible = state.events.filter(function (e) { return !state.hidden[e.project]; });
+    var visible = state.events.filter(shown);
     var timed = visible.filter(function (e) { return !e.untimed; });
     var lo, hi;
     if (state.density === 'detailed') {                     // roomy, scrolling: fixed 7 AM - 9 PM, wider if events fall outside
@@ -314,6 +314,10 @@
   }
   var SECT_KEY = 'lkcSections';
   try { state.sect = JSON.parse(localStorage.getItem(SECT_KEY) || '{}') || {}; } catch (e) { state.sect = {}; }
+  // People hidden with the name pills (this browser only; nothing is deleted)
+  try { state.hiddenPeople = JSON.parse(localStorage.getItem('lkcHiddenPeople') || '{}') || {}; } catch (e) { state.hiddenPeople = {}; }
+  function savePeople() { try { localStorage.setItem('lkcHiddenPeople', JSON.stringify(state.hiddenPeople)); } catch (e) { /* storage unavailable */ } }
+  function shown(e) { return !state.hidden[e.project] && !state.hiddenPeople[e.who_id]; }
   function sectionOpen(key, count) {
     if (state.sect[key] != null) return state.sect[key];
     return count <= 3;                    // long lists start folded to one line
@@ -372,7 +376,8 @@
     var syncLine = state.syncNote || (g && g.last_sync ? 'Google last synced ' + g.last_sync + ' \u00b7 automatic every hour' : '');
     if (syncLine) out.push(h('p', { class: 'lkc-synced' }, [syncLine,
       g && g.connected && g.calendars_chosen ? h('button', { class: 'lkc-clear lkc-calpick', type: 'button', onclick: openCalendars }, 'Choose calendars') : null]));
-    var overdue = buildItems(a.overdue), todays = buildItems(a.today), upcoming = buildItems(a.upcoming);
+    var mine = function (list) { return (list || []).filter(function (o) { return !state.hiddenPeople[o.who_id]; }); };      // the name pills apply here too
+    var overdue = buildItems(mine(a.overdue)), todays = buildItems(mine(a.today)), upcoming = buildItems(mine(a.upcoming));
     if (overdue.length) {
       out.push(agendaSection('overdue', 'Overdue', overdue.map(function (o) { return agendaRow(o, true); }), '',
         h('button', { type: 'button', class: 'btn lkc-mini', onclick: moveAllOverdue }, 'Move all to today')));
@@ -486,6 +491,8 @@
       ['When', e.untimed ? longDate(e.date) + ' \u00b7 no specific time' : longDate(e.date) + ' \u00b7 ' + label12(e.start_time) + ' \u2013 ' + label12(hhmm(endMin))]
     ];
     if (!google) { rows.push(['Repeats', repeatText]); rows.push(['Status', e.done ? 'Done' : 'Open']); }
+    if (e.who_id != null) rows.push(['From', e.who_id === state.me ? (google ? 'Your Google Calendar' : 'You')
+                                              : (e.who_name || 'A teammate') + (google ? '\u2019s Google Calendar' : '')]);
     var grid = h('div', { class: 'lkc-grid2' });
     rows.forEach(function (r) { grid.appendChild(h('label', { class: 'lkc-lbl' }, r[0])); grid.appendChild(h('div', { class: 'lkc-v' }, r[1])); });
     var actions = [];
@@ -505,7 +512,7 @@
         if (!confirm(e.repeat === 'none' ? 'Delete this item?' : 'Delete this item and all its repeats?')) return;
         api('DELETE', '/api/calendar/events/' + e.id).then(function () { state.selected = null; state.mode = 'agenda'; load(); });
       } }, 'Delete'));
-    } else {
+    } else if (e.who_id == null || e.who_id === state.me) {      // only meetings in your own Google Calendar can be deleted by you
       actions.push(h('button', { class: 'btn danger', type: 'button', onclick: function () {
         var invited = ((callCache[e.id] || {}).attendees || []).length;
         if (!confirm('Delete this meeting from your Google Calendar?' + (invited ? ' The people invited get a cancellation email from Google.' : ''))) return;
@@ -1085,9 +1092,20 @@
     var opts = { month: 'short', timeZone: 'UTC' };
     $('#lkcRange').textContent = s.toLocaleString('en-US', opts) + ' ' + s.getUTCDate() + ' – ' +
       (s.getUTCMonth() === e.getUTCMonth() ? '' : e.toLocaleString('en-US', opts) + ' ') + e.getUTCDate() + ', ' + e.getUTCFullYear();
-    $('#lkcFilters').replaceChildren.apply($('#lkcFilters'), Object.keys(PROJECTS).map(function (p) {
+    var chips = Object.keys(PROJECTS).map(function (p) {
       return h('span', { class: 'lkc-chip' + (state.hidden[p] ? ' off' : ''), onclick: function () { state.hidden[p] = !state.hidden[p]; render(); } }, [dot(p), PROJECTS[p].label]);
-    }));
+    });
+    var people = {};                                // whose items are on screen: one pill each when there is more than one person
+    state.events.forEach(function (e) { if (e.who_id != null) people[e.who_id] = e.who_name; });
+    if (Object.keys(people).length > 1) {
+      chips.push(h('span', { class: 'lkc-filter-sep' }));
+      Object.keys(people).sort(function (a, b) { return (+b === state.me) - (+a === state.me); }).forEach(function (id) {
+        var label = +id === state.me ? 'Me' : (people[id] || 'Someone');
+        chips.push(h('span', { class: 'lkc-chip lkc-person' + (state.hiddenPeople[id] ? ' off' : ''), title: state.hiddenPeople[id] ? 'Show ' + label : 'Hide ' + label,
+          onclick: function () { state.hiddenPeople[id] = !state.hiddenPeople[id]; savePeople(); render(); } }, [h('b', {}, label.charAt(0).toUpperCase()), label]));
+      });
+    }
+    $('#lkcFilters').replaceChildren.apply($('#lkcFilters'), chips);
     renderGrid();
     $('#lkcDensity').textContent = state.density === 'fit' ? 'Fit day' : 'Detailed';
     $('#lkcTabInfo').classList.toggle('is-active', state.pane === 'info');
