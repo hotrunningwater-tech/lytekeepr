@@ -1,5 +1,5 @@
 #!/bin/bash
-# Push the current code to https://lytekeepr.xyz/calendar/ (Hetzner, SSH alias "hetzner-landing").
+# Push the current code to https://lytekeepr.xyz/app/ (Hetzner, SSH alias "hetzner-landing").
 # Uploads code only: no .env, no data, no tokens, no recordings. The calendar database lives in
 # /opt/lytekeepr-calendar/data/ on the server and is never touched by this script.
 # Usage: scripts/deploy_calendar.sh [--dry-run]
@@ -53,4 +53,4 @@ rsync -az --delete --filter="merge $FILTER" ./ "$HOST:$DEST"
 ssh "$HOST" 'chown -R lkcal:lkcal /opt/lytekeepr-calendar/app &&
   su -s /bin/bash lkcal -c "cd /opt/lytekeepr-calendar && venv/bin/pip install -q --disable-pip-version-check -r app/requirements.txt" &&
   systemctl restart lytekeepr-calendar && sleep 3 && systemctl is-active lytekeepr-calendar'
-echo "Deployed. Check https://lytekeepr.xyz/calendar/"
+echo "Deployed. Check https://lytekeepr.xyz/app/"

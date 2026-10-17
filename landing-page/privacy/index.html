@@ -61,14 +61,14 @@
   <main id="main">
     <article class="policy">
       <h1>Privacy Policy</h1>
-      <p class="updated">Last updated: October 13, 2026</p>
+      <p class="updated">Last updated: October 16, 2026</p>
 
       <div class="short">
         <h2>The short version</h2>
         <ul>
-          <li>LyteKeepr connects to your Google account only when you choose to connect it. It can read your Gmail messages and your primary Google Calendar, and it can send an email from your Gmail account only after you approve that email.</li>
+          <li>LyteKeepr connects to your Google account only when you choose to connect it. It can read your Gmail messages and your primary Google Calendar, create or delete a meeting in that calendar when you ask it to, and send an email from your Gmail account only after you approve that email.</li>
           <li>We use Google data only to provide LyteKeepr's features to you. We do not sell it, use it for advertising, or use it to train AI models.</li>
-          <li>When you use LyteKeepr's AI features, relevant text from your emails, calendar events or leads is sent to OpenAI to produce the answer (see section 5).</li>
+          <li>When you use LyteKeepr's AI features, relevant text from your emails, calendar events, call transcripts or leads is sent to OpenAI to produce the answer (see section 5).</li>
           <li>You can disconnect Google at any time, and you can ask us to delete your data (see section 7).</li>
         </ul>
       </div>
@@ -91,7 +91,7 @@
       <p>LyteKeepr ("we", "us") is an independent B2B relationship software product available at <a href="https://lytekeepr.xyz">lytekeepr.xyz</a>. It helps you keep track of conversations with leads and customers across LinkedIn, Instagram, email and your calendar, and reminds you when to follow up. It is currently offered through early access. This policy applies to the LyteKeepr website and the LyteKeepr application.</p>
 
       <h2 id="google">2. Google user data we access</h2>
-      <p>Google access is optional and starts only when you sign in with Google and approve the permissions shown on Google's consent screen. We request the following two permissions (scopes):</p>
+      <p>Google access is optional and starts only when you sign in with Google and approve the permissions shown on Google's consent screen. We request the following permissions (scopes):</p>
       <div class="scroll">
         <table>
           <thead><tr><th>Google service and scope</th><th>What we read or do</th><th>Why</th></tr></thead>
@@ -103,14 +103,19 @@
             </tr>
             <tr>
               <td><strong>Google Calendar</strong><br><code>https://www.googleapis.com/auth/calendar.readonly</code></td>
-              <td>Read-only access to events on your primary calendar, from about 30 days in the past to about 6 months ahead: title, start and end time, description, location and meeting link. All-day events are ignored. We never create, change or delete anything in your Google Calendar.</td>
+              <td>Read-only access to events on your primary calendar, from about 30 days in the past to about 6 months ahead: title, start and end time, description, location and meeting link. All-day events are ignored. This permission cannot change your calendar.</td>
               <td>To show your meetings next to your tasks and follow-ups, let you add your own notes and meeting status in LyteKeepr, and create a follow-up reminder 24 hours after a conference call you mark as completed. While connected, the calendar refreshes automatically about once an hour.</td>
+            </tr>
+            <tr>
+              <td><strong>Google Calendar events</strong><br><code>https://www.googleapis.com/auth/calendar.events</code></td>
+              <td>Creates a meeting in your primary calendar when you press Save on a new meeting in LyteKeepr (title, time, length, notes, the people you chose to invite and, if you ask, a Google Meet link), and deletes a meeting when you press Delete meeting. Google then emails the invitation or cancellation to the people invited. We do not change or delete any other event.</td>
+              <td>So you can schedule calls with your contacts from LyteKeepr and have them recorded and linked to the right contact.</td>
             </tr>
           </tbody>
         </table>
       </div>
       <p>The Gmail permission is Google's "modify" scope. In the LyteKeepr application we use it to read messages and to send messages you approve; the application does not delete, trash or relabel your Gmail messages. (The only other write is a separate import tool run by the operator, which can add historical messages to the operator's own mailbox. It is not part of the application screens.)</p>
-      <p>Google is used only to connect Gmail and Calendar. It is not used to log you in to LyteKeepr.</p>
+      <p>You can also sign in to LyteKeepr with Google. For that we receive only your email address and name (the <code>openid</code>, <code>email</code> and <code>profile</code> scopes), to know which account is signing in.</p>
       <div class="limited">
         <p><strong>Google API Services User Data Policy.</strong> LyteKeepr's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy#additional_requirements_for_specific_api_scopes">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
       </div>
@@ -119,9 +124,11 @@
       <ul>
         <li><strong>Early-access requests.</strong> If you submit the form on our website we receive your name, work email, company and the CRM you use. The submission is saved to a file on our server and emailed to us through our mail server and its outbound email-delivery provider (Brevo).</li>
         <li><strong>Things you add to LyteKeepr.</strong> Lead lists you import (for example names, profile handles and links, and notes), your own tasks, meetings and reminders, the notes and meeting statuses you add, and the status of each lead.</li>
+        <li><strong>Call transcripts, if you connect Fathom.</strong> If you paste your own Fathom API key in LyteKeepr, we fetch your recorded calls from Fathom about once an hour: the meeting title and time, the people invited, the link to the recording in Fathom and the transcript. These are saved in your workspace's database and linked to your contacts by email address. A summary or follow-up email is written only when you press Summarize or Draft follow-up. Your Fathom key is saved on our server in a file only the application can read; Disconnect removes it.</li>
+        <li><strong>Your account.</strong> The email address and name you sign in with, the people you add to your team and their access level, and, for the operator, plan and billing settings. Each customer account's data is kept in its own separate workspace.</li>
         <li><strong>Your assistant conversation.</strong> So that a page refresh or a new sign-in doesn't lose it, the most recent 100 messages of your conversation with the LyteKeepr assistant are saved in the application's database. The "Clear chat" button deletes them.</li>
         <li><strong>Web server logs.</strong> When you visit lytekeepr.xyz our web server records your IP address, the time, the page requested and your browser type. These logs are kept on the server and not shared; we do not currently delete them automatically.</li>
-        <li><strong>A sign-in cookie.</strong> If you sign in to the LyteKeepr calendar, we set one cookie that keeps you signed in for up to 30 days. It is a signed, HTTP-only cookie sent only over HTTPS and only to the calendar pages.</li>
+        <li><strong>A sign-in cookie.</strong> If you sign in to the LyteKeepr application, we set one cookie that keeps you signed in for up to 30 days. It is a signed, HTTP-only cookie sent only over HTTPS and only to the application pages.</li>
         <li><strong>No analytics or advertising.</strong> Our website does not use analytics, advertising or tracking scripts or cookies. Its pages load fonts from Fontshare (<a href="https://www.fontshare.com">fontshare.com</a>), so your browser contacts that service, which may see your IP address.</li>
       </ul>
 
@@ -142,13 +149,14 @@
       <h3>Where your data is stored</h3>
       <ul>
         <li><strong>On the computer that runs the LyteKeepr application</strong>, when the application is run on a personal computer. There, your Google access token is saved as a file, synced Gmail messages and attachments are saved as files, and your leads and calendar data are saved in a database.</li>
-        <li><strong>On our server.</strong> The website, early-access submissions and the LyteKeepr application at lytekeepr.xyz/calendar run on a cloud server hosted by Hetzner. When Google is connected there, your Google access token is saved on that server as a file that only the application's service account can read; synced Gmail messages and attachments are saved there as files; and synced calendar events, together with the notes and statuses you add to them, are saved in the application's database.</li>
+        <li><strong>On our server.</strong> The website, early-access submissions and the LyteKeepr application at lytekeepr.xyz/app run on a cloud server hosted by Hetzner. When Google is connected there, your Google access token is saved on that server as a file that only the application's service account can read; synced Gmail messages and attachments are saved there as files; and synced calendar events, together with the notes and statuses you add to them, are saved in the application's database.</li>
         <li><strong>Backups.</strong> The calendar database on our server, which includes synced Google Calendar events and the notes and statuses you add to them, is backed up automatically every night, and the 14 most recent backups are kept, readable only by the server administrator. Google access tokens and synced Gmail files are not part of those backups.</li>
       </ul>
       <h3>Who else processes data</h3>
       <ul>
         <li><strong>Google</strong>, to provide your Gmail and Calendar data and to let you sign in and approve access.</li>
-        <li><strong>OpenAI</strong> (the OpenAI API), to power LyteKeepr's AI features. When you ask the assistant a question, or when LyteKeepr triages incoming email, drafts a follow-up or reads a document, the text it needs is sent to OpenAI. Depending on the feature this can include email sender, subject, date and body excerpts, attachment file names, images or text of attachments, calendar events and lead details. We send these requests with the API's response-storage option turned off. OpenAI processes the data under its own terms and privacy policy (<a href="https://openai.com/policies">openai.com/policies</a>).</li>
+        <li><strong>OpenAI</strong> (the OpenAI API), to power LyteKeepr's AI features. When you ask the assistant a question, or when LyteKeepr triages incoming email, drafts a follow-up or reads a document, the text it needs is sent to OpenAI. Depending on the feature this can include email sender, subject, date and body excerpts, attachment file names, images or text of attachments, calendar events, call transcripts and lead details. We send these requests with the API's response-storage option turned off. OpenAI processes the data under its own terms and privacy policy (<a href="https://openai.com/policies">openai.com/policies</a>).</li>
+        <li><strong>Fathom</strong>, only if you connect it: it records your calls under your own Fathom account and terms, and LyteKeepr reads the transcripts from it (<a href="https://fathom.video/privacy">fathom.video/privacy</a>).</li>
         <li><strong>Hetzner</strong>, which hosts our server, and <strong>Brevo</strong>, which delivers the email notification for early-access requests.</li>
         <li><strong>Fontshare</strong>, which serves the website fonts.</li>
       </ul>
@@ -158,7 +166,7 @@
       <p>These are the protections that are actually in place today:</p>
       <ul>
         <li>lytekeepr.xyz is served over HTTPS.</li>
-        <li>The LyteKeepr calendar on our server requires a password. Repeated wrong passwords from the same address are temporarily blocked.</li>
+        <li>The LyteKeepr application on our server requires signing in, with Google or a password. Repeated wrong passwords from the same address are temporarily blocked. New accounts stay locked until the operator approves them, and each account sees only its own workspace.</li>
         <li>The server is administered by the operator over SSH. Server backups and the server's settings file are readable only by the administrator account.</li>
         <li>Google access tokens never appear in the pages the application sends to your browser. On our server they are stored in a folder that only the application's service account can open.</li>
       </ul>
@@ -166,7 +174,7 @@
 
       <h2 id="retention">7. Retention, disconnecting and deletion</h2>
       <h3>How long we keep data</h3>
-      <p>We keep data until it is deleted; there is no automatic expiry for synced messages, calendar events, leads or early-access submissions. Messages that you delete in Gmail are removed from LyteKeepr's local copy the next time it syncs. Calendar events that disappear from Google's synced period are removed from LyteKeepr unless you added your own notes or a status to them.</p>
+      <p>We keep data until it is deleted; there is no automatic expiry for synced messages, calendar events, leads or early-access submissions. Messages that you delete in Gmail are removed from LyteKeepr's local copy the next time it syncs. Calendar events that disappear from Google's synced period are removed from LyteKeepr unless you added your own notes or a status to them. If an account is deleted, its workspace is moved to an archive folder on our server that only the administrator can read, and it is erased for good on request.</p>
       <h3>Disconnecting Google</h3>
       <p>You can withdraw LyteKeepr's access at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> by selecting LyteKeepr and choosing "Remove access". After that, LyteKeepr can no longer read your Gmail or Calendar or send email for you.</p>
       <h3>Requesting deletion</h3>
