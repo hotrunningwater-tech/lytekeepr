@@ -230,6 +230,6 @@
 .lkc-reconnect-btn { align-self: flex-start; padding: 7px 13px; background: var(--ink); color: var(--surface); font-size: 12px; text-decoration: none; }
 
 /* "+ New meeting" at the top of the side panel: the standard pill button */
-.lkc-newmeeting { align-self: flex-start; }
+.lkc-newmeeting { align-self: flex-end; }
 .lkc-day.past { opacity: .25; cursor: default; }
 .lkc-day.past:hover { background: none; }
