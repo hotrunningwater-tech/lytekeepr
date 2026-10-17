@@ -77,16 +77,15 @@ import lk_calendar
 lk_calendar.register(app)
 
 
-@app.get("/")
-def index():
+def _app_page(name: str):
     # send_from_directory adds ETag/Last-Modified by default, which lets
     # the browser skip re-fetching even on a manual reload — exactly the
     # kind of stale-page confusion that wasted real debugging time here.
-    # This is the one page that must never be cached.
-    response = send_from_directory(APP_DIR, "index.html")
+    # The app pages must never be cached.
+    response = send_from_directory(APP_DIR, name)
     prefix = os.getenv("LK_URL_PREFIX", "").rstrip("/")
     if prefix:
-        # Served under a path (e.g. /calendar/) behind nginx: make the page's absolute
+        # Served under a path (e.g. /app/) behind nginx: make the page's absolute
         # "/api/..." style requests go through that path too.
         shim = (
             "<script>(function(P){window.LK_PREFIX=P;var f=window.fetch;"
@@ -95,12 +94,23 @@ def index():
             "if(typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/')arguments[1]=P+u;return x.apply(this,arguments);};"
             "})(" + json.dumps(prefix) + ");</script>"
         )
-        html = (APP_DIR / "index.html").read_text(encoding="utf-8").replace("<head>", "<head>" + shim, 1)
+        html = (APP_DIR / name).read_text(encoding="utf-8").replace("<head>", "<head>" + shim, 1)
         response = app.response_class(html, mimetype="text/html")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
+
+
+@app.get("/")
+def index():
+    return _app_page("index.html")
+
+
+@app.get("/m")
+def mobile_index():
+    # The phone version: Today, Calendar, Needs attention, search, meeting and contact cards (mobile.html).
+    return _app_page("mobile.html")
 
 
 @app.get("/styles.css")

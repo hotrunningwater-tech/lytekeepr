@@ -3,6 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+  // Phones get the phone version (/m). "?desktop=1" (its "Open the desktop version" link) keeps this browser on the full app.
+  (function () {
+    try {
+      var q = location.search;
+      if (/[?&]desktop=1/.test(q)) localStorage.setItem('lkDesktop', '1');
+      if (/[?&]desktop=0/.test(q)) localStorage.removeItem('lkDesktop');
+      var phone = /iPhone|Android.+Mobile|Mobile Safari/i.test(navigator.userAgent) || (window.matchMedia && matchMedia('(max-width: 600px)').matches);
+      if (phone && !localStorage.getItem('lkDesktop')) location.replace((window.LK_PREFIX || '') + '/m');
+    } catch (e) { /* storage blocked: stay on the full app */ }
+  })();
+</script>
 <title>LyteKeepr — Workspace</title>
 <script>
 /* If a screen other than Home was remembered, keep the page invisible until it is restored, so a refresh never flashes through other screens. */
