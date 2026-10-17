@@ -180,6 +180,19 @@ TOOLS = [
     {"name": "search_messages", "title": "Search messages", "description": "Search LinkedIn and Instagram message history, for one contact or everyone.",
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "query": {"type": "string"}, "channel": {"type": "string", "enum": ["", "linkedin", "instagram"]},
                                                       "since_days": {"type": "integer", "default": 30}}}, "read": True},
+    {"name": "book_meeting", "title": "Book a meeting",
+     "description": ("Create a real meeting in the user's Google Calendar (their chosen meetings calendar) and email the invites from Google. "
+                     "Adds a Google Meet link and marks it to be recorded by Fathom unless told otherwise. Today or later only. "
+                     "This SENDS invitations: always confirm title, date, time and who is invited with the user first. "
+                     "Invite people by contact name (as in LyteKeepr) or email address."),
+     "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
+                                                      "time": {"type": "string", "description": "HH:MM, 24-hour, the user's local time"},
+                                                      "duration_min": {"type": "integer", "default": 30}, "invite": {"type": "array", "items": {"type": "string"}, "description": "Contact names or email addresses"},
+                                                      "google_meet": {"type": "boolean", "default": True}, "record_with_fathom": {"type": "boolean", "default": True},
+                                                      "notes": {"type": "string"}}, "required": ["title", "date", "time"]}, "read": False},
+    {"name": "cancel_meeting", "title": "Cancel a meeting",
+     "description": "Delete a meeting from the user's own Google Calendar; Google emails a cancellation to the people invited. Confirm with the user first. The id comes from get_agenda or list_calendar.",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}}, "required": ["item_id"]}, "read": False},
     {"name": "draft_email", "title": "Draft an email",
      "description": "Write an email to one contact and leave it in LyteKeepr for the user to send. NOTHING is sent: the user opens LyteKeepr (Home) within 30 minutes and presses Send now.",
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name of the contact"}, "subject": {"type": "string"}, "body": {"type": "string"}},
@@ -287,6 +300,15 @@ def _run_tool(call, name: str, args: dict):
         if args.get("notes"):
             body["my_notes"] = args["notes"]
         return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/meeting", body))
+    if name == "book_meeting":
+        body = {"title": args["title"], "start_date": args["date"], "start_time": args["time"], "duration_min": int(args.get("duration_min") or 30),
+                "invite": ", ".join(str(x) for x in (args.get("invite") or [])), "meet": args.get("google_meet", True) is not False,
+                "expect_recording": args.get("record_with_fathom", True) is not False, "notes": str(args.get("notes") or "")}
+        m = need(*call("POST", "/api/calendar/meetings", body))
+        return {"booked": True, "item_id": m.get("id"), "title": m.get("title"), "date": m.get("start_date"), "time": m.get("start_time"),
+                "google_meet": m.get("join_url") or None, "invited": [a.get("email") for a in m.get("attendees") or []]}
+    if name == "cancel_meeting":
+        return need(*call("DELETE", f"/api/calendar/meetings/{int(args['item_id'])}"))
     if name == "check_reply":
         out = need(*call("POST", "/api/claude/home/check_reply", {"query": args.get("contact", ""), "channel": args.get("channel", "")}))
         for k in ("their_last_message", "your_last_message"):          # email text stays in LyteKeepr: only when and where
@@ -588,7 +610,7 @@ ul{font-size:14px;line-height:1.6;margin:0 0 16px;padding-left:18px}b{color:#294
 </style></head><body><div class="card">
 <h1>Allow Claude to use your LyteKeepr?</h1>
 <p>Signed in as <b>{{WHO}}</b> {{EMAIL}}</p>
-<ul><li>See your contacts, funnels, tasks, reminders, recorded calls and LinkedIn/Instagram messages</li><li>Add and update contacts, stages, outreach statuses, tasks and reminders</li><li>Write email and LinkedIn drafts that you send yourself from LyteKeepr</li></ul>
+<ul><li>See your contacts, funnels, tasks, reminders, recorded calls and LinkedIn/Instagram messages</li><li>Add and update contacts, stages, outreach statuses, tasks and reminders</li><li>Book or cancel meetings in your Google Calendar (invites go out from Google)</li><li>Write email and LinkedIn drafts that you send yourself from LyteKeepr</li></ul>
 <p>Claude sees only what you can see in LyteKeepr, and asks you before it changes anything. Disconnect any time in LyteKeepr Settings → Claude.</p>
 <form method="post" action="{{ACTION}}"><input type="hidden" name="grant" value="{{GRANT}}">
 <div class="row"><button class="no" name="choice" value="deny" type="submit">Cancel</button><button class="allow" name="choice" value="allow" type="submit">Allow</button></div></form>
