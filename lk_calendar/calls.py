@@ -232,8 +232,21 @@ def _public(row, with_transcript: bool = False) -> dict:
     return out
 
 
+def _catch_up(conn, person_id: int) -> None:
+    """Calls that arrived before this contact existed (or before it had this email): link them now, by invitee email."""
+    emails = {r["e"] for r in conn.execute("""SELECT lower(channel_identifier) AS e FROM channel_accounts
+                                              WHERE person_id = ? AND channel = 'email' AND channel_identifier != ''""", (person_id,))}
+    if not emails:
+        return
+    for r in conn.execute("""SELECT call_id, invitees FROM calls WHERE call_id NOT IN (SELECT call_id FROM call_people WHERE person_id = ?)""",
+                          (person_id,)).fetchall():
+        if emails & {(i.get("email") or "").lower() for i in json.loads(r["invitees"] or "[]")}:
+            conn.execute("INSERT OR IGNORE INTO call_people (call_id, person_id) VALUES (?, ?)", (r["call_id"], person_id))
+
+
 def calls_for_person(person_id: int) -> list[dict]:
     with _crm() as conn:
+        _catch_up(conn, person_id)
         rows = conn.execute("""SELECT c.* FROM calls c JOIN call_people p ON p.call_id = c.call_id WHERE p.person_id = ?
                                ORDER BY c.started_at DESC""", (person_id,)).fetchall()
         people = _people_on(conn, [r["call_id"] for r in rows])
