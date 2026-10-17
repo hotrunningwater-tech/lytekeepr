@@ -2240,6 +2240,9 @@
           var home = document.getElementById('homeTab'); if (home) home.click();
         }).catch(function () {});
       });
+      if (c.meeting_only) btn('It happened after all', 'btn-secondary', function (b) {
+        crmCallAction('/api/calls/missing/' + c.event_id, { status: 'completed' }, b, 'Saving…').then(function () { loadCrmPersonCalls(personId, crmPersonDetailAllMessages); });
+      });
       if (c.status === 'ready') btn('Mark done', 'btn-secondary', function (b) {
         crmCallAction('/api/calls/' + c.call_id + '/status', { status: 'done' }, b, 'Saving…').then(function () { loadCrmPersonCalls(personId, crmPersonDetailAllMessages); });
       });

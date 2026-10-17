@@ -15,6 +15,7 @@ google_oauth/active-account.json
 
 # Per-profile runtime data: live DBs, synced emails/messages, OCR output
 profiles/data/
+profiles/deleted/
 
 # Generated/regenerable test & demo state
 demo_state/

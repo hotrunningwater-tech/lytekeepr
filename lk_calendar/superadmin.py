@@ -215,7 +215,9 @@ def register(app, app_dir):
             with store._conn() as c:
                 people = [{"id": r["id"], "email": r["email"], "name": r["name"], "role": r["role"], "active": bool(r["active"]),
                            "last_login_at": r["last_login_at"]} for r in c.execute("SELECT * FROM users ORDER BY role = 'admin' DESC, email")]
-        return jsonify({"account": {**account, "billing_effective": _effective_billing(account, directory.console_settings())},
+        from profiles.store import home_profile_id
+        return jsonify({"account": {**account, "billing_effective": _effective_billing(account, directory.console_settings()),
+                                    "is_home": account["profile_id"] == home_profile_id()},
                         "people": people, "usage": usage(account["profile_id"]),
                         "activity": [x for x in directory.list_activity(500) if x["account_id"] == account_id][:30]})
 
@@ -231,6 +233,23 @@ def register(app, app_dir):
         directory.log_activity(_me(), {"active": "Approved / reactivated", "suspended": "Suspended", "waiting": "Set back to waiting"}[status]
                                + f" {account['owner_email']}", account_id)
         return jsonify({"account": account})
+
+    @app.post("/api/superadmin/accounts/<int:account_id>/delete")
+    def console_delete(account_id):
+        if (denied := guard()):
+            return denied
+        account = directory.get_account(account_id)
+        if not account:
+            return jsonify({"error": "no such account"}), 404
+        typed = str((request.get_json(silent=True) or {}).get("confirm", "")).strip().lower()
+        if typed != (account["owner_email"] or "").lower():
+            return jsonify({"error": "Type the account's email exactly to confirm."}), 400
+        try:
+            gone = directory.delete_account(account_id)
+        except directory.DirectoryError as exc:
+            return jsonify({"error": str(exc)}), 400
+        directory.log_activity(_me(), f"Deleted account {gone['owner_email']} (data moved to the deleted folder)")
+        return jsonify({"ok": True})
 
     @app.post("/api/superadmin/accounts/<int:account_id>/billing")
     def console_billing(account_id):

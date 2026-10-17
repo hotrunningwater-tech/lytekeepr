@@ -240,6 +240,26 @@ def calls_for_person(person_id: int) -> list[dict]:
     return [{**_public(r, with_transcript=True), "contacts": people.get(r["call_id"], [])} for r in rows]
 
 
+def no_shows_for_person(person_id: int) -> list[dict]:
+    """Meetings this contact was invited to that were marked no-show and have no recording, shaped like call rows for the timeline."""
+    with _crm() as conn:
+        emails = {r["e"] for r in conn.execute("""SELECT lower(channel_identifier) AS e FROM channel_accounts
+                                                  WHERE person_id = ? AND channel = 'email' AND channel_identifier != ''""", (person_id,))}
+        linked = {r["event_id"] for r in conn.execute("SELECT event_id FROM calls WHERE event_id IS NOT NULL")}
+    if not emails:
+        return []
+    out = []
+    with store._conn() as cal:
+        for e in cal.execute("SELECT * FROM events WHERE meeting_status = 'no_show' AND attendees != '[]' ORDER BY start_date DESC, start_time DESC"):
+            invited = json.loads(e["attendees"] or "[]")
+            if e["id"] in linked or not emails & {(a.get("email") or "").lower() for a in invited}:
+                continue
+            out.append({"call_id": None, "event_id": e["id"], "title": e["title"], "started_at": f"{e['start_date']}T{e['start_time']}",
+                        "duration_min": e["duration_min"], "platform": "", "share_url": "", "summary": "", "status": "no_show",
+                        "invitees": invited, "has_transcript": False, "transcript": [], "contacts": [], "meeting_only": True})
+    return out
+
+
 def _people_on(conn, call_ids: list) -> dict:
     if not call_ids:
         return {}
@@ -473,7 +493,7 @@ def register(app):
     @app.get("/api/calls/person/<int:person_id>")
     @guarded
     def calls_person(person_id):
-        return jsonify({"calls": calls_for_person(person_id)})
+        return jsonify({"calls": calls_for_person(person_id) + no_shows_for_person(person_id)})
 
     @app.get("/api/calls/event/<int:event_id>")
     @guarded

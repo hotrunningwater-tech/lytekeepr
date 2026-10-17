@@ -38,6 +38,7 @@
   td b { display: block; } td small { color: var(--ink-soft); font-size: 12px; }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .btn-soft { background: rgba(230,237,240,.9); color: var(--ink); }
+  .btn-danger { background: #f7d9d2; color: #a3412b; }
   .search { border: none; background: rgba(230,237,240,.9); border-radius: 10px; padding: 9px 13px; font-family: var(--font-body); font-size: 13px; color: var(--ink); min-width: 240px; }
   .hide { display: none !important; }
   .cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; } @media (max-width: 1100px) { .cols { grid-template-columns: 1fr; } }
@@ -115,7 +116,7 @@
           <div class="card"><h2>Usage</h2><table><tbody id="dUsage"></tbody></table>
             <div class="privacy">Only these counts are shown. You cannot see their contacts, emails or notes.</div></div>
           <div class="card"><h2>Account actions</h2><div class="row" id="dActions"></div>
-            <p class="note">Suspending blocks sign-in for everyone in the account. Their data is kept; nothing is deleted.</p>
+            <p class="note">Suspending blocks sign-in for everyone in the account; their data is kept. Deleting removes the account; its data is moved to a deleted folder on the server.</p>
             <div class="field"><label>Private notes (only you see these)</label><textarea rows="4" id="dNotes"></textarea></div>
             <div class="row"><button class="btn btn-soft" type="button" id="saveNotes">Save notes</button><span class="note" id="notesMsg"></span></div>
           </div>
@@ -250,6 +251,15 @@
       if (a.status === 'waiting') btn('Approve', 'btn-primary', 'active');
       if (a.status === 'active') btn('Suspend account', 'btn-soft', 'suspended');
       if (a.status === 'suspended') btn('Reactivate', 'btn-primary', 'active');
+      if (!a.is_home) {
+        var del = el('button', 'btn btn-danger', 'Delete account'); del.type = 'button';
+        del.onclick = function () {
+          var typed = prompt('Delete ' + (a.name || a.owner_email) + '? Everyone in it loses access right away. Their data is moved to a deleted folder on the server, not shown anywhere.\n\nType ' + a.owner_email + ' to confirm:');
+          if (typed == null) return;
+          api('POST', 'accounts/' + id + '/delete', { confirm: typed }).then(function () { show('accounts'); loadAccounts(); loadOverview(); }).catch(function (e) { alert(e.message); });
+        };
+        ac.appendChild(del);
+      }
       $('dNotes').value = a.notes || ''; $('notesMsg').textContent = ''; $('planMsg').textContent = '';
       var da = $('dActivity'); da.replaceChildren();
       if (!r.activity.length) da.textContent = 'No changes yet.';

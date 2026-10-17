@@ -17,6 +17,7 @@ cat > "$FILTER" <<'RULES'
 - .env
 - .DS_Store
 - /profiles/data/
+- /profiles/deleted/
 - /profiles/active-profile.json
 - /profiles/registry.json
 - /profiles/directory.db*

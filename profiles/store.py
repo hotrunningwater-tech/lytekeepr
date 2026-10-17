@@ -12,6 +12,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent.parent
 PROFILE_ROOT = Path(os.getenv("LK_PROFILES_ROOT") or APP_DIR / "profiles")      # LK_PROFILES_ROOT: tests, or data kept outside the app
 PROFILE_DATA_ROOT = PROFILE_ROOT / "data"
+PROFILE_DELETED_ROOT = PROFILE_ROOT / "deleted"      # deleted workspaces are moved here, never erased by the app
 REGISTRY_PATH = PROFILE_ROOT / "registry.json"
 ACTIVE_PROFILE_PATH = PROFILE_ROOT / "active-profile.json"
 PROFILE_SYSTEM_VERSION = 1
@@ -151,6 +152,13 @@ def _next_storage_id(registry: dict) -> str:
         raw = str(payload.get("storage_id") or "").strip()
         if VALID_STORAGE_ID_RE.fullmatch(raw):
             used.add(int(raw))
+    # never reuse the number of a folder still on disk or of a deleted workspace (its archive and backups carry that number)
+    for folder in [PROFILE_DATA_ROOT, PROFILE_DELETED_ROOT]:
+        if folder.exists():
+            for child in folder.iterdir():
+                head = child.name.split("-", 1)[0]
+                if VALID_STORAGE_ID_RE.fullmatch(head):
+                    used.add(int(head))
     next_value = 1
     while next_value in used:
         next_value += 1
@@ -299,6 +307,23 @@ def create_profile(display_name: str, *, profile_id: str | None = None) -> dict:
 
 
 
+
+
+def archive_profile(profile_id: str) -> Path | None:
+    """Delete a workspace from the app: it leaves the registry and its folder is moved to profiles/deleted/<storage>-<id>-<time>."""
+    from datetime import datetime
+    registry = ensure_profile_bootstrap()
+    payload = registry["profiles"].pop(profile_id, None)
+    if not payload:
+        return None
+    folder = _profile_dir_from_payload(payload)
+    target = None
+    if folder.exists():
+        PROFILE_DELETED_ROOT.mkdir(parents=True, exist_ok=True)
+        target = PROFILE_DELETED_ROOT / f"{_storage_dir_name(payload)}-{profile_id}-{datetime.now():%Y%m%d-%H%M%S}"
+        folder.rename(target)
+    _save_registry(registry)
+    return target
 
 
 def attach_gmail_account(profile_id: str | None, account_id: str) -> dict:
