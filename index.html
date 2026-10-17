@@ -563,7 +563,7 @@
 
 <script src="chat.js"></script>
 <script src="lk-calendar/calendar.js?v=team1"></script>
-<script src="lk-calendar/settings.js?v=calls1"></script>
+<script src="lk-calendar/settings.js?v=team2"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
 <script>
@@ -1774,6 +1774,7 @@
       var copy = document.createElement('p'); copy.className = 'attention-copy'; copy.textContent = copyText; card.appendChild(copy);
       var actions = document.createElement('div'); actions.className = 'attention-actions';
       buttons.forEach(function (b) {
+        if (!b) return;                                 // a button this person can't use
         var el = document.createElement('button'); el.type = 'button'; el.className = b[1]; el.textContent = b[0];
         el.addEventListener('click', function () { b[2](el); }); actions.appendChild(el);
       });
@@ -1798,7 +1799,7 @@
           callsAttentionList.appendChild(callRow('Call' + (who ? ' with ' + who : '') + ' — transcript ready',
             [c.title, formatCrmTimestamp(c.started_at), c.duration_min ? c.duration_min + ' min' : ''].filter(Boolean).join(' · '), [
               ['Summarize', 'btn btn-primary btn-small', function (el) { callPost('/api/calls/' + c.call_id + '/summarize', {}, el, 'Summarizing…').then(loadCallsAttention); }],
-              ['Draft follow-up', 'btn btn-secondary btn-small', function (el) {
+              (window.lkMe && window.lkMe.role !== 'admin') ? null : ['Draft follow-up', 'btn btn-secondary btn-small', function (el) {
                 callPost('/api/calls/' + c.call_id + '/draft-followup', {}, el, 'Writing…').then(function (d) {
                   el.disabled = false; el.textContent = 'Draft follow-up';
                   if (window.lkHomeChat && window.lkHomeChat.showDraft) window.lkHomeChat.showDraft('Your follow-up email to ' + (d.person_name || 'them') + ' after "' + c.title + '" is ready below. Edit it, then press Send now.');
@@ -2244,7 +2245,8 @@
       if (c.has_transcript && !c.summary) btn('Summarize', 'btn-primary', function (b) {
         crmCallAction('/api/calls/' + c.call_id + '/summarize', {}, b, 'Summarizing…').then(function () { loadCrmPersonCalls(personId, crmPersonDetailAllMessages); });
       });
-      if (c.has_transcript) btn('Draft follow-up', c.summary ? 'btn-primary' : 'btn-secondary', function (b) {
+      var canEmail = !window.lkMe || window.lkMe.role === 'admin';      // follow-ups go out from the admin's Gmail
+      if (c.has_transcript && canEmail) btn('Draft follow-up', c.summary ? 'btn-primary' : 'btn-secondary', function (b) {
         crmCallAction('/api/calls/' + c.call_id + '/draft-followup', { person_id: personId }, b, 'Writing…').then(function (d) {
           b.disabled = false; b.textContent = 'Draft follow-up';
           if (window.lkHomeChat && window.lkHomeChat.showDraft) window.lkHomeChat.showDraft('Your follow-up email to ' + (d.person_name || 'them') + ' after "' + c.title + '" is ready below. Edit it, then press Send now.');

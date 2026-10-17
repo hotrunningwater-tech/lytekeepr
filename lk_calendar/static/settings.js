@@ -660,8 +660,9 @@
   }
   function loadMe() {                                  // who is signed in; the Team section is only for the admin
     return api('GET', '/api/me').then(function (r) {
-      me = r; showChip(r);
-      ['team', 'calls'].forEach(function (v) { var b = nav.querySelector('[data-view=' + v + ']'); if (b) b.hidden = r.role !== 'admin'; });   // admin only
+      me = r; window.lkMe = r; showChip(r);
+      var tb = nav.querySelector('[data-view=team]'); if (tb) tb.hidden = r.role !== 'admin';      // admin only
+      var cb = nav.querySelector('[data-view=calls]'); if (cb) cb.hidden = false;                  // everyone: their own Fathom
       return r;
     }).catch(function () { return null; });
   }
@@ -830,7 +831,8 @@
         }).catch(function (e) { save.disabled = false; msg.textContent = e.message; });
       });
       var kids = [h('h2', {}, 'Calls (Fathom)'),
-        h('p', {}, 'LyteKeepr picks up the transcript of every call Fathom records and puts it on the contacts who were on it, in date order with their emails.'),
+        h('p', {}, s.member ? 'Connect your own free Fathom account: the transcript of every call it records goes on the contacts who were on it. Your admin sees your calls too.'
+          : 'LyteKeepr picks up the transcript of every call Fathom records and puts it on the contacts who were on it, in date order with their emails.'),
         h('div', { class: 'lks-row' }, [h('span', { class: 'lks-badge ' + (s.connected ? 'on' : 'wait') }, s.connected ? 'Connected' : 'Not connected'),
           s.last_sync ? h('span', { class: 'lks-note' }, 'Last checked ' + new Date(s.last_sync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) : null,
           s.last_error ? h('span', { class: 'lks-err' }, s.last_error) : null]),

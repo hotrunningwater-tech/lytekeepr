@@ -106,7 +106,7 @@ def sign_in_with_google(email: str, verified: bool, name: str = "") -> dict | No
 # What a team member (not the admin) may use. Everything else under /api is refused, so a new feature is private until it is opened on purpose.
 # Left out for now: Gmail, LinkedIn, documents, the AI chats (they read the admin's mailbox and messages), the Google Calendar sync and the
 # app-wide profile name. Each comes back when it works per person.
-USER_API_ALLOWED = ("/api/me", "/api/crm/", "/api/calendar/")
+USER_API_ALLOWED = ("/api/me", "/api/crm/", "/api/calendar/", "/api/calls/")       # calls: their own Fathom (lk_calendar/calls.py checks who sees what)
 USER_API_BLOCKED = ("/api/calendar/chat", "/api/calendar/contact-ai", "/api/calendar/profile", "/api/crm/recent-activity")
 # Google sync and meetings are open to team members: they always work with their own Google Calendar (member_google), never the admin's.
 

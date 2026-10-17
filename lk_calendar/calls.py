@@ -62,12 +62,49 @@ def _crm():
     from . import contacts
     with contacts._crm() as conn:
         conn.executescript(SCHEMA)
+        if "owner_id" not in {r["name"] for r in conn.execute("PRAGMA table_info(calls)")}:
+            conn.execute("ALTER TABLE calls ADD COLUMN owner_id INTEGER")      # whose Fathom recorded it: NULL = the admin's
         yield conn
 
 
-# ------------------------------------------------------------------ the admin's Fathom key (one per workspace, in its folder)
+# ------------------------------------------------------------------ whose Fathom: the admin's, or a team member's own
+def _me():
+    """The team member working now (their own Fathom key and calls), or None for the admin. Same rule as their own Google Calendar."""
+    from .google_sync import member_id
+    return member_id()
+
+
+def _state(name: str) -> str:
+    from .google_sync import _key
+    return _key(name)
+
+
+def _member_ids() -> set:
+    with store._conn() as conn:
+        return {r["id"] for r in conn.execute("SELECT id FROM users WHERE role != 'admin'")}
+
+
+def _mine_sql(alias: str = "") -> tuple[str, list]:
+    """SQL condition for calls recorded by the current person's own Fathom."""
+    col = f"{alias}owner_id"
+    me = _me()
+    return (f"{col} = ?", [me]) if me else (f"{col} IS NULL", [])
+
+
+def _visible_sql(alias: str = "") -> tuple[str, list]:
+    """SQL condition for the calls this person may see: everyone's for the admin and "Everything", else only their own."""
+    from . import access
+    return ("1 = 1", []) if access.is_full() else _mine_sql(alias)
+
+
+# ------------------------------------------------------------------ the Fathom key (the admin's per workspace, plus each team member's own)
 def _key_path():
     from profiles.store import profile_component_dir
+    me = _me()
+    if me:
+        folder = profile_component_dir("fathom") / "members"
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder / f"{int(me)}.json"
     return profile_component_dir("fathom") / "key.json"
 
 
@@ -97,8 +134,8 @@ def remove_key() -> None:
 
 def settings() -> dict:
     key = get_key()
-    return {"connected": bool(key), "key_end": key[-4:] if key else "", "last_sync": store.get_state("fathom_last_sync") or "",
-            "last_error": store.get_state("fathom_last_error") or ""}
+    return {"connected": bool(key), "key_end": key[-4:] if key else "", "last_sync": store.get_state(_state("fathom_last_sync")) or "",
+            "last_error": store.get_state(_state("fathom_last_error")) or "", "member": bool(_me())}
 
 
 def _fathom_get(path: str, params: dict, api_key: str | None = None) -> dict:
@@ -140,7 +177,7 @@ def sync() -> dict:
     """Fetch calls recorded since the last fetch (first time: the last 30 days) and store them. Safe to run any time."""
     if not get_key():
         return {"status": "not_connected"}
-    since = store.get_state("fathom_last_sync_utc") or (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    since = store.get_state(_state("fathom_last_sync_utc")) or (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
     started = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     added = updated = 0
     cursor, pages = None, 0
@@ -158,11 +195,11 @@ def sync() -> dict:
             if not cursor or pages >= 20:
                 break
     except CallsError as exc:
-        store.set_state("fathom_last_error", str(exc))
+        store.set_state(_state("fathom_last_error"), str(exc))
         raise
-    store.set_state("fathom_last_sync_utc", started)
-    store.set_state("fathom_last_sync", store.now_local().isoformat())
-    store.set_state("fathom_last_error", "")
+    store.set_state(_state("fathom_last_sync_utc"), started)
+    store.set_state(_state("fathom_last_sync"), store.now_local().isoformat())
+    store.set_state(_state("fathom_last_error"), "")
     return {"status": "ok", "added": added, "updated": updated}
 
 
@@ -188,8 +225,8 @@ def _store_call(item: dict) -> bool:
             conn.execute(f"UPDATE calls SET {', '.join(k + ' = :' + k for k in fields)} WHERE call_id = :id", {**fields, "id": row["call_id"]})
             call_id, new = row["call_id"], False
         else:
-            call_id = conn.execute(f"INSERT INTO calls (recording_id, {', '.join(fields)}) VALUES (:rid, {', '.join(':' + k for k in fields)})",
-                                   {**fields, "rid": rid}).lastrowid
+            call_id = conn.execute(f"INSERT INTO calls (recording_id, owner_id, {', '.join(fields)}) VALUES (:rid, :owner, {', '.join(':' + k for k in fields)})",
+                                   {**fields, "rid": rid, "owner": _me()}).lastrowid
             new = True
         _link_people(conn, call_id, invitees)
     _link_event(call_id, start, end)
@@ -210,10 +247,13 @@ def _link_event(call_id: int, start: str, end: str) -> None:
     if not start:
         return
     s = datetime.fromisoformat(start)
+    me, members = _me(), _member_ids()
     with store._conn() as cal:
         best = None
-        for e in cal.execute("SELECT id, start_date, start_time FROM events WHERE (has_call = 1 OR kind = 'meeting') AND start_date BETWEEN ? AND ?",
+        for e in cal.execute("SELECT id, start_date, start_time, owner_id FROM events WHERE (has_call = 1 OR kind = 'meeting') AND start_date BETWEEN ? AND ?",
                              ((s - timedelta(days=1)).date().isoformat(), (s + timedelta(days=1)).date().isoformat())):
+            if (e["owner_id"] != me) if me else (e["owner_id"] in members):    # a recording belongs to a meeting in the same person's calendar
+                continue
             gap = abs((datetime.fromisoformat(f"{e['start_date']}T{e['start_time']}") - s).total_seconds())
             if gap <= 45 * 60 and (best is None or gap < best[0]):
                 best = (gap, e["id"])
@@ -239,7 +279,7 @@ def _catch_up(conn, person_id: int) -> None:
     if not emails:
         return
     for r in conn.execute("""SELECT call_id, invitees FROM calls WHERE call_id NOT IN (SELECT call_id FROM call_people WHERE person_id = ?)""",
-                          (person_id,)).fetchall():
+                          (person_id,)).fetchall():      # (linking is not showing: who may see each call is decided when reading)
         if emails & {(i.get("email") or "").lower() for i in json.loads(r["invitees"] or "[]")}:
             conn.execute("INSERT OR IGNORE INTO call_people (call_id, person_id) VALUES (?, ?)", (r["call_id"], person_id))
 
@@ -247,8 +287,9 @@ def _catch_up(conn, person_id: int) -> None:
 def calls_for_person(person_id: int) -> list[dict]:
     with _crm() as conn:
         _catch_up(conn, person_id)
-        rows = conn.execute("""SELECT c.* FROM calls c JOIN call_people p ON p.call_id = c.call_id WHERE p.person_id = ?
-                               ORDER BY c.started_at DESC""", (person_id,)).fetchall()
+        cond, args = _visible_sql("c.")
+        rows = conn.execute(f"""SELECT c.* FROM calls c JOIN call_people p ON p.call_id = c.call_id WHERE p.person_id = ? AND {cond}
+                                ORDER BY c.started_at DESC""", (person_id, *args)).fetchall()
         people = _people_on(conn, [r["call_id"] for r in rows])
     return [{**_public(r, with_transcript=True), "contacts": people.get(r["call_id"], [])} for r in rows]
 
@@ -263,9 +304,10 @@ def no_shows_for_person(person_id: int) -> list[dict]:
         return []
     out = []
     with store._conn() as cal:
+        from . import access
         for e in cal.execute("SELECT * FROM events WHERE meeting_status = 'no_show' AND attendees != '[]' ORDER BY start_date DESC, start_time DESC"):
             invited = json.loads(e["attendees"] or "[]")
-            if e["id"] in linked or not emails & {(a.get("email") or "").lower() for a in invited}:
+            if e["id"] in linked or not emails & {(a.get("email") or "").lower() for a in invited} or not access.can_event(dict(e)):
                 continue
             out.append({"call_id": None, "event_id": e["id"], "title": e["title"], "started_at": f"{e['start_date']}T{e['start_time']}",
                         "duration_min": e["duration_min"], "platform": "", "share_url": "", "summary": "", "status": "no_show",
@@ -285,8 +327,10 @@ def _people_on(conn, call_ids: list) -> dict:
 
 
 def get_call(call_id: int) -> dict | None:
+    """One call, or None when it does not exist or this person may not see it."""
     with _crm() as conn:
-        row = conn.execute("SELECT * FROM calls WHERE call_id = ?", (call_id,)).fetchone()
+        cond, args = _visible_sql()
+        row = conn.execute(f"SELECT * FROM calls WHERE call_id = ? AND {cond}", (call_id, *args)).fetchone()
         if not row:
             return None
         people = _people_on(conn, [call_id])
@@ -295,7 +339,8 @@ def get_call(call_id: int) -> dict | None:
 
 def call_for_event(event_id: int) -> dict | None:
     with _crm() as conn:
-        row = conn.execute("SELECT call_id FROM calls WHERE event_id = ? ORDER BY call_id DESC LIMIT 1", (event_id,)).fetchone()
+        cond, args = _visible_sql()
+        row = conn.execute(f"SELECT call_id FROM calls WHERE event_id = ? AND {cond} ORDER BY call_id DESC LIMIT 1", (event_id, *args)).fetchone()
     return get_call(row["call_id"]) if row else None
 
 
@@ -382,6 +427,9 @@ def draft_followup(call_id: int, person_id: int | None = None) -> dict:
     call = get_call(call_id)
     if not call:
         raise CallsError("no such call")
+    from . import users
+    if not users.is_admin():                        # the draft is sent from the workspace's Gmail, which is the admin's
+        raise CallsError("Follow-up emails go out from the admin's Gmail, so for now only the admin can draft them. Copy the summary instead.")
     from . import contacts
     target = None
     for c in call["contacts"]:
@@ -415,9 +463,11 @@ def draft_followup(call_id: int, person_id: int | None = None) -> dict:
 def attention(days: int = 14) -> dict:
     """For Home: calls with a transcript nobody has summarized yet, and call meetings that passed with no recording (no-show?)."""
     since = (store.now_local() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M")
+    cond, args = _mine_sql()                        # Home asks each person only about their own calls
     with _crm() as conn:
-        ready = [dict(r) for r in conn.execute("""SELECT call_id, title, started_at, duration_min, invitees FROM calls
-                                                   WHERE status = 'ready' AND transcript != '[]' AND started_at >= ? ORDER BY started_at DESC""", (since,))]
+        ready = [dict(r) for r in conn.execute(f"""SELECT call_id, title, started_at, duration_min, invitees FROM calls
+                                                    WHERE status = 'ready' AND transcript != '[]' AND started_at >= ? AND {cond}
+                                                    ORDER BY started_at DESC""", (since, *args))]
         for r in ready:
             r["invitees"] = json.loads(r["invitees"] or "[]")
         people = _people_on(conn, [r["call_id"] for r in ready])
@@ -435,9 +485,12 @@ def attention(days: int = 14) -> dict:
             connected = json.loads(_key_path().read_text()).get("saved_at", "")[:16]
         except (OSError, ValueError):
             connected = ""
+        me, members = _me(), _member_ids()
         with store._conn() as cal:
             for e in cal.execute("""SELECT * FROM events WHERE (has_call = 1 OR expect_recording = 1) AND meeting_status = ''
                                     AND start_date BETWEEN ? AND ?""", (since[:10], store.now_local().date().isoformat())):
+                if (e["owner_id"] != me) if me else (e["owner_id"] in members):      # only this person's own meetings
+                    continue
                 end = datetime.fromisoformat(f"{e['start_date']}T{e['start_time']}") + timedelta(minutes=e["duration_min"])
                 starts = f"{e['start_date']}T{e['start_time']}"
                 if end <= cutoff and e["id"] not in linked and starts >= connected:
@@ -449,12 +502,26 @@ def attention(days: int = 14) -> dict:
 _started = False
 
 
+def sync_everyone() -> str:
+    """This workspace's admin Fathom, then each active team member's own."""
+    from .google_sync import as_member
+    out = sync()["status"] if get_key() else "not connected"
+    for user_id in sorted(_member_ids()):
+        with as_member(user_id):
+            if get_key():
+                try:
+                    sync()
+                except CallsError as exc:
+                    log.warning("Fathom fetch for team member %s failed: %s", user_id, exc)
+    return out
+
+
 def _loop() -> None:
     from . import directory
     time.sleep(90)
     while True:
         try:
-            directory.run_in_each_workspace(lambda: sync() if get_key() else "not connected", "Fathom calls")
+            directory.run_in_each_workspace(sync_everyone, "Fathom calls")
         except Exception:
             log.exception("Fathom fetch failed; it will try again in an hour")
         time.sleep(3600)
@@ -516,11 +583,18 @@ def register(app):
     @app.get("/api/calls/person/<int:person_id>")
     @guarded
     def calls_person(person_id):
+        from . import access
+        if not access.can_person(person_id):
+            return jsonify({"error": "You don't have access to that contact."}), 403
         return jsonify({"calls": calls_for_person(person_id) + no_shows_for_person(person_id)})
 
     @app.get("/api/calls/event/<int:event_id>")
     @guarded
     def calls_event(event_id):
+        from . import access
+        event = store.get_event(event_id)
+        if not event or not access.can_event(event):
+            return jsonify({"error": "no such meeting"}), 404
         return jsonify({"call": call_for_event(event_id), "attendees": event_attendees(event_id)})
 
     @app.get("/api/calendar/meetings/people")
@@ -600,5 +674,9 @@ def register(app):
         status = str((request.get_json(silent=True) or {}).get("status", ""))
         if status not in ("no_show", "completed"):
             raise CallsError("status must be no_show or completed")
+        from . import access
+        event = store.get_event(event_id)
+        if not event or not access.can_event(event):
+            return jsonify({"error": "no such meeting"}), 404
         event = store.set_meeting(event_id, meeting_status=status)
         return (jsonify({"ok": True}), 200) if event else (jsonify({"error": "no such meeting"}), 404)
