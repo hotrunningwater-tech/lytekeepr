@@ -233,3 +233,4 @@
 .lkc-newmeeting { align-self: flex-end; }
 .lkc-day.past { opacity: .25; cursor: default; }
 .lkc-day.past:hover { background: none; }
+.lkc-connect { background: rgba(127,168,184,.16); }

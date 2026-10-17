@@ -10,6 +10,7 @@
 - Manual events, lead follow-ups and leads are never read or written here.
 """
 
+import contextvars
 import html
 import json
 import re
@@ -18,6 +19,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 from . import store
@@ -44,9 +46,51 @@ class GoogleAuthError(GoogleSyncError):
 _LOCK = threading.Lock()      # the hourly job, the button and the chat command all take turns: no overlapping syncs
 RECONNECT_HINT = "Reconnect Google (open /auth/google/start), approve Calendar access, then sync again."
 
+# Whose Google Calendar: the workspace's (the admin's) by default, or a team member's own (member_google). A signed-in team
+# member always works with their own; the hourly job picks each member explicitly with as_member().
+_MEMBER = contextvars.ContextVar("lk_google_member", default=None)
+
+
+@contextmanager
+def as_member(user_id):
+    token = _MEMBER.set(user_id)
+    try:
+        yield
+    finally:
+        _MEMBER.reset(token)
+
+
+def member_id():
+    """The team member whose own Google Calendar is in use, or None for the workspace's (admin's) Google."""
+    chosen = _MEMBER.get()
+    if chosen is not None:
+        return chosen
+    try:
+        from flask import g, has_request_context
+        if has_request_context():
+            user = getattr(g, "user", None)
+            if user and user.get("role") != "admin" and user.get("id"):
+                return int(user["id"])
+    except Exception:
+        pass
+    return None
+
+
+def _prefix() -> str:
+    mid = member_id()
+    return f"google:u{mid}:" if mid else "google:primary:"
+
+
+def _key(name: str) -> str:
+    mid = member_id()
+    return f"{name}:u{mid}" if mid else name
+
 
 def is_connected() -> bool:
     """True if a Google refresh token has ever been saved on this machine (it may still have expired)."""
+    if member_id():
+        from . import member_google
+        return member_google.has_token(member_id())
     try:
         from google_oauth.store import has_refresh_token
         return bool(has_refresh_token())
@@ -57,14 +101,21 @@ def is_connected() -> bool:
 def can_create_meetings() -> bool:
     """True if the saved Google connection includes the "create calendar events" permission (connections made before it was added do not)."""
     try:
-        from google_oauth.store import load_tokens
-        scopes = ((load_tokens() or {}).get("scope") or "").split()
+        if member_id():
+            from . import member_google
+            scopes = member_google.scopes(member_id())
+        else:
+            from google_oauth.store import load_tokens
+            scopes = ((load_tokens() or {}).get("scope") or "").split()
     except Exception:
         return False
     return any(s.endswith("/auth/calendar.events") or s.endswith("/auth/calendar") for s in scopes)
 
 
 def _access_token() -> str:
+    if member_id():
+        from . import member_google
+        return member_google.access_token(member_id())
     try:
         from google_oauth.errors import GoogleOAuthError      # imported here so a machine without Google set up still runs
         from google_oauth.tokens import get_valid_access_token
@@ -144,7 +195,7 @@ def _convert(item: dict) -> dict | None:
     notes = (notes + "\n\n" + description).strip() if description else notes
     attendees = [{"email": (a.get("email") or "").lower(), "name": a.get("displayName") or ""}
                  for a in item.get("attendees") or [] if a.get("email") and not a.get("self")]      # everyone invited except you
-    return {"external_id": "google:primary:" + item["id"], "title": (item.get("summary") or "(no title)").strip()[:200],
+    return {"external_id": _prefix() + item["id"], "title": (item.get("summary") or "(no title)").strip()[:200],
             "start_date": s.date().isoformat(), "start_time": s.strftime("%H:%M"),
             "duration_min": min(max(minutes, 5), 24 * 60), "notes": notes[:2000], "has_call": 1 if has_call else 0,
             "attendees": json.dumps(attendees), "join_url": join[:500]}
@@ -173,11 +224,11 @@ def _sync_locked() -> dict:
             fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google"})
             if cur is None:
                 conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
-                                notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url)
+                                notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, owner_id)
                                 VALUES (:title, :project, :kind, :start_date, :start_time, :duration_min, :repeat, :repeat_days,
-                                :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url)""",
+                                :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :owner)""",
                              {**fields, "created_at": store.now_local().isoformat(), "external_id": ext, "has_call": row["has_call"],
-                              "attendees": row["attendees"], "join_url": row["join_url"]})
+                              "attendees": row["attendees"], "join_url": row["join_url"], "owner": member_id()})
                 result["added"] += 1       # INSERT OR IGNORE + the unique index mean two racing syncs can never create a duplicate
                 continue
             same = (all(cur[k] == fields[k] for k in ("title", "start_date", "start_time", "duration_min", "notes")) and cur["has_call"] == row["has_call"]
@@ -191,7 +242,9 @@ def _sync_locked() -> dict:
             result["updated"] += 1
             store.meeting_follow_up(conn, dict(conn.execute("SELECT * FROM events WHERE id = ?", (cur["id"],)).fetchone()))
 
-        gone = conn.execute("SELECT * FROM events WHERE source = 'google' AND start_date BETWEEN ? AND ?", result["window"]).fetchall()
+        # only this calendar's own events (the admin's, or this member's) can disappear here
+        gone = conn.execute("SELECT * FROM events WHERE source = 'google' AND substr(external_id, 1, ?) = ? AND start_date BETWEEN ? AND ?",
+                            (len(_prefix()), _prefix(), *result["window"])).fetchall()
         for ev in gone:
             if ev["external_id"] in wanted:
                 continue
@@ -208,12 +261,12 @@ def _sync_locked() -> dict:
 
 def _record(trigger: str, ok: bool, message: str = "", needs_reconnect: bool = False, result: dict | None = None) -> None:
     now = store.now_local().strftime("%Y-%m-%d %H:%M")
-    store.set_state("google_last_attempt", str(time.time()))
-    store.set_state("google_sync_status", json.dumps({"at": now, "trigger": trigger, "ok": ok, "message": message,
+    store.set_state(_key("google_last_attempt"), str(time.time()))
+    store.set_state(_key("google_sync_status"), json.dumps({"at": now, "trigger": trigger, "ok": ok, "message": message,
                                                       "needs_reconnect": needs_reconnect, "result": result}))
     if ok:
-        store.set_state("last_google_sync", now)
-        store.set_state("last_google_sync_result", json.dumps(result))
+        store.set_state(_key("last_google_sync"), now)
+        store.set_state(_key("last_google_sync_result"), json.dumps(result))
 
 
 def sync(trigger: str = "manual") -> dict:
@@ -232,9 +285,10 @@ def sync(trigger: str = "manual") -> dict:
 
 
 def status() -> dict:
-    raw = store.get_state("google_sync_status")
+    raw = store.get_state(_key("google_sync_status"))
     last = json.loads(raw) if raw else {}
-    return {"last_sync": store.get_state("last_google_sync"), "connected": is_connected(),
+    return {"last_sync": store.get_state(_key("last_google_sync")), "connected": is_connected(), "member": bool(member_id()),
+            "connect_path": "/auth/google/calendar/start" if member_id() else "/auth/google/start",
             "last_attempt": last.get("at"), "last_trigger": last.get("trigger"), "last_ok": last.get("ok"),
             "message": last.get("message", ""), "needs_reconnect": bool(last.get("needs_reconnect")),
             "can_create_meetings": can_create_meetings()}
@@ -246,9 +300,11 @@ def delete_meeting(event_id: int) -> bool:
     ev = store.get_event(event_id)
     if not ev:
         return False
-    if ev["source"] != "google" or not (ev["external_id"] or "").startswith("google:primary:"):
+    if ev["source"] != "google" or not (ev["external_id"] or "").startswith("google:"):
         raise GoogleSyncError("This is not a Google Calendar meeting.")
-    google_id = ev["external_id"].split(":", 2)[2]
+    if not ev["external_id"].startswith(_prefix()):      # each person deletes only meetings in their own Google Calendar
+        raise GoogleSyncError("This meeting is in someone else's Google Calendar; only they can delete it.")
+    google_id = ev["external_id"][len(_prefix()):]
     token = _access_token()
     req = urllib.request.Request(f"{API}/{urllib.parse.quote(google_id)}?sendUpdates=all", method="DELETE")
     req.add_header("Authorization", f"Bearer {token}")
@@ -309,11 +365,11 @@ def create_meeting(title: str, start_date: str, start_time: str, duration_min: i
     with store._conn() as conn:
         fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google", "notes": row["notes"]})
         conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
-                        notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, expect_recording)
+                        notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, expect_recording, owner_id)
                         VALUES (:title, :project, :kind, :start_date, :start_time, :duration_min, :repeat, :repeat_days,
-                        :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :expect)""",
+                        :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :expect, :owner)""",
                      {**fields, "created_at": store.now_local().isoformat(), "external_id": row["external_id"], "has_call": row["has_call"],
-                      "attendees": row["attendees"], "join_url": row["join_url"], "expect": 1 if expect_recording else 0})
+                      "attendees": row["attendees"], "join_url": row["join_url"], "expect": 1 if expect_recording else 0, "owner": member_id()})
         ev = conn.execute("SELECT * FROM events WHERE external_id = ?", (row["external_id"],)).fetchone()
     return {"id": ev["id"], "title": ev["title"], "start_date": ev["start_date"], "start_time": ev["start_time"], "join_url": ev["join_url"],
             "attendees": json.loads(ev["attendees"] or "[]")}

@@ -353,7 +353,13 @@
       out.push(h('div', { class: 'lkc-reconnect' }, [
         h('b', {}, 'Google needs to be reconnected'),
         h('span', {}, 'Your Google authorization expired or was revoked, so the hourly sync is paused. Your events, notes and statuses are safe.'),
-        h('a', { class: 'btn primary', href: (window.LK_PREFIX || '') + '/auth/google/start' }, 'Reconnect Google')
+        h('a', { class: 'btn primary', href: (window.LK_PREFIX || '') + connectPath() }, 'Reconnect Google')
+      ]));
+    } else if (g && g.member && !g.connected) {        // a team member: their own Google Calendar, one click
+      out.push(h('div', { class: 'lkc-reconnect lkc-connect' }, [
+        h('b', {}, 'Connect your Google Calendar'),
+        h('span', {}, 'Your meetings show here, and you can create meetings with a Google Meet link. Only your calendar is used; LyteKeepr never reads your Gmail.'),
+        h('a', { class: 'btn primary', href: (window.LK_PREFIX || '') + connectPath() }, 'Connect my Google Calendar')
       ]));
     }
     if (state.syncNote) out.push(h('p', { class: 'lkc-synced' }, state.syncNote));
@@ -738,7 +744,8 @@
     ])];
   }
 
-  function reconnectButton() { return h('a', { class: 'btn lkc-reconnect-btn', href: (window.LK_PREFIX || '') + '/auth/google/start' }, 'Reconnect Google'); }
+  function connectPath() { return (state.google && state.google.connect_path) || '/auth/google/start'; }      // a team member's own calendar has its own
+  function reconnectButton() { return h('a', { class: 'btn lkc-reconnect-btn', href: (window.LK_PREFIX || '') + connectPath() }, 'Reconnect Google'); }
 
   // Date: a small month calendar in the same look as the rest of the page (weeks start on Monday, like the calendar)
   function dateField(f) {
@@ -848,10 +855,13 @@
         onclick: function () { sync(); f[key] = !f[key]; render(); } }, [h('span', {}, label), h('span', { class: 'lkc-switch' }, [h('i', {})])]);
     }
     var needsPermission = g.connected && g.can_create_meetings === false && (f.meet || f.people.length);
+    var needsConnect = g.member && !g.connected;          // a team member who has not connected their own Google Calendar yet
     return h('div', { class: 'lkc-meetbox' }, [
       h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Invite'), h('div', { class: 'lkc-invitebox' }, [chips, input, list])]),
       h('div', { class: 'lkc-toggles' }, [toggle('meet', 'Google Meet link'), toggle('expect', 'Record with Fathom')]),
-      needsPermission ? h('div', { class: 'lkc-permission' }, [h('span', {}, 'Google needs one more permission before LyteKeepr can send invites.'), reconnectButton()]) : null
+      needsPermission ? h('div', { class: 'lkc-permission' }, [h('span', {}, 'Google needs one more permission before LyteKeepr can send invites.'), reconnectButton()]) : null,
+      needsConnect ? h('div', { class: 'lkc-permission' }, [h('span', {}, 'Connect your Google Calendar to send invites and get a Meet link.'),
+        h('a', { class: 'btn lkc-reconnect-btn', href: (window.LK_PREFIX || '') + connectPath() }, 'Connect my Google Calendar')]) : null
     ]);
   }
 
@@ -1114,6 +1124,15 @@
   $('#lkcTabInfo').addEventListener('click', function () { state.pane = 'info'; render(); });
   $('#lkcTabChat').addEventListener('click', function () { state.pane = 'chat'; render(); });
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !panel.hidden && state.mode !== 'agenda') closeSide(); });
+
+  // Back from Google after a team member connected their calendar: open the Calendar and say how it went.
+  (function () {
+    var q = new URLSearchParams(location.search), result = q.get('calendar');
+    if (!result) return;
+    state.syncNote = result === 'connected' ? 'Your Google Calendar is connected. Your meetings are below.' : 'Google Calendar was not connected: ' + (q.get('reason') || 'unknown error');
+    history.replaceState(null, '', location.pathname);
+    setTimeout(function () { var tab = document.getElementById('calendarTab'); if (tab) tab.click(); }, 300);
+  })();
 
   // Keep "now" line and badge fresh while the tab is open.
   setInterval(function () { if (!panel.hidden && state.mode !== 'form' && state.mode !== 'import') load(); }, 60000);

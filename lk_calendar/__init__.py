@@ -22,6 +22,8 @@ def register(app):
     users.register(app)
     from . import calls
     calls.register(app)
+    from . import member_google
+    member_google.register(app)
     from pathlib import Path
     from . import superadmin
     superadmin.register(app, str(Path(__file__).resolve().parent.parent))

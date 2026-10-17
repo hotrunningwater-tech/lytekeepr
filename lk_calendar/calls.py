@@ -330,7 +330,11 @@ def parse_invitees(text: str) -> tuple[list, list]:
             emails += [f.lower() for f in found]
             continue
         from assistant.contact_lookup import find_people
+        from . import access
         people = find_people(part, email_only=True)
+        allowed = access.person_ids()                  # a team member resolves only names they may see
+        if allowed is not None:
+            people = [p for p in people if p["person_id"] in allowed]
         if len(people) == 1:
             emails.append(people[0]["email"].lower())
         else:
@@ -526,6 +530,10 @@ def register(app):
         from assistant.contact_lookup import find_people
         q = request.args.get("q", "").strip()
         people = find_people(q, email_only=True) if len(q) >= 2 else []
+        from . import access
+        allowed = access.person_ids()                  # None = the whole database
+        if allowed is not None:
+            people = [p for p in people if p["person_id"] in allowed]
         return jsonify({"people": [{"name": p["name"], "email": p["email"].lower(), "company": p.get("company") or ""} for p in people[:6]]})
 
     @app.post("/api/calendar/meetings")

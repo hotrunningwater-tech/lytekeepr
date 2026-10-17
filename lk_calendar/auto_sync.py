@@ -25,11 +25,24 @@ def _settings() -> tuple[int, int, int]:
 
 
 def run_if_due() -> str:
-    """One scheduler tick. Returns what happened (handy for tests): 'skipped', 'not due', 'synced' or 'failed'."""
+    """One scheduler tick in this workspace: the admin's Google Calendar, then each team member's own. Returns what happened to the
+    admin's (handy for tests): 'skipped', 'not due', 'synced' or 'failed'."""
+    outcome = _run_one()
+    try:
+        from . import member_google
+        for user_id in member_google.connected_members():
+            with google_sync.as_member(user_id):
+                _run_one()
+    except Exception:
+        log.exception("Team members' Google Calendar sync failed")
+    return outcome
+
+
+def _run_one() -> str:
     interval = _settings()[0]
     if not google_sync.is_connected():
         return "skipped"
-    last = float(store.get_state("google_last_attempt") or 0)
+    last = float(store.get_state(google_sync._key("google_last_attempt")) or 0)
     if time.time() - last < interval:
         return "not due"
     try:

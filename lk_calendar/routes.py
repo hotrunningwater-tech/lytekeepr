@@ -23,7 +23,7 @@ def list_events():
     start, end = request.args.get("start"), request.args.get("end")
     if not start or not end:
         return jsonify({"error": "start and end are required"}), 400
-    events = [e for e in store.occurrences(start, end) if access.can_event(e) and (users.is_admin() or e.get("source") != "google")]
+    events = [e for e in store.occurrences(start, end) if access.can_event(e)]      # "Everything" sees the admin's Google meetings too
     return jsonify({"now": store.now_local().strftime("%Y-%m-%dT%H:%M"), "events": events})
 
 
@@ -35,9 +35,9 @@ def move_overdue():
 @bp.get("/api/calendar/agenda")
 def agenda():
     data = store.agenda()
-    if not (users.is_admin() and access.is_full()):
+    if not access.is_full():
         for key in ("overdue", "today", "upcoming"):
-            data[key] = [e for e in data[key] if access.can_event(e) and (users.is_admin() or e.get("source") != "google")]
+            data[key] = [e for e in data[key] if access.can_event(e)]
         data["badge"] = len(data["overdue"]) + sum(1 for o in data["today"] if not o["done"])
     return jsonify(data)
 

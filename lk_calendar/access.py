@@ -97,14 +97,14 @@ def lead_person(lead_id):
 
 
 def can_event(event: dict) -> bool:
-    """An event is visible when it belongs to a contact the person may see, or the person created it (the admin's own events and the
-    Google Calendar are only for those with the whole database)."""
+    """An event is visible when it belongs to a contact the person may see, or it is theirs (created by them, or from their own Google
+    Calendar). The admin's own events and Google Calendar are only for those with the whole database."""
     if is_full():
         return True
     lead = event.get("lead")
     if lead:
         return can_person(lead.get("person_id"))
-    return event.get("owner_id") is not None and event.get("owner_id") == (_current() or {}).get("id") and event.get("source") != "google"
+    return event.get("owner_id") is not None and event.get("owner_id") == (_current() or {}).get("id")      # incl. their own Google Calendar
 
 
 def can_company(company_id) -> bool:

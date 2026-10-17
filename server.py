@@ -403,6 +403,8 @@ def google_oauth_callback():
     if workspace not in {p["profile_id"] for p in list_profiles()}:
         return redirect(f"{_app_home()}?gmail=error&reason=unknown_workspace")
     with use_profile(workspace):
+        if isinstance(purpose, dict) and purpose.get("p") == "calendar":      # a team member's own Google Calendar
+            return app.config["LK_MEMBER_CALENDAR_FINISH"](code, purpose)
         return _finish_gmail_connect(code, (purpose.get("e") or "") if isinstance(purpose, dict) else "")
 
 

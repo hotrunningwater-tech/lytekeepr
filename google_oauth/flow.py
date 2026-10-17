@@ -25,13 +25,13 @@ CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events"      #
 REQUESTED_SCOPES = (GMAIL_MODIFY_SCOPE, CALENDAR_READONLY_SCOPE, CALENDAR_EVENTS_SCOPE)
 
 
-def build_authorization_url(state: str | None = None, login_hint: str | None = None) -> str:
+def build_authorization_url(state: str | None = None, login_hint: str | None = None, scopes=None) -> str:
     config = GoogleOAuthConfig.from_env().require()
     params = {
         "client_id": config.client_id,
         "redirect_uri": config.redirect_uri,
         "response_type": "code",
-        "scope": " ".join(REQUESTED_SCOPES),
+        "scope": " ".join(scopes or REQUESTED_SCOPES),        # a team member's own calendar asks for calendar scopes only
         "access_type": "offline",
         # Forces Google to always return a refresh_token, even on repeat
         # connections from the same account (otherwise it's only issued
@@ -46,7 +46,7 @@ def build_authorization_url(state: str | None = None, login_hint: str | None = N
     return f"{AUTH_ENDPOINT}?{urllib.parse.urlencode(params)}"
 
 
-def exchange_code_for_tokens(code: str) -> dict:
+def exchange_code_for_tokens(code: str, save: bool = True) -> dict:
     config = GoogleOAuthConfig.from_env().require()
     data = urllib.parse.urlencode(
         {
@@ -71,7 +71,8 @@ def exchange_code_for_tokens(code: str) -> dict:
         raise GoogleOAuthError(f"Could not reach Google's token endpoint: {exc}") from exc
 
     tokens["expires_at"] = time.time() + tokens.get("expires_in", 3600)
-    save_tokens(tokens)
+    if save:                                    # a team member's calendar tokens are kept elsewhere (lk_calendar/member_google)
+        save_tokens(tokens)
     return tokens
 
 
