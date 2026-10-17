@@ -2652,9 +2652,9 @@ html[data-photo-crop-lock="active"] .email-panel {
   font-family: var(--font-heading); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink); }
 .header-slogan span { color: var(--coral); }
 @media (max-width: 1200px) { .header-slogan { display: none; } }
-.user-chip { display: inline-flex; align-items: center; gap: 9px; padding: 5px 14px 5px 5px; border-radius: 999px; background: rgba(255,255,255,.75); box-shadow: 0 2px 8px rgba(41,67,78,.1); max-width: 260px; }
+.user-chip { display: inline-flex; align-items: center; gap: 9px; padding: 8px 10px 8px 16px; border-radius: 999px; background: rgba(255,255,255,.75); box-shadow: 0 2px 8px rgba(41,67,78,.1); max-width: 260px; }
 .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--teal); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-weight: 700; font-size: 13px; flex: none; }
-.user-chip.is-admin .user-avatar { background: rgba(233,139,116,.2); color: #c2654c; }    /* soft: the ADMIN badge is the one bright accent */
+.user-chip .user-avatar { display: none; }      /* name and role are enough */
 .user-name { font-family: var(--font-heading); font-weight: 700; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-role { font-family: var(--font-heading); font-weight: 700; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; background: #3a9cbc; color: #fff; border-radius: 999px; padding: 3px 8px; flex: none; box-shadow: 0 2px 8px rgba(58,156,188,.35); }
 @media (max-width: 700px) { .user-name { display: none; } }
