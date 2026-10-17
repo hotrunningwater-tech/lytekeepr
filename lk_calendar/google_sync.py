@@ -27,7 +27,7 @@ from . import store
 API = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 PAST_DAYS, FUTURE_DAYS = 30, 180
 CALL_RE = re.compile(r"(zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|gotomeeting\.com|gotomeet\.me)", re.I)
-FIELDS = ("nextPageToken,items(id,status,summary,description,location,hangoutLink,start,end,"
+FIELDS = ("nextPageToken,items(id,iCalUID,status,summary,description,location,hangoutLink,start,end,"
           "conferenceData(entryPoints(uri,entryPointType)),attendees(email,displayName,self,organizer))")
 
 
@@ -198,7 +198,7 @@ def _convert(item: dict) -> dict | None:
     return {"external_id": _prefix() + item["id"], "title": (item.get("summary") or "(no title)").strip()[:200],
             "start_date": s.date().isoformat(), "start_time": s.strftime("%H:%M"),
             "duration_min": min(max(minutes, 5), 24 * 60), "notes": notes[:2000], "has_call": 1 if has_call else 0,
-            "attendees": json.dumps(attendees), "join_url": join[:500]}
+            "attendees": json.dumps(attendees), "join_url": join[:500], "ical_uid": (item.get("iCalUID") or "")[:300]}
 
 
 def _sync_locked() -> dict:
@@ -224,21 +224,21 @@ def _sync_locked() -> dict:
             fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google"})
             if cur is None:
                 conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
-                                notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, owner_id)
+                                notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, owner_id, ical_uid)
                                 VALUES (:title, :project, :kind, :start_date, :start_time, :duration_min, :repeat, :repeat_days,
-                                :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :owner)""",
+                                :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :owner, :ical_uid)""",
                              {**fields, "created_at": store.now_local().isoformat(), "external_id": ext, "has_call": row["has_call"],
-                              "attendees": row["attendees"], "join_url": row["join_url"], "owner": member_id()})
+                              "attendees": row["attendees"], "join_url": row["join_url"], "owner": member_id(), "ical_uid": row["ical_uid"]})
                 result["added"] += 1       # INSERT OR IGNORE + the unique index mean two racing syncs can never create a duplicate
                 continue
             same = (all(cur[k] == fields[k] for k in ("title", "start_date", "start_time", "duration_min", "notes")) and cur["has_call"] == row["has_call"]
-                    and cur["attendees"] == row["attendees"] and cur["join_url"] == row["join_url"])
+                    and cur["attendees"] == row["attendees"] and cur["join_url"] == row["join_url"] and cur["ical_uid"] == row["ical_uid"])
             if same:
                 result["unchanged"] += 1
                 continue
-            conn.execute("UPDATE events SET title=?, start_date=?, start_time=?, duration_min=?, notes=?, has_call=?, attendees=?, join_url=? WHERE id=?",
+            conn.execute("UPDATE events SET title=?, start_date=?, start_time=?, duration_min=?, notes=?, has_call=?, attendees=?, join_url=?, ical_uid=? WHERE id=?",
                          (fields["title"], fields["start_date"], fields["start_time"], fields["duration_min"], fields["notes"],
-                          row["has_call"], row["attendees"], row["join_url"], cur["id"]))
+                          row["has_call"], row["attendees"], row["join_url"], row["ical_uid"], cur["id"]))
             result["updated"] += 1
             store.meeting_follow_up(conn, dict(conn.execute("SELECT * FROM events WHERE id = ?", (cur["id"],)).fetchone()))
 
@@ -365,11 +365,12 @@ def create_meeting(title: str, start_date: str, start_time: str, duration_min: i
     with store._conn() as conn:
         fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google", "notes": row["notes"]})
         conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
-                        notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, expect_recording, owner_id)
+                        notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, expect_recording, owner_id, ical_uid)
                         VALUES (:title, :project, :kind, :start_date, :start_time, :duration_min, :repeat, :repeat_days,
-                        :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :expect, :owner)""",
+                        :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :expect, :owner, :ical_uid)""",
                      {**fields, "created_at": store.now_local().isoformat(), "external_id": row["external_id"], "has_call": row["has_call"],
-                      "attendees": row["attendees"], "join_url": row["join_url"], "expect": 1 if expect_recording else 0, "owner": member_id()})
+                      "attendees": row["attendees"], "join_url": row["join_url"], "expect": 1 if expect_recording else 0, "owner": member_id(),
+                      "ical_uid": row["ical_uid"]})
         ev = conn.execute("SELECT * FROM events WHERE external_id = ?", (row["external_id"],)).fetchone()
     return {"id": ev["id"], "title": ev["title"], "start_date": ev["start_date"], "start_time": ev["start_time"], "join_url": ev["join_url"],
             "attendees": json.loads(ev["attendees"] or "[]")}

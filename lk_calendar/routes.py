@@ -18,12 +18,28 @@ def _bad_request(err):
     return jsonify({"error": str(err)}), 400
 
 
+def _one_per_meeting(events: list) -> list:
+    """A meeting that is in several people's Google Calendars (you invited a team member, or both were invited) shows once:
+    the viewer's own copy when they have one, else the first. Repeats keep one per date."""
+    admin, me = users.is_admin(), users.current_id()
+    def mine(e):
+        return (e.get("external_id") or "").startswith("google:primary:") if admin else e.get("owner_id") == me
+    best = {}
+    for e in events:
+        if not e.get("ical_uid"):
+            continue
+        k = (e["ical_uid"], e.get("date") or e.get("start_date"))
+        if k not in best or (mine(e) and not mine(best[k])):
+            best[k] = e
+    return [e for e in events if not e.get("ical_uid") or best.get((e["ical_uid"], e.get("date") or e.get("start_date"))) is e]
+
+
 @bp.get("/api/calendar/events")
 def list_events():
     start, end = request.args.get("start"), request.args.get("end")
     if not start or not end:
         return jsonify({"error": "start and end are required"}), 400
-    events = [e for e in store.occurrences(start, end) if access.can_event(e)]      # "Everything" sees the admin's Google meetings too
+    events = _one_per_meeting([e for e in store.occurrences(start, end) if access.can_event(e)])      # "Everything" sees the admin's Google meetings too
     return jsonify({"now": store.now_local().strftime("%Y-%m-%dT%H:%M"), "events": events})
 
 
@@ -35,10 +51,9 @@ def move_overdue():
 @bp.get("/api/calendar/agenda")
 def agenda():
     data = store.agenda()
-    if not access.is_full():
-        for key in ("overdue", "today", "upcoming"):
-            data[key] = [e for e in data[key] if access.can_event(e)]
-        data["badge"] = len(data["overdue"]) + sum(1 for o in data["today"] if not o["done"])
+    for key in ("overdue", "today", "upcoming"):
+        data[key] = _one_per_meeting([e for e in data[key] if access.can_event(e)])
+    data["badge"] = len(data["overdue"]) + sum(1 for o in data["today"] if not o["done"])
     return jsonify(data)
 
 

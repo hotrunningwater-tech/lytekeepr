@@ -230,6 +230,12 @@ def _store_call(item: dict) -> bool:
             new = True
         _link_people(conn, call_id, invitees)
     _link_event(call_id, start, end)
+    if new:                                         # a recording arrived, so the meeting happened: mark it completed (unless already set)
+        with _crm() as conn:
+            event_id = conn.execute("SELECT event_id FROM calls WHERE call_id = ?", (call_id,)).fetchone()["event_id"]
+        event = store.get_event(event_id) if event_id else None
+        if event and not event.get("meeting_status"):
+            store.set_meeting(event_id, meeting_status="completed")
     return new
 
 
