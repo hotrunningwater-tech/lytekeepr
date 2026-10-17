@@ -412,8 +412,14 @@ def attention(days: int = 14) -> dict:
     """For Home: calls with a transcript nobody has summarized yet, and call meetings that passed with no recording (no-show?)."""
     since = (store.now_local() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M")
     with _crm() as conn:
-        ready = [dict(r) for r in conn.execute("""SELECT call_id, title, started_at, duration_min FROM calls
+        ready = [dict(r) for r in conn.execute("""SELECT call_id, title, started_at, duration_min, invitees FROM calls
                                                    WHERE status = 'ready' AND transcript != '[]' AND started_at >= ? ORDER BY started_at DESC""", (since,))]
+        for r in ready:
+            r["invitees"] = json.loads(r["invitees"] or "[]")
+        people = _people_on(conn, [r["call_id"] for r in ready])
+        for r in ready:                             # a contact added since the call arrived: link it now, by email
+            if not people.get(r["call_id"]):
+                _link_people(conn, r["call_id"], r["invitees"])
         people = _people_on(conn, [r["call_id"] for r in ready])
         linked = {r["event_id"] for r in conn.execute("SELECT event_id FROM calls WHERE event_id IS NOT NULL")}
     for r in ready:

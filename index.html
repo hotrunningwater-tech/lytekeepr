@@ -1804,7 +1804,12 @@
                   if (window.lkHomeChat && window.lkHomeChat.showDraft) window.lkHomeChat.showDraft('Your follow-up email to ' + (d.person_name || 'them') + ' after "' + c.title + '" is ready below. Edit it, then press Send now.');
                 });
               }],
-              ['Open', 'subtle-link-btn', function () { if (c.contacts && c.contacts[0]) openCrmPersonDetail(c.contacts[0].person_id); }]
+              (c.contacts && c.contacts[0])
+                ? ['Open', 'subtle-link-btn', function () { openCrmPersonDetail(c.contacts[0].person_id); }]
+                : ['Add as contact', 'subtle-link-btn', function () {     // nobody on the call is a contact yet: the other person, prefilled
+                    var other = (c.invitees || []).filter(function (i) { return i.external; })[0] || (c.invitees || [])[0] || {};
+                    if (window.lkContacts) window.lkContacts.addContact({ email: other.email || '', name: other.name && other.name !== other.email ? other.name : '', channel: 'email' }, loadCallsAttention);
+                  }]
             ]));
         });
         data.missing.forEach(function (m) {
