@@ -241,6 +241,36 @@ def status() -> dict:
 
 
 # ------------------------------------------------------------------ creating a meeting (needs the "create calendar events" permission)
+def delete_meeting(event_id: int) -> bool:
+    """Delete a Google meeting from the user's Google Calendar (people invited get Google's cancellation email) and from here."""
+    ev = store.get_event(event_id)
+    if not ev:
+        return False
+    if ev["source"] != "google" or not (ev["external_id"] or "").startswith("google:primary:"):
+        raise GoogleSyncError("This is not a Google Calendar meeting.")
+    google_id = ev["external_id"].split(":", 2)[2]
+    token = _access_token()
+    req = urllib.request.Request(f"{API}/{urllib.parse.quote(google_id)}?sendUpdates=all", method="DELETE")
+    req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            pass
+    except urllib.error.HTTPError as exc:
+        low = exc.read().decode(errors="replace").lower()
+        if exc.code in (404, 410):
+            pass                                    # already gone from Google: just remove it here too
+        elif exc.code == 401 or (exc.code == 403 and ("insufficient" in low or "scope" in low)):
+            raise GoogleAuthError("Google hasn't allowed LyteKeepr to change your calendar yet. Press Reconnect Google and tick "
+                                  "every box, then try again.") from exc
+        else:
+            raise GoogleSyncError(f"Google could not delete the meeting (error {exc.code}).") from exc
+    except urllib.error.URLError as exc:
+        raise GoogleSyncError(f"Could not reach Google: {exc}") from exc
+    with store._conn() as conn:
+        conn.execute("DELETE FROM events WHERE id = ?", (event_id,))
+    return True
+
+
 def create_meeting(title: str, start_date: str, start_time: str, duration_min: int, invitees: list, add_meet: bool = True,
                    notes: str = "", expect_recording: bool = True, project: str = "google") -> dict:
     """Put a meeting in the user's Google Calendar, with a Google Meet link if asked, and send the invites. It is then kept here like

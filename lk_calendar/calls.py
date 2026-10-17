@@ -506,6 +506,17 @@ def register(app):
             raise CallsError(str(exc))
         return jsonify(meeting), 201
 
+    @app.delete("/api/calendar/meetings/<int:event_id>")
+    @guarded
+    def meetings_delete(event_id):
+        """Delete a Google meeting (from Google Calendar too; invited people get a cancellation)."""
+        from . import google_sync
+        try:
+            ok = google_sync.delete_meeting(event_id)
+        except google_sync.GoogleSyncError as exc:
+            raise CallsError(str(exc))
+        return (jsonify({"ok": True}), 200) if ok else (jsonify({"error": "not found"}), 404)
+
     @app.get("/api/calls/<int:call_id>")
     @guarded
     def calls_get(call_id):

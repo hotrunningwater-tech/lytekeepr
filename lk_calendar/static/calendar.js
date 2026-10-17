@@ -479,6 +479,13 @@
         if (!confirm(e.repeat === 'none' ? 'Delete this item?' : 'Delete this item and all its repeats?')) return;
         api('DELETE', '/api/calendar/events/' + e.id).then(function () { state.selected = null; state.mode = 'agenda'; load(); });
       } }, 'Delete'));
+    } else {
+      actions.push(h('button', { class: 'btn danger', type: 'button', onclick: function () {
+        var invited = ((callCache[e.id] || {}).attendees || []).length;
+        if (!confirm('Delete this meeting from your Google Calendar?' + (invited ? ' The people invited get a cancellation email from Google.' : ''))) return;
+        api('DELETE', '/api/calendar/meetings/' + e.id).then(function () { state.selected = null; state.mode = 'agenda'; state.deleteError = null; load(); })
+          .catch(function (err) { state.deleteError = { id: e.id, message: err.message }; render(); });
+      } }, 'Delete meeting'));
     }
     return [h('div', { class: 'lkc-card lkc-detail' }, [
       h('div', { class: 'lkc-top' }, [
@@ -490,6 +497,8 @@
       e.notes ? h('div', { class: 'lkc-notes' }, [google ? h('span', { class: 'lkc-lbl' }, 'From Google') : null, e.notes]) : null,
       recordingBlock(e),
       google || e.kind === 'meeting' ? meetingBlock(e) : null,
+      state.deleteError && state.deleteError.id === e.id ? h('p', { class: 'lkc-err' }, state.deleteError.message) : null,
+      state.deleteError && state.deleteError.id === e.id && /Reconnect Google/.test(state.deleteError.message) ? reconnectButton() : null,
       actions.length ? h('div', { class: 'lkc-actions' }, actions) : null
     ])];
   }
@@ -697,7 +706,7 @@
       h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Title'), h('input', { type: 'text', id: 'lkcTitleInput', maxlength: 200, value: f.title, placeholder: 'e.g. Send LinkedIn batch' })]),
       h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Project'), projPick]),
       h('div', { class: 'lkc-row2' }, [
-        h('div', {}, [h('span', { class: 'lkc-lbl' }, f.repeat === 'none' ? 'Date' : 'Starts'), h('input', { type: 'date', id: 'lkcDate', value: f.start_date })]),
+        h('div', {}, [h('span', { class: 'lkc-lbl' }, f.repeat === 'none' ? 'Date' : 'Starts'), dateField(f)]),
         f.untimed ? h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Time'), h('p', { class: 'lkc-empty', style: 'margin:9px 0 0' }, 'No specific time')])
           : h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Time'), timeField(f)])
       ]),
@@ -718,6 +727,36 @@
   }
 
   function reconnectButton() { return h('a', { class: 'btn lkc-reconnect-btn', href: (window.LK_PREFIX || '') + '/auth/google/start' }, 'Reconnect Google'); }
+
+  // Date: a small month calendar in the same look as the rest of the page (weeks start on Monday, like the calendar)
+  function dateField(f) {
+    var hidden = h('input', { type: 'hidden', id: 'lkcDate', value: f.start_date });
+    var button = h('button', { type: 'button', class: 'lkc-datebtn' }, [longDate(f.start_date) + ', ' + f.start_date.slice(0, 4)]);
+    var pop = h('div', { class: 'lkc-pop lkc-datepop', hidden: true });
+    var shown = f.start_date.slice(0, 7);          // the month on screen, "2026-10"
+    function pick(iso) { f.start_date = iso; hidden.value = iso; button.textContent = longDate(iso) + ', ' + iso.slice(0, 4); pop.hidden = true; }
+    function draw() {
+      pop.innerHTML = '';
+      var first = shown + '-01', start = mondayOf(first), nextMonth = addDays(first, 32).slice(0, 7);
+      var title = toUTC(first).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+      pop.appendChild(h('div', { class: 'lkc-datehead' }, [
+        h('button', { type: 'button', 'aria-label': 'Previous month', onmousedown: function (ev) { ev.preventDefault(); shown = addDays(first, -1).slice(0, 7); draw(); } }, '\u2039'),
+        h('b', {}, title),
+        h('button', { type: 'button', 'aria-label': 'Next month', onmousedown: function (ev) { ev.preventDefault(); shown = nextMonth; draw(); } }, '\u203a')
+      ]));
+      var grid = h('div', { class: 'lkc-dategrid' }, DAY_LETTERS.map(function (l) { return h('span', { class: 'lkc-dow' }, l); }));
+      for (var i = 0; i < 42; i++) (function (iso) {
+        if (i >= 35 && iso.slice(0, 7) !== shown) return;      // no sixth row when the month fits in five
+        grid.appendChild(h('button', { type: 'button', class: 'lkc-day' + (iso.slice(0, 7) !== shown ? ' out' : '') + (iso === today() ? ' today' : '') + (iso === f.start_date ? ' on' : ''),
+          onmousedown: function (ev) { ev.preventDefault(); pick(iso); } }, String(+iso.slice(8))));
+      })(addDays(start, i));
+      pop.appendChild(grid);
+      pop.appendChild(h('div', { class: 'lkc-datefoot' }, [h('button', { type: 'button', onmousedown: function (ev) { ev.preventDefault(); pick(today()); } }, 'Today')]));
+    }
+    button.addEventListener('click', function () { if (pop.hidden) { shown = f.start_date.slice(0, 7); draw(); pop.hidden = false; } else pop.hidden = true; });
+    button.addEventListener('blur', function () { pop.hidden = true; });
+    return h('div', { class: 'lkc-datepick' }, [hidden, button, pop]);
+  }
 
   // Time: type it ("2pm", "14:30") or pick from a list in 15-minute steps
   function timeField(f) {
@@ -787,8 +826,8 @@
       else if (ev.key === 'Backspace' && !input.value && f.people.length) { sync(); f.people.pop(); render(); var again = $('#lkcInvite'); if (again) again.focus(); }
     });
     function toggle(key, label) {
-      return h('button', { type: 'button', class: 'lkc-toggle' + (f[key] ? ' on' : ''), 'aria-pressed': f[key] ? 'true' : 'false',
-        onclick: function () { sync(); f[key] = !f[key]; render(); } }, [h('i', {}), label]);
+      return h('button', { type: 'button', role: 'switch', class: 'lkc-switchrow' + (f[key] ? ' on' : ''), 'aria-checked': f[key] ? 'true' : 'false',
+        onclick: function () { sync(); f[key] = !f[key]; render(); } }, [h('span', {}, label), h('span', { class: 'lkc-switch' }, [h('i', {})])]);
     }
     var needsPermission = g.connected && g.can_create_meetings === false && (f.meet || f.people.length);
     return h('div', { class: 'lkc-meetbox' }, [
