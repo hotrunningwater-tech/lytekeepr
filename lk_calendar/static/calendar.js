@@ -347,7 +347,7 @@
 
   function renderAgenda() {
     var a = state.agenda, out = [];
-    out.push(h('button', { class: 'lkc-newmeeting', type: 'button', onclick: function () { openForm({ kind: 'meeting' }); } }, [h('span', { 'aria-hidden': 'true' }, '+'), 'New meeting']));
+    out.push(h('button', { class: 'btn btn-primary lkc-newmeeting', type: 'button', onclick: function () { openForm({ kind: 'meeting' }); } }, '+ New meeting'));
     var g = state.google;
     if (g && g.needs_reconnect) {
       out.push(h('div', { class: 'lkc-reconnect' }, [
