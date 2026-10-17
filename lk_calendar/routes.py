@@ -44,7 +44,9 @@ def agenda():
 
 @bp.post("/api/calendar/events")
 def create_event():
-    event = store.create_event(_payload())
+    body = _payload()
+    store.check_not_past(str(body.get("start_date", "")), str(body.get("start_time", "")), bool(body.get("untimed")))
+    event = store.create_event(body)
     mine = users.current_id()
     if mine and event.get("id"):                       # who created it: they always see their own events
         with store._conn() as conn:

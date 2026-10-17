@@ -515,6 +515,10 @@ def register(app):
         """Create a meeting in Google Calendar (optionally with a Meet link) and send the invites."""
         from . import google_sync
         body = request.get_json(silent=True) or {}
+        try:
+            store.check_not_past(str(body.get("start_date", "")), str(body.get("start_time", "")))
+        except store.ValidationError as exc:
+            raise CallsError(str(exc))
         emails, unknown = parse_invitees(str(body.get("invite", "")))
         if unknown:
             raise CallsError("Not found as a contact with an email: " + ", ".join(unknown) + ". Type their email address instead.")

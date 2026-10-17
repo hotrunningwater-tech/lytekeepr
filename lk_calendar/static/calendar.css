@@ -228,3 +228,12 @@
 .lkc-meetbox { gap: 10px; }
 .lkc-permission { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); }
 .lkc-reconnect-btn { align-self: flex-start; padding: 7px 13px; background: var(--ink); color: var(--surface); font-size: 12px; text-decoration: none; }
+
+/* The main action: one big "New meeting" button at the top of the side panel */
+.lkc-newmeeting { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: none; border-radius: 14px;
+  padding: 13px 16px; background: var(--ink); color: var(--surface); font-family: var(--font-heading); font-size: 15px; font-weight: 600;
+  cursor: pointer; box-shadow: 0 4px 14px rgba(41,67,78,.22); }
+.lkc-newmeeting span { font-size: 20px; line-height: 1; font-weight: 500; }
+.lkc-newmeeting:hover { filter: brightness(1.12); }
+.lkc-day.past { opacity: .25; cursor: default; }
+.lkc-day.past:hover { background: none; }

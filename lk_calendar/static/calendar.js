@@ -41,6 +41,15 @@
   function minutes(hhmm) { var p = hhmm.split(':'); return +p[0] * 60 + +p[1]; }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function hhmm(min) { return pad(Math.floor(min / 60) % 24) + ':' + pad(min % 60); }
+  function nowHHMM() { return state.now ? state.now.slice(11, 16) : pad(new Date().getHours()) + ':' + pad(new Date().getMinutes()); }
+  function isPast(dateIso, time, untimed) {     // new items may not start before now
+    if (dateIso < today()) return true;
+    return !untimed && dateIso === today() && !!time && time < nowHHMM();
+  }
+  function nextFreeStart() {                    // the next half hour from now, or 9:00 tomorrow late in the evening
+    var m = minutes(nowHHMM()), next = Math.ceil((m + 1) / 30) * 30;
+    return next > 22 * 60 ? { date: addDays(today(), 1), time: '09:00' } : { date: today(), time: hhmm(next) };
+  }
   function timeText(hhmmStr) { var m = minutes(hhmmStr), h = Math.floor(m / 60); return ((h + 11) % 12 + 1) + ':' + pad(m % 60) + ' ' + (h >= 12 ? 'PM' : 'AM'); }
   function parseTime(text) {   // "2pm", "2:30 pm", "14:30", "930" -> "14:30"; null if it isn't a time
     var t = String(text || '').trim().toLowerCase().replace(/\s+/g, ''), m = t.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?$/);
@@ -261,7 +270,9 @@
         if (ev.target !== col && !ev.target.classList.contains('lkc-line')) return;
         var rect = col.getBoundingClientRect();
         var min = Math.round(((ev.clientY - rect.top) / PX_PER_HOUR * 60) / 30) * 30 + lo * 60;
-        openForm({ start_date: dayIso, start_time: hhmm(Math.min(min, 23 * 60 + 30)) });
+        var slot = hhmm(Math.min(min, 23 * 60 + 30));
+        if (isPast(dayIso, slot)) return;          // nothing new can be put in the past
+        openForm({ start_date: dayIso, start_time: slot });
       } });
       for (var l = 0; l < hi - lo; l++) col.appendChild(h('div', { class: 'lkc-line', style: 'top:' + l * PX_PER_HOUR + 'px' }));
       day.items.forEach(function (e) {
@@ -336,6 +347,7 @@
 
   function renderAgenda() {
     var a = state.agenda, out = [];
+    out.push(h('button', { class: 'lkc-newmeeting', type: 'button', onclick: function () { openForm({ kind: 'meeting' }); } }, [h('span', { 'aria-hidden': 'true' }, '+'), 'New meeting']));
     var g = state.google;
     if (g && g.needs_reconnect) {
       out.push(h('div', { class: 'lkc-reconnect' }, [
@@ -661,8 +673,8 @@
       kind: seed.kind || 'task',
       project: seed.project || 'lytekeepr',
       title: seed.title || '',
-      start_date: seed.start_date || today(),
-      start_time: seed.start_time || '09:00',
+      start_date: seed.start_date || (editing ? today() : nextFreeStart().date),
+      start_time: seed.start_time || (editing ? '09:00' : (seed.start_date && seed.start_date !== today() ? '09:00' : nextFreeStart().time)),
       untimed: !!seed.untimed,
       duration_min: seed.duration_min || null,
       repeat: seed.repeat || 'none',
@@ -700,10 +712,10 @@
       return h('option', { value: m, selected: (f.duration_min || defaultDur[f.kind]) === m }, m < 60 ? m + ' min' : (m / 60) + (m === 60 ? ' hour' : ' hours'));
     }));
     return [h('form', { class: 'lkc-card lkc-form', onsubmit: function (ev) { ev.preventDefault(); save(); } }, [
-      h('div', { class: 'lkc-top' }, [h('h2', { class: 'lkc-title' }, f.id ? 'Edit item' : 'New item'),
+      h('div', { class: 'lkc-top' }, [h('h2', { class: 'lkc-title' }, f.id ? 'Edit item' : f.kind === 'meeting' ? 'New meeting' : 'New item'),
         h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: closeSide }, '×')]),
       kindTabs,
-      h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Title'), h('input', { type: 'text', id: 'lkcTitleInput', maxlength: 200, value: f.title, placeholder: 'e.g. Send LinkedIn batch' })]),
+      h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Title'), h('input', { type: 'text', id: 'lkcTitleInput', maxlength: 200, value: f.title, placeholder: f.kind === 'meeting' ? 'e.g. Intro call with Sara' : 'e.g. Send LinkedIn batch' })]),
       h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Project'), projPick]),
       h('div', { class: 'lkc-row2' }, [
         h('div', {}, [h('span', { class: 'lkc-lbl' }, f.repeat === 'none' ? 'Date' : 'Starts'), dateField(f)]),
@@ -734,7 +746,10 @@
     var button = h('button', { type: 'button', class: 'lkc-datebtn' }, [longDate(f.start_date) + ', ' + f.start_date.slice(0, 4)]);
     var pop = h('div', { class: 'lkc-pop lkc-datepop', hidden: true });
     var shown = f.start_date.slice(0, 7);          // the month on screen, "2026-10"
-    function pick(iso) { f.start_date = iso; hidden.value = iso; button.textContent = longDate(iso) + ', ' + iso.slice(0, 4); pop.hidden = true; }
+    function pick(iso) {
+      f.start_date = iso; hidden.value = iso; button.textContent = longDate(iso) + ', ' + iso.slice(0, 4); pop.hidden = true;
+      if (!f.id && isPast(iso, f.start_time, f.untimed)) { var t = $('#lkcTime'); f.start_time = nextFreeStart().time; if (t) t.value = timeText(f.start_time); }
+    }
     function draw() {
       pop.innerHTML = '';
       var first = shown + '-01', start = mondayOf(first), nextMonth = addDays(first, 32).slice(0, 7);
@@ -747,8 +762,9 @@
       var grid = h('div', { class: 'lkc-dategrid' }, DAY_LETTERS.map(function (l) { return h('span', { class: 'lkc-dow' }, l); }));
       for (var i = 0; i < 42; i++) (function (iso) {
         if (i >= 35 && iso.slice(0, 7) !== shown) return;      // no sixth row when the month fits in five
-        grid.appendChild(h('button', { type: 'button', class: 'lkc-day' + (iso.slice(0, 7) !== shown ? ' out' : '') + (iso === today() ? ' today' : '') + (iso === f.start_date ? ' on' : ''),
-          onmousedown: function (ev) { ev.preventDefault(); pick(iso); } }, String(+iso.slice(8))));
+        var gone = !f.id && iso < today();
+        grid.appendChild(h('button', { type: 'button', disabled: gone, class: 'lkc-day' + (iso.slice(0, 7) !== shown ? ' out' : '') + (iso === today() ? ' today' : '') + (iso === f.start_date ? ' on' : '') + (gone ? ' past' : ''),
+          onmousedown: function (ev) { ev.preventDefault(); if (!gone) pick(iso); } }, String(+iso.slice(8))));
       })(addDays(start, i));
       pop.appendChild(grid);
       pop.appendChild(h('div', { class: 'lkc-datefoot' }, [h('button', { type: 'button', onmousedown: function (ev) { ev.preventDefault(); pick(today()); } }, 'Today')]));
@@ -768,7 +784,9 @@
     })(hhmm(m));
     function open() {
       list.hidden = false;
+      [].forEach.call(list.children, function (b) { b.hidden = !f.id && isPast(f.start_date, b.getAttribute('data-v')); });
       var cur = minutes(parseTime(input.value) || f.start_time), near = list.children[Math.min(95, Math.round(cur / 15))];
+      if (near.hidden) near = [].filter.call(list.children, function (b) { return !b.hidden; })[0] || near;
       [].forEach.call(list.children, function (b) { b.classList.toggle('on', b === near); });
       list.scrollTop = near.offsetTop - 60;
     }
@@ -856,6 +874,9 @@
     if (!f.title.trim()) { f.error = 'Please enter a title.'; render(); return; }
     if (f.repeat === 'weekly' && !f.days.length) { f.error = 'Pick at least one day.'; render(); return; }
     if (!f.start_date || !f.start_time) { f.error = 'Date and time are required.'; render(); return; }
+    if (!f.id && isPast(f.start_date, f.start_time, f.untimed)) {
+      f.error = f.start_date < today() ? 'That date has passed. Pick today or a later date.' : 'That time has passed. Pick a later time.'; render(); return;
+    }
     var body = {
       title: f.title.trim(), project: f.project, kind: f.kind, start_date: f.start_date, start_time: f.untimed ? '08:00' : f.start_time, untimed: !!f.untimed,
       duration_min: f.duration_min, repeat: f.repeat, repeat_days: f.days.slice().sort().join(','), notes: f.notes
@@ -1072,7 +1093,6 @@
   $('#lkcToday').addEventListener('click', function () { state.weekTouched = false; state.weekStart = mondayOf(today()); load(); });
   document.getElementById('lkcCollapse').addEventListener('click', function () { setCollapsed(!state.collapsed); });
   applyCollapse();
-  $('#lkcNew').addEventListener('click', function () { openForm({}); });
   $('#lkcDensity').addEventListener('click', function () { setDensity(state.density === 'fit' ? 'detailed' : 'fit'); });
   var resizeTimer = null;
   window.addEventListener('resize', function () {          // keep the day fitted when the window changes size

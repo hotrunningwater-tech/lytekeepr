@@ -265,6 +265,16 @@ def now_local() -> datetime:
     return datetime.now(TZ).replace(tzinfo=None, second=0, microsecond=0)
 
 
+def check_not_past(start_date: str, start_time: str = "", untimed: bool = False) -> None:
+    """New items can't start in the past (a past date, or a time earlier today that has gone by)."""
+    now = now_local()
+    day = _parse_date(start_date, "start_date")
+    if day < now.date():
+        raise ValidationError("That date has passed. Pick today or a later date.")
+    if not untimed and day == now.date() and start_time and start_time[:5] < now.strftime("%H:%M"):
+        raise ValidationError("That time has passed. Pick a later time.")
+
+
 def _parse_date(value, field="date") -> date:
     try:
         return date.fromisoformat(str(value))

@@ -17,6 +17,7 @@ import re
 import shutil
 import sys
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent.parent
@@ -38,6 +39,10 @@ os.environ.update({
 sys.path.insert(0, str(APP_DIR))
 
 import profiles.store as _profiles  # noqa: E402
+
+SOON = (date.today() + timedelta(days=5)).isoformat()           # new items can't be in the past, so test data is always a few days ahead
+LATER = (date.today() + timedelta(days=6)).isoformat()
+WINDOW = f"?start={date.today() - timedelta(days=15)}&end={date.today() + timedelta(days=25)}"
 if Path(_profiles.PROFILE_ROOT).resolve() != (TMP / "profiles").resolve():
     # The app was loaded before this script could point it at the temporary folder (for example by another script importing it
     # first). Running now would touch the REAL data, so stop before a single request.
@@ -89,7 +94,7 @@ def seed(c, mark, owner_email, workspace, padding=0):
         pad_people = [c.post("/api/calendar/contacts", json={"name": f"Filler {i}", "email": f"filler{i}@{mark}-filler.test"}).get_json()["id"] for i in range(padding)]
         c.post("/api/crm/funnels/move", json={"person_ids": pad_people, "funnel_id": pad_funnel})
         for i in range(padding):
-            c.post("/api/calendar/events", json={"title": f"Filler {i}", "start_date": "2026-10-21", "start_time": "09:00", "project": "lytekeepr", "kind": "task"})
+            c.post("/api/calendar/events", json={"title": f"Filler {i}", "start_date": LATER, "start_time": "09:00", "project": "lytekeepr", "kind": "task"})
             c.post("/api/team", json={"email": f"filler{i}@{mark}-filler.test"})
             c.post("/api/calendar/companies", json={"name": f"Filler company {i}"})
     r = c.post("/api/calendar/contacts", json={"name": f"{mark} Person", "company": f"{mark} Company", "email": f"{mark}.person@example.com",
@@ -100,8 +105,10 @@ def seed(c, mark, owner_email, workspace, padding=0):
     c.post("/api/crm/funnels/move", json={"person_ids": [ids["person"]], "funnel_id": ids["funnel"]})
     board = c.get(f"/api/crm/funnels/{ids['funnel']}/board").get_json()
     ids["stage"] = board["stages"][1]["stage_id"]
-    ids["event"] = c.post("/api/calendar/events", json={"title": f"{mark} Event", "start_date": "2026-10-20", "start_time": "10:00",
+    ids["event"] = c.post("/api/calendar/events", json={"title": f"{mark} Event", "start_date": SOON, "start_time": "10:00",
                                                        "project": "lytekeepr", "kind": "task"}).get_json().get("id")
+    if not ids["event"]:
+        sys.exit("ISOLATION CHECK COULD NOT set up its test event (did the rules for new events change?)")
     ids["company"] = [x for x in c.get("/api/calendar/companies").get_json()["companies"] if mark in x["name"].lower()][0]["id"]
     ids["user"] = c.post("/api/team", json={"email": f"member-{mark}@example.com", "name": f"{mark} Member"}).get_json()["user"]["id"]
     c.put("/api/calendar/profile", json={"name": f"{mark} Sender"})
@@ -119,7 +126,7 @@ def seed(c, mark, owner_email, workspace, padding=0):
 def snapshot(c):
     """What the victim's own admin sees: if an attacker changed anything, this differs afterwards."""
     ov = c.get("/api/crm/overview").get_json()
-    events = c.get("/api/calendar/events?start=2026-10-01&end=2026-11-10").get_json()["events"]
+    events = c.get("/api/calendar/events" + WINDOW).get_json()["events"]
     return json.dumps({
         "people": sorted((p["person_id"], p["name"], p.get("notes") or "", p.get("funnel_stage_name") or "") for p in ov["people"]),
         "companies": sorted(x["company_name"] for x in ov["companies"]),
@@ -163,7 +170,7 @@ def attack(direction, attackers, victim_ids, victim_mark, victim_admin, attacker
     if victim_mark not in before.lower():
         problems.append(f"BROKEN {direction}: the victim's marked data is missing before the attack, so the check would prove nothing")
     calls = 0
-    query = "?start=2026-10-01&end=2026-11-10&q=zzleak&limit=200&channel=&email=" + victim_mark + ".person@example.com"
+    query = WINDOW + "&q=zzleak&limit=200&channel=&email=" + victim_mark + ".person@example.com"
     for who, c in attackers:
         for rule in app.url_map.iter_rules():
             path = rule.rule
