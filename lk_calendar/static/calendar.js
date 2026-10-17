@@ -362,8 +362,16 @@
         h('a', { class: 'btn primary', href: (window.LK_PREFIX || '') + connectPath() }, 'Connect my Google Calendar')
       ]));
     }
-    if (state.syncNote) out.push(h('p', { class: 'lkc-synced' }, state.syncNote));
-    else if (g && g.last_sync) out.push(h('p', { class: 'lkc-synced' }, 'Google last synced ' + g.last_sync + ' \u00b7 automatic every hour'));
+    if (g && g.connected && !g.calendars_chosen) {     // ask once which Google calendars belong here (keeps personal ones out)
+      out.push(h('div', { class: 'lkc-reconnect lkc-connect' }, [
+        h('b', {}, 'Choose which Google calendars LyteKeepr shows'),
+        h('span', {}, 'Right now it shows your main calendar. Pick only your work calendar (for example "Nexy") to keep personal events out.'),
+        h('button', { class: 'btn primary', type: 'button', onclick: openCalendars }, 'Choose calendars')
+      ]));
+    }
+    var syncLine = state.syncNote || (g && g.last_sync ? 'Google last synced ' + g.last_sync + ' \u00b7 automatic every hour' : '');
+    if (syncLine) out.push(h('p', { class: 'lkc-synced' }, [syncLine,
+      g && g.connected && g.calendars_chosen ? h('button', { class: 'lkc-clear lkc-calpick', type: 'button', onclick: openCalendars }, 'Choose calendars') : null]));
     var overdue = buildItems(a.overdue), todays = buildItems(a.today), upcoming = buildItems(a.upcoming);
     if (overdue.length) {
       out.push(agendaSection('overdue', 'Overdue', overdue.map(function (o) { return agendaRow(o, true); }), '',
@@ -744,6 +752,42 @@
     ])];
   }
 
+  // Which Google calendars LyteKeepr pulls, and where new meetings go (each person chooses their own)
+  function openCalendars() { state.mode = 'calendars'; state.calendars = null; state.calendarsError = ''; render();
+    api('GET', '/api/calendar/google/calendars').then(function (r) { state.calendars = r.calendars; render(); })
+      .catch(function (e) { state.calendarsError = e.message; render(); });
+  }
+  function renderCalendars() {
+    var list = state.calendars, body;
+    if (state.calendarsError) body = [h('p', { class: 'lkc-err' }, state.calendarsError), /Reconnect Google/.test(state.calendarsError) ? reconnectButton() : null];
+    else if (!list) body = [h('p', { class: 'lkc-empty' }, 'Loading your Google calendars\u2026')];
+    else {
+      var rows = list.map(function (c) {
+        return h('button', { type: 'button', role: 'switch', class: 'lkc-switchrow' + (c.sync ? ' on' : ''), 'aria-checked': c.sync ? 'true' : 'false',
+          onclick: function () { c.sync = !c.sync; if (!c.sync && c.meetings) c.meetings = false; render(); } },
+          [h('span', { class: 'lkc-calname' }, [h('i', { style: 'background:' + (c.color || '#9eb8c2') }), c.name + (c.main ? ' (main)' : '')]), h('span', { class: 'lkc-switch' }, [h('i', {})])]);
+      });
+      var targets = list.filter(function (c) { return c.sync && c.can_add; });
+      var current = (targets.filter(function (c) { return c.meetings; })[0] || targets[0] || {}).id;
+      var pick = h('select', { id: 'lkcMeetCal' }, targets.map(function (c) { return h('option', { value: c.id, selected: c.id === current }, c.name); }));
+      body = [h('p', { class: 'lkc-empty', style: 'margin:0' }, 'LyteKeepr shows only the calendars switched on here. The others stay private and are never pulled.'),
+        h('div', { class: 'lkc-toggles' }, rows),
+        targets.length ? h('div', {}, [h('span', { class: 'lkc-lbl' }, 'New meetings go to'), pick]) : h('p', { class: 'lkc-err' }, 'Switch on at least one calendar you can add events to.'),
+        state.calendarsError ? h('p', { class: 'lkc-err' }, state.calendarsError) : null,
+        h('div', { class: 'lkc-actions' }, [
+          h('button', { class: 'btn primary', type: 'button', disabled: !targets.length, onclick: function (ev) {
+            var b = ev.target; b.disabled = true; b.textContent = 'Saving\u2026';
+            api('PUT', '/api/calendar/google/calendars', { sync: list.filter(function (c) { return c.sync; }).map(function (c) { return c.id; }), meetings: document.getElementById('lkcMeetCal').value })
+              .then(function () { state.mode = 'agenda'; state.syncNote = 'Calendars saved. Only the chosen ones show here.'; return load(); })
+              .catch(function (e) { state.calendarsError = e.message; render(); });
+          } }, 'Save'),
+          h('button', { class: 'btn', type: 'button', onclick: function () { state.mode = 'agenda'; render(); } }, 'Cancel')
+        ])];
+    }
+    return [h('div', { class: 'lkc-card lkc-form' }, [h('div', { class: 'lkc-top' }, [h('h2', { class: 'lkc-title' }, 'Google calendars'),
+      h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: function () { state.mode = 'agenda'; render(); } }, '\u00d7')])].concat(body))];
+  }
+
   function connectPath() { return (state.google && state.google.connect_path) || '/auth/google/start'; }      // a team member's own calendar has its own
   function reconnectButton() { return h('a', { class: 'btn lkc-reconnect-btn', href: (window.LK_PREFIX || '') + connectPath() }, 'Reconnect Google'); }
 
@@ -1052,7 +1096,7 @@
     if (state.lastMode !== state.mode + state.pane && state.pane !== 'chat') side.scrollTop = 0;
     state.lastMode = state.mode + state.pane;
     if (state.pane === 'chat') { var cn = chatPane(); if (side.firstChild !== cn || side.childNodes.length !== 1) side.replaceChildren(cn); }
-    else side.replaceChildren.apply(side, (state.mode === 'form' ? renderForm() : state.mode === 'import' ? renderImport() : state.mode === 'detail' ? renderDetail() : renderAgenda()).filter(Boolean));
+    else side.replaceChildren.apply(side, (state.mode === 'form' ? renderForm() : state.mode === 'import' ? renderImport() : state.mode === 'detail' ? renderDetail() : state.mode === 'calendars' ? renderCalendars() : renderAgenda()).filter(Boolean));
   }
 
   /* ---------- collapsible side panel ---------- */
@@ -1129,13 +1173,13 @@
   (function () {
     var q = new URLSearchParams(location.search), result = q.get('calendar');
     if (!result) return;
-    state.syncNote = result === 'connected' ? 'Your Google Calendar is connected. Your meetings are below.' : 'Google Calendar was not connected: ' + (q.get('reason') || 'unknown error');
+    state.syncNote = result === 'connected' ? 'Your Google Calendar is connected.' : 'Google Calendar was not connected: ' + (q.get('reason') || 'unknown error');
     history.replaceState(null, '', location.pathname);
-    setTimeout(function () { var tab = document.getElementById('calendarTab'); if (tab) tab.click(); }, 300);
+    setTimeout(function () { var tab = document.getElementById('calendarTab'); if (tab) tab.click(); if (result === 'connected') openCalendars(); }, 300);
   })();
 
   // Keep "now" line and badge fresh while the tab is open.
-  setInterval(function () { if (!panel.hidden && state.mode !== 'form' && state.mode !== 'import') load(); }, 60000);
+  setInterval(function () { if (!panel.hidden && state.mode !== 'form' && state.mode !== 'import' && state.mode !== 'calendars') load(); }, 60000);
   // Badge on first page load, even before the tab is opened.
   api('GET', '/api/calendar/agenda').then(function (a) { state.agenda = a; state.now = a.now; updateBadge(); }).catch(function () {});
 })();

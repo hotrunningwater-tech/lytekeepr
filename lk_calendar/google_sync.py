@@ -25,6 +25,11 @@ from datetime import datetime, timedelta, timezone
 from . import store
 
 API = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+CALENDAR_LIST = "https://www.googleapis.com/calendar/v3/users/me/calendarList"
+
+
+def _events_url(calendar_id: str = "primary") -> str:
+    return API if calendar_id in ("", "primary") else f"https://www.googleapis.com/calendar/v3/calendars/{urllib.parse.quote(calendar_id, safe='')}/events"
 PAST_DAYS, FUTURE_DAYS = 30, 180
 CALL_RE = re.compile(r"(zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|gotomeeting\.com|gotomeet\.me)", re.I)
 FIELDS = ("nextPageToken,items(id,iCalUID,status,summary,description,location,hangoutLink,start,end,"
@@ -132,8 +137,8 @@ def _access_token() -> str:
         raise GoogleAuthError("Google authorization expired or was revoked. " + RECONNECT_HINT) from exc
 
 
-def _fetch_events(window_start: datetime, window_end: datetime) -> list[dict]:
-    """All events (every page) between two UTC datetimes. Separate function so tests can replace the network."""
+def _fetch_events(window_start: datetime, window_end: datetime, calendar_id: str = "primary") -> list[dict]:
+    """All events (every page) between two UTC datetimes in one calendar. Separate function so tests can replace the network."""
     token = _access_token()
     items, page = [], None
     while True:
@@ -141,7 +146,7 @@ def _fetch_events(window_start: datetime, window_end: datetime) -> list[dict]:
                   "singleEvents": "true", "orderBy": "startTime", "maxResults": "250", "fields": FIELDS}
         if page:
             params["pageToken"] = page
-        req = urllib.request.Request(f"{API}?{urllib.parse.urlencode(params)}")
+        req = urllib.request.Request(f"{_events_url(calendar_id)}?{urllib.parse.urlencode(params)}")
         req.add_header("Authorization", f"Bearer {token}")
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
@@ -162,6 +167,48 @@ def _fetch_events(window_start: datetime, window_end: datetime) -> list[dict]:
         page = data.get("nextPageToken")
         if not page:
             return items
+
+
+# ------------------------------------------------------------------ which of the person's Google calendars LyteKeepr uses
+def chosen_calendars() -> dict:
+    """{"sync": [calendar ids to pull], "meetings": calendar id new meetings go to}. Until the person chooses: their main calendar."""
+    raw = store.get_state(_key("google_calendars"))
+    try:
+        data = json.loads(raw) if raw else {}
+    except ValueError:
+        data = {}
+    sync_ids = [c for c in data.get("sync") or [] if isinstance(c, str) and c] or ["primary"]
+    return {"sync": sync_ids, "meetings": data.get("meetings") or sync_ids[0], "chosen": bool(raw)}
+
+
+def list_calendars() -> list[dict]:
+    """The person's Google calendars (name, colour), each marked if LyteKeepr pulls it or puts new meetings there."""
+    req = urllib.request.Request(f"{CALENDAR_LIST}?{urllib.parse.urlencode({'fields': 'items(id,summary,summaryOverride,primary,accessRole,backgroundColor)', 'maxResults': 100})}")
+    req.add_header("Authorization", f"Bearer {_access_token()}")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            items = json.loads(resp.read().decode()).get("items", [])
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            raise GoogleAuthError("Google did not allow reading your calendar list. Press Reconnect Google.") from exc
+        raise GoogleSyncError(f"Google could not list your calendars (error {exc.code}).") from exc
+    except urllib.error.URLError as exc:
+        raise GoogleSyncError(f"Could not reach Google: {exc}") from exc
+    chosen = chosen_calendars()
+    def key(c):
+        return "primary" if c.get("primary") else c["id"]
+    return [{"id": key(c), "name": c.get("summaryOverride") or c.get("summary") or c["id"], "main": bool(c.get("primary")),
+             "color": c.get("backgroundColor") or "", "can_add": c.get("accessRole") in ("owner", "writer"),
+             "sync": key(c) in chosen["sync"], "meetings": key(c) == chosen["meetings"]} for c in items]
+
+
+def choose_calendars(sync_ids: list, meetings_id: str) -> dict:
+    sync_ids = [str(c) for c in sync_ids if str(c).strip()][:20]
+    if not sync_ids:
+        raise GoogleSyncError("Pick at least one calendar.")
+    meetings_id = str(meetings_id or sync_ids[0])
+    store.set_state(_key("google_calendars"), json.dumps({"sync": sync_ids, "meetings": meetings_id}))
+    return chosen_calendars()
 
 
 def _local(dt_text: str) -> datetime:
@@ -206,12 +253,18 @@ def _sync_locked() -> dict:
     local_start = datetime.combine(now.date() - timedelta(days=PAST_DAYS), datetime.min.time())
     local_end = datetime.combine(now.date() + timedelta(days=FUTURE_DAYS), datetime.min.time())
     to_utc = lambda d: d.replace(tzinfo=store.TZ).astimezone(timezone.utc)
-    items = _fetch_events(to_utc(local_start), to_utc(local_end))      # raises before anything is written if Google fails
+    chosen = chosen_calendars()["sync"]
+    items = []
+    for cal in chosen:                                                  # raises before anything is written if Google fails
+        for item in (_fetch_events(to_utc(local_start), to_utc(local_end)) if cal == "primary"
+                     else _fetch_events(to_utc(local_start), to_utc(local_end), calendar_id=cal)):
+            items.append({**item, "_calendar": "" if cal == "primary" else cal})
 
     wanted, skipped = {}, 0
     for item in items:
         row = _convert(item)
         if row:
+            row["google_calendar"] = item.get("_calendar", "")
             wanted[row["external_id"]] = row
         elif item.get("status") != "cancelled":
             skipped += 1                                                 # all-day or unreadable
@@ -224,21 +277,23 @@ def _sync_locked() -> dict:
             fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google"})
             if cur is None:
                 conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
-                                notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, owner_id, ical_uid)
+                                notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, owner_id, ical_uid, google_calendar)
                                 VALUES (:title, :project, :kind, :start_date, :start_time, :duration_min, :repeat, :repeat_days,
-                                :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :owner, :ical_uid)""",
+                                :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :owner, :ical_uid, :gcal)""",
                              {**fields, "created_at": store.now_local().isoformat(), "external_id": ext, "has_call": row["has_call"],
-                              "attendees": row["attendees"], "join_url": row["join_url"], "owner": member_id(), "ical_uid": row["ical_uid"]})
+                              "attendees": row["attendees"], "join_url": row["join_url"], "owner": member_id(), "ical_uid": row["ical_uid"],
+                              "gcal": row["google_calendar"]})
                 result["added"] += 1       # INSERT OR IGNORE + the unique index mean two racing syncs can never create a duplicate
                 continue
             same = (all(cur[k] == fields[k] for k in ("title", "start_date", "start_time", "duration_min", "notes")) and cur["has_call"] == row["has_call"]
-                    and cur["attendees"] == row["attendees"] and cur["join_url"] == row["join_url"] and cur["ical_uid"] == row["ical_uid"])
+                    and cur["attendees"] == row["attendees"] and cur["join_url"] == row["join_url"] and cur["ical_uid"] == row["ical_uid"]
+                    and cur["google_calendar"] == row["google_calendar"])
             if same:
                 result["unchanged"] += 1
                 continue
-            conn.execute("UPDATE events SET title=?, start_date=?, start_time=?, duration_min=?, notes=?, has_call=?, attendees=?, join_url=?, ical_uid=? WHERE id=?",
+            conn.execute("UPDATE events SET title=?, start_date=?, start_time=?, duration_min=?, notes=?, has_call=?, attendees=?, join_url=?, ical_uid=?, google_calendar=? WHERE id=?",
                          (fields["title"], fields["start_date"], fields["start_time"], fields["duration_min"], fields["notes"],
-                          row["has_call"], row["attendees"], row["join_url"], row["ical_uid"], cur["id"]))
+                          row["has_call"], row["attendees"], row["join_url"], row["ical_uid"], row["google_calendar"], cur["id"]))
             result["updated"] += 1
             store.meeting_follow_up(conn, dict(conn.execute("SELECT * FROM events WHERE id = ?", (cur["id"],)).fetchone()))
 
@@ -249,6 +304,9 @@ def _sync_locked() -> dict:
             if ev["external_id"] in wanted:
                 continue
             has_followup = conn.execute("SELECT 1 FROM events WHERE lead_ref = ? AND source = 'auto'", (f"meeting:{ev['id']}",)).fetchone()
+            in_unchosen = (ev["google_calendar"] or "primary") not in chosen        # its calendar was switched off, not cancelled in Google
+            if in_unchosen and (ev["my_notes"] or ev["meeting_status"] or has_followup):
+                continue                                                      # keep what you wrote on it, as it is
             if ev["my_notes"] or ev["meeting_status"] or has_followup:
                 if not ev["meeting_status"]:
                     conn.execute("UPDATE events SET meeting_status = 'cancelled' WHERE id = ?", (ev["id"],))
@@ -289,6 +347,7 @@ def status() -> dict:
     last = json.loads(raw) if raw else {}
     return {"last_sync": store.get_state(_key("last_google_sync")), "connected": is_connected(), "member": bool(member_id()),
             "connect_path": "/auth/google/calendar/start" if member_id() else "/auth/google/start",
+            "calendars_chosen": chosen_calendars()["chosen"],
             "last_attempt": last.get("at"), "last_trigger": last.get("trigger"), "last_ok": last.get("ok"),
             "message": last.get("message", ""), "needs_reconnect": bool(last.get("needs_reconnect")),
             "can_create_meetings": can_create_meetings()}
@@ -306,7 +365,7 @@ def delete_meeting(event_id: int) -> bool:
         raise GoogleSyncError("This meeting is in someone else's Google Calendar; only they can delete it.")
     google_id = ev["external_id"][len(_prefix()):]
     token = _access_token()
-    req = urllib.request.Request(f"{API}/{urllib.parse.quote(google_id)}?sendUpdates=all", method="DELETE")
+    req = urllib.request.Request(f"{_events_url(ev.get('google_calendar') or 'primary')}/{urllib.parse.quote(google_id)}?sendUpdates=all", method="DELETE")
     req.add_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(req, timeout=30):
@@ -344,8 +403,9 @@ def create_meeting(title: str, start_date: str, start_time: str, duration_min: i
     if add_meet:
         body["conferenceData"] = {"createRequest": {"requestId": uuid.uuid4().hex, "conferenceSolutionKey": {"type": "hangoutsMeet"}}}
     token = _access_token()
+    target = chosen_calendars()["meetings"]
     params = urllib.parse.urlencode({"conferenceDataVersion": 1 if add_meet else 0, "sendUpdates": "all" if invitees else "none"})
-    req = urllib.request.Request(f"{API}?{params}", data=json.dumps(body).encode(), method="POST")
+    req = urllib.request.Request(f"{_events_url(target)}?{params}", data=json.dumps(body).encode(), method="POST")
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Content-Type", "application/json")
     try:
@@ -362,15 +422,16 @@ def create_meeting(title: str, start_date: str, start_time: str, duration_min: i
     row = _convert(item)
     if not row:
         raise GoogleSyncError("Google created the meeting but sent back something unreadable; it will appear after the next sync.")
+    row["google_calendar"] = "" if target == "primary" else target
     with store._conn() as conn:
         fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google", "notes": row["notes"]})
         conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
-                        notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, expect_recording, owner_id, ical_uid)
+                        notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, expect_recording, owner_id, ical_uid, google_calendar)
                         VALUES (:title, :project, :kind, :start_date, :start_time, :duration_min, :repeat, :repeat_days,
-                        :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :expect, :owner, :ical_uid)""",
+                        :notes, 'google', '', :created_at, :external_id, :has_call, :attendees, :join_url, :expect, :owner, :ical_uid, :gcal)""",
                      {**fields, "created_at": store.now_local().isoformat(), "external_id": row["external_id"], "has_call": row["has_call"],
                       "attendees": row["attendees"], "join_url": row["join_url"], "expect": 1 if expect_recording else 0, "owner": member_id(),
-                      "ical_uid": row["ical_uid"]})
+                      "ical_uid": row["ical_uid"], "gcal": row["google_calendar"]})
         ev = conn.execute("SELECT * FROM events WHERE external_id = ?", (row["external_id"],)).fetchone()
     return {"id": ev["id"], "title": ev["title"], "start_date": ev["start_date"], "start_time": ev["start_time"], "join_url": ev["join_url"],
             "attendees": json.loads(ev["attendees"] or "[]")}

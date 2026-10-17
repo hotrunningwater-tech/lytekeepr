@@ -218,6 +218,25 @@ def google_sync_now():
         return jsonify({"error": str(exc)}), 502
 
 
+@bp.get("/api/calendar/google/calendars")
+def google_calendars():
+    try:
+        return jsonify({"calendars": google_sync.list_calendars()})
+    except google_sync.GoogleSyncError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@bp.put("/api/calendar/google/calendars")
+def google_calendars_choose():
+    data = _payload()
+    try:
+        chosen = google_sync.choose_calendars(data.get("sync") or [], str(data.get("meetings") or ""))
+        result = google_sync.sync(trigger="calendars")
+    except google_sync.GoogleSyncError as exc:
+        return jsonify({"error": str(exc)}), 502
+    return jsonify({"chosen": chosen, "sync": result})
+
+
 @bp.get("/api/calendar/google/status")
 def google_status():
     return jsonify(google_sync.status())

@@ -234,3 +234,6 @@
 .lkc-day.past { opacity: .25; cursor: default; }
 .lkc-day.past:hover { background: none; }
 .lkc-connect { background: rgba(127,168,184,.16); }
+.lkc-calpick { margin-left: 8px; }
+.lkc-calname { display: inline-flex; align-items: center; gap: 8px; }
+.lkc-calname i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }

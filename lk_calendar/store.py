@@ -234,6 +234,7 @@ def _conn():
         ("events", "my_notes", "TEXT NOT NULL DEFAULT ''"),
         ("events", "owner_id", "INTEGER"),
         ("events", "ical_uid", "TEXT NOT NULL DEFAULT ''"),          # Google's id for one meeting across everyone's calendars (no duplicates)
+        ("events", "google_calendar", "TEXT NOT NULL DEFAULT ''"),   # which of the person's Google calendars it is in ('' = their main one)
         ("events", "expect_recording", "INTEGER NOT NULL DEFAULT 0"),
         ("events", "attendees", "TEXT NOT NULL DEFAULT '[]'"),
         ("events", "join_url", "TEXT NOT NULL DEFAULT ''"),
