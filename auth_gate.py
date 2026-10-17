@@ -50,9 +50,17 @@ def finish_google_login(email: str, verified: bool, name: str = ""):
         person = users.sign_in_with_google(email, verified, name)
     if not person:
         return redirect(prefix + "/login?e=3")
-    response = make_response(redirect(prefix + "/"))
+    response = make_response(redirect(after_login_target()))
     _session["set_cookie"](response, person["id"], account["profile_id"])
+    response.delete_cookie("lk_next", path="/")
     return response
+
+
+def after_login_target() -> str:
+    """Where to go after signing in: back to Claude's "Allow" page if the sign-in started there, else the app."""
+    prefix = _session.get("prefix", "")
+    nxt = request.cookies.get("lk_next", "")
+    return nxt if nxt.startswith(prefix + "/oauth/authorize?") and "\n" not in nxt and "\r" not in nxt else prefix + "/"
 
 
 def _notify_signup(email: str, app_url: str) -> None:
@@ -111,7 +119,8 @@ def install(app, app_dir):
         payload = {"u": user_id, "w": profile_id or home_profile_id()}          # who, and which workspace they work in
         response.set_cookie(COOKIE, signer.dumps(payload), max_age=MAX_AGE, httponly=True, samesite="Lax", secure=secure, path=prefix or "/")
 
-    _session.update(prefix=prefix, set_cookie=set_cookie)
+    _session.update(prefix=prefix, set_cookie=set_cookie,
+                    sign=lambda user_id, profile_id: signer.dumps({"u": user_id, "w": profile_id}))     # Claude's connector signs in as the person
 
     def current_user():
         """The signed-in person, or None. The cookie names the person and their workspace; this request is switched into that
@@ -140,6 +149,8 @@ def install(app, app_dir):
             return users.for_session(int(user_id or 0))
         except Exception:
             return None
+
+    _session["current_user"] = current_user
 
     @app.before_request
     def require_login():
@@ -189,8 +200,9 @@ def install(app, app_dir):
             time.sleep(1)  # slows down guessing
             return redirect(prefix + "/login?e=1")
         failures.pop(who, None)
-        response = make_response(redirect(prefix + "/"))
+        response = make_response(redirect(after_login_target()))
         set_cookie(response, 0)                      # the admin
+        response.delete_cookie("lk_next", path="/")
         return response
 
     @app.get("/auth/google/login")

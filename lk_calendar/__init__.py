@@ -24,6 +24,8 @@ def register(app):
     calls.register(app)
     from . import member_google
     member_google.register(app)
+    from . import claude_connector
+    claude_connector.register(app)
     from pathlib import Path
     from . import superadmin
     superadmin.register(app, str(Path(__file__).resolve().parent.parent))

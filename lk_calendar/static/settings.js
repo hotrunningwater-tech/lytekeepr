@@ -708,7 +708,7 @@
   function showSettings(view) {
     currentSettingsView = view;
     nav.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.view === view); });
-    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else detailsView();
+    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else if (view === 'claude') claudeView(); else detailsView();
   }
   nav.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { showSettings(b.dataset.view); }); });
 
@@ -812,6 +812,29 @@
       h('div', { class: 'lks-hint' }, ['No password. They open LyteKeepr, press ', h('b', {}, 'Sign in with Google'), ' and choose this email. Anyone whose email is not on this list is refused.']), err,
       h('div', { class: 'lks-row' }, [add, h('button', { class: 'btn lks-soft', type: 'button', onclick: function () { closeModal(true); } }, 'Cancel')])]));
     email.focus();
+  }
+
+  /* Claude: use LyteKeepr from the Claude app (phone or web). The address to add as a connector, and who is connected. */
+  function claudeView() {
+    main.replaceChildren();
+    var card = h('div', { class: 'lks-card' }, [h('h2', {}, 'Claude'), h('p', {}, 'Loading…')]);
+    main.appendChild(card);
+    api('GET', '/api/me/claude').then(function (r) {
+      var url = h('input', { type: 'text', readonly: true, value: r.connector_url });
+      var kids = [h('h2', {}, 'Claude'),
+        h('p', {}, 'Ask Claude about your contacts, funnels, tasks and calls, on your phone or the web. Claude sees only what you can see here, and asks before it adds anything.'),
+        h('div', { class: 'lks-opt' }, [h('label', {}, 'Connector address'), h('div', { class: 'lks-row' }, [url, window.lkContacts.copyPill(function () { return r.connector_url; })])]),
+        h('div', { class: 'lks-hint' }, [h('b', {}, 'One-time setup: '), 'on claude.ai open Customize → Connectors → Add custom connector, paste this address, then sign in to LyteKeepr and press Allow. It then works in the Claude app on iPhone and Android too.']),
+        h('h2', { style: 'margin-top:18px' }, 'Connected'),
+        r.connections.length ? null : h('p', { class: 'lks-note' }, 'Not connected yet.')].concat(r.connections.map(function (c) {
+          return h('div', { class: 'lks-row' }, [h('span', { class: 'lks-badge on' }, c.name),
+            h('span', { class: 'lks-note' }, 'since ' + new Date(c.since).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + (c.last_used ? ' · last used ' + new Date(c.last_used).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '')),
+            h('button', { class: 'btn lks-soft', type: 'button', onclick: function () {
+              askConfirm('Disconnect Claude? It loses access right away; you can connect again any time.', 'Disconnect').then(function (yes) { if (yes) api('DELETE', '/api/me/claude/' + encodeURIComponent(c.client_id)).then(claudeView); });
+            } }, 'Disconnect')]);
+        }));
+      card.replaceChildren.apply(card, kids.filter(Boolean));
+    }).catch(function (e) { card.replaceChildren(h('h2', {}, 'Claude'), h('p', {}, e.message)); });
   }
 
   /* Calls: the admin pastes their own Fathom API key once; recorded calls then appear on the contacts who were on them. */
