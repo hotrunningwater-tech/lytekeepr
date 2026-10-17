@@ -18,7 +18,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=27">
+<link rel="stylesheet" href="styles.css?v=28">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=meet6">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -2219,7 +2219,14 @@
         var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'crm-call-toggle';
         toggle.textContent = open ? '▾ Hide transcript' : '▸ Show transcript';
         toggle.addEventListener('click', function () { crmCallOpen[c.call_id] = !open; renderCrmPersonDetailMessages(); });
-        row.appendChild(toggle);
+        var toggleLine = document.createElement('div'); toggleLine.className = 'crm-call-toggleline';
+        toggleLine.appendChild(toggle);
+        if (window.lkContacts && window.lkContacts.copyPill) {     // the whole transcript, ready to paste anywhere
+          toggleLine.appendChild(window.lkContacts.copyPill(function () {
+            return (c.transcript || []).map(function (t) { return (t.at ? '[' + t.at + '] ' : '') + (t.speaker || 'Someone') + ': ' + t.text; }).join('\n');
+          }));
+        }
+        row.appendChild(toggleLine);
         if (open) {
           var box = document.createElement('div'); box.className = 'crm-call-transcript';
           (c.transcript || []).forEach(function (t) {

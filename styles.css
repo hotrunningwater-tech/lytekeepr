@@ -2685,3 +2685,6 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .crm-call-actions a.btn { text-decoration: none; }
 .crm-call-pill { font-family: var(--font-heading); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 3px 9px; }
 .crm-call-pill.ready { background: #ece6fb; color: #5b45a8; } .crm-call-pill.done { background: #d8eee2; color: #1f6b46; } .crm-call-pill.miss { background: #f7d9d2; color: #a3412b; }
+
+.crm-call-toggleline { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.crm-call-toggleline .crm-call-toggle { padding: 0; }
