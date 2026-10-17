@@ -143,7 +143,11 @@ def import_leads():
 
 @bp.put("/api/calendar/leads/<int:lead_id>")
 def update_lead(lead_id):
-    lead = leads.set_status(lead_id, str(_payload().get("status", "")))
+    data = _payload()
+    if data.get("follow_up_date") and not data.get("status"):          # only the next follow-up date (used by the Claude connector)
+        lead = leads.set_follow_up(lead_id, str(data["follow_up_date"]))
+        return (jsonify({"ok": True, "lead_id": lead_id, "follow_up_date": str(data["follow_up_date"])}), 200) if lead else (jsonify({"error": "not found"}), 404)
+    lead = leads.set_status(lead_id, str(data.get("status", "")))
     return (jsonify(lead), 200) if lead else (jsonify({"error": "not found"}), 404)
 
 

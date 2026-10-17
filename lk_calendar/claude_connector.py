@@ -145,6 +145,48 @@ TOOLS = [
     {"name": "mark_task_done", "title": "Mark a task done", "description": "Mark a LyteKeepr task done (or not done) on a given date. Get the id from get_agenda or list_calendar.",
      "inputSchema": {"type": "object", "properties": {"task_id": {"type": "integer"}, "date": {"type": "string", "description": "YYYY-MM-DD of that occurrence"},
                                                       "done": {"type": "boolean", "default": True}}, "required": ["task_id", "date"]}, "read": False},
+    # --- added for everyday phone use: the same actions the three LyteKeepr AI chats have ---
+    {"name": "create_contact", "title": "Add a contact", "description": "Add a new contact (someone you just met or talked to).",
+     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "company": {"type": "string"}, "job_title": {"type": "string"},
+                                                      "email": {"type": "string"}, "phone": {"type": "string"}, "profile_url": {"type": "string", "description": "LinkedIn or Instagram link"},
+                                                      "notes": {"type": "string"}}, "required": ["name"]}, "read": False},
+    {"name": "update_contact", "title": "Update a contact",
+     "description": "Change a contact's details, or add a note (add_note is appended with today's date; it never replaces the existing notes). Only the fields given change.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "name": {"type": "string"}, "company": {"type": "string"},
+                                                      "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
+                                                      "profile_url": {"type": "string"}, "add_note": {"type": "string"}}, "required": ["contact_id"]}, "read": False},
+    {"name": "move_contact_stage", "title": "Move to a funnel stage",
+     "description": "Move a contact to a stage of their funnel by the stage's name (e.g. 'In conversation'). Give funnel_id to put them into a funnel they are not in yet.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "stage": {"type": "string"}, "funnel_id": {"type": "integer"}},
+                     "required": ["contact_id", "stage"]}, "read": False},
+    {"name": "set_outreach_status", "title": "Set outreach status",
+     "description": "Set where outreach to a contact stands on a channel (linkedin, instagram or email). Use one of the options get_contact lists for that channel under outreach (e.g. 'email sent', 'replied', 'call booked').",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "channel": {"type": "string", "enum": ["linkedin", "instagram", "email"]},
+                                                      "status": {"type": "string"}}, "required": ["contact_id", "channel", "status"]}, "read": False},
+    {"name": "set_follow_up_date", "title": "Set follow-up date", "description": "Move the outreach follow-up for a contact to a date. The lead_id per channel is in get_contact under outreach (set_outreach_status creates one if missing).",
+     "inputSchema": {"type": "object", "properties": {"lead_ids": {"type": "array", "items": {"type": "integer"}}, "date": {"type": "string", "description": "YYYY-MM-DD"}},
+                     "required": ["lead_ids", "date"]}, "read": False},
+    {"name": "update_calendar_item", "title": "Reschedule or rename", "description": "Change a LyteKeepr task, reminder or meeting: new date, time, title or notes. Google Calendar meetings can't be changed here.",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
+                                                      "time": {"type": "string", "description": "HH:MM"}, "notes": {"type": "string"}}, "required": ["item_id"]}, "read": False},
+    {"name": "move_overdue", "title": "Move overdue items", "description": "Move every overdue one-off task and follow-up to today or tomorrow.",
+     "inputSchema": {"type": "object", "properties": {"to": {"type": "string", "enum": ["today", "tomorrow"]}}, "required": ["to"]}, "read": False},
+    {"name": "set_meeting_status", "title": "Meeting status", "description": "Mark a meeting scheduled, completed, no_show or cancelled, and optionally save your notes on it.",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "status": {"type": "string", "enum": ["scheduled", "completed", "no_show", "cancelled"]},
+                                                      "notes": {"type": "string"}}, "required": ["item_id", "status"]}, "read": False},
+    {"name": "check_reply", "title": "Did they reply?", "description": "Did this contact write back after your last message? Works on LinkedIn, Instagram and email (for email only the date is shared, not the text).",
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name of the contact"},
+                                                      "channel": {"type": "string", "enum": ["", "linkedin", "instagram", "email"]}}, "required": ["contact"]}, "read": True},
+    {"name": "search_messages", "title": "Search messages", "description": "Search LinkedIn and Instagram message history, for one contact or everyone.",
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "query": {"type": "string"}, "channel": {"type": "string", "enum": ["", "linkedin", "instagram"]},
+                                                      "since_days": {"type": "integer", "default": 30}}}, "read": True},
+    {"name": "draft_email", "title": "Draft an email",
+     "description": "Write an email to one contact and leave it in LyteKeepr for the user to send. NOTHING is sent: the user opens LyteKeepr (Home) within 30 minutes and presses Send now.",
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name of the contact"}, "subject": {"type": "string"}, "body": {"type": "string"}},
+                     "required": ["contact", "subject", "body"]}, "read": False},
+    {"name": "draft_linkedin_message", "title": "Draft a LinkedIn message",
+     "description": "Write a LinkedIn message to one contact and leave it in LyteKeepr for the user to send. NOTHING is sent until they press Send now in LyteKeepr.",
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "text": {"type": "string"}}, "required": ["contact", "text"]}, "read": False},
 ]
 
 
@@ -167,6 +209,9 @@ def _run_tool(call, name: str, args: dict):
         detail["messages"] = [m for m in detail.get("messages") or [] if m.get("channel") != "email"]
         if emails:
             detail["emails_not_shared"] = f"{len(emails)} email(s) exist in LyteKeepr; email text is not shared with Claude yet."
+        status, outreach = call("GET", f"/api/calendar/people/{pid}/outreach")
+        if status < 400:
+            detail["outreach"] = outreach
         status, calls = call("GET", f"/api/calls/person/{pid}")
         detail["calls"] = [{"call_id": c.get("call_id"), "title": c.get("title"), "date": c.get("started_at"), "status": c.get("status"),
                             "summary": c.get("summary"), "has_transcript": c.get("has_transcript")} for c in (calls or {}).get("calls", [])] if status < 400 else []
@@ -193,6 +238,77 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("POST", "/api/reminders", {"text": args.get("text"), "due_date": args.get("due_date")}))
     if name == "mark_task_done":
         return need(*call("POST", f"/api/calendar/events/{int(args['task_id'])}/done", {"date": args["date"], "done": bool(args.get("done", True))}))
+    if name == "create_contact":
+        body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "profile_url", "notes") if args.get(k)}
+        c = need(*call("POST", "/api/calendar/contacts", body))
+        return {"id": c.get("id"), "name": c.get("display"), "company": c.get("company"), "email": c.get("email")}
+    if name == "update_contact":
+        pid = int(args["contact_id"])
+        body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "profile_url") if args.get(k)}
+        if args.get("add_note"):
+            current = need(*call("GET", f"/api/calendar/contacts/{pid}"))
+            stamp = datetime.now().strftime("%Y-%m-%d")
+            body["notes"] = ((current.get("notes") or "").rstrip() + f"\n\n{stamp}: {args['add_note'].strip()}").strip()
+        if not body:
+            raise ValueError("Nothing to change.")
+        c = need(*call("PUT", f"/api/calendar/contacts/{pid}", body))
+        return {"id": c.get("id"), "name": c.get("display"), "updated": sorted(body)}
+    if name == "move_contact_stage":
+        pid = int(args["contact_id"])
+        person = need(*call("GET", f"/api/crm/people/{pid}"))
+        funnel_id = args.get("funnel_id") or person.get("funnel_id")
+        if not funnel_id:
+            raise ValueError("This contact is not in a funnel yet. Give funnel_id (list_funnels shows them).")
+        if int(funnel_id) != (person.get("funnel_id") or 0):
+            need(*call("POST", "/api/crm/funnels/move", {"person_ids": [pid], "funnel_id": int(funnel_id)}))
+        board = need(*call("GET", f"/api/crm/funnels/{int(funnel_id)}/board"))
+        wanted = str(args["stage"]).strip().lower()
+        stages = board.get("stages") or []
+        match = [s for s in stages if (s.get("name") or "").lower() == wanted] or [s for s in stages if wanted in (s.get("name") or "").lower()]
+        if len(match) != 1:
+            raise ValueError("Stage not found. The stages are: " + ", ".join(s.get("name", "") for s in stages))
+        need(*call("POST", "/api/crm/funnels/stages/move", {"person_id": pid, "stage_id": match[0]["stage_id"]}))
+        return {"ok": True, "contact_id": pid, "stage": match[0]["name"]}
+    if name == "set_outreach_status":
+        return need(*call("POST", f"/api/calendar/people/{int(args['contact_id'])}/outreach", {"channel": args["channel"], "status": args["status"]}))
+    if name == "set_follow_up_date":
+        return [need(*call("PUT", f"/api/calendar/leads/{int(i)}", {"follow_up_date": args["date"]})) for i in args["lead_ids"]]
+    if name == "update_calendar_item":
+        body = {k: v for k, v in (("title", args.get("title")), ("start_date", args.get("date")), ("start_time", args.get("time")), ("notes", args.get("notes"))) if v}
+        if args.get("time"):
+            body["untimed"] = False
+        if not body:
+            raise ValueError("Nothing to change.")
+        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}", body))
+    if name == "move_overdue":
+        return need(*call("POST", "/api/calendar/overdue/move", {"to": args.get("to", "today")}))
+    if name == "set_meeting_status":
+        body = {"meeting_status": args["status"]}
+        if args.get("notes"):
+            body["my_notes"] = args["notes"]
+        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/meeting", body))
+    if name == "check_reply":
+        out = need(*call("POST", "/api/claude/home/check_reply", {"query": args.get("contact", ""), "channel": args.get("channel", "")}))
+        for k in ("their_last_message", "your_last_message"):          # email text stays in LyteKeepr: only when and where
+            if isinstance(out.get(k), dict) and (out[k].get("channel") or "") == "email":
+                out[k] = {kk: vv for kk, vv in out[k].items() if kk != "text"}
+        return out
+    if name == "search_messages":
+        out = need(*call("POST", "/api/claude/home/search_crm_messages", {"person_name": args.get("contact") or None, "query": args.get("query") or None,
+                                                                         "channel": args.get("channel") or None, "since_days": args.get("since_days") or 30, "limit": 50}))
+        out["results"] = [m for m in out.get("results") or [] if (m.get("channel") or "").lower() != "email"]      # emails are not shared with Claude yet
+        out["count"] = len(out["results"])
+        return out
+    if name == "draft_email":
+        out = need(*call("POST", "/api/claude/home/draft_email_message", {"person_name": args["contact"], "subject": args["subject"], "body": args["body"]}))
+        if out.get("status") == "pending_confirmation":
+            out["next_step"] = "Nothing was sent. Open LyteKeepr (Home) within 30 minutes and press Send now."
+        return out
+    if name == "draft_linkedin_message":
+        out = need(*call("POST", "/api/claude/home/draft_linkedin_message", {"person_name": args["contact"], "message_text": args["text"]}))
+        if out.get("status") == "pending_confirmation":
+            out["next_step"] = "Nothing was sent. Open LyteKeepr (Home) and press Send now."
+        return out
     raise ValueError(f"Unknown tool: {name}")
 
 
@@ -430,6 +546,16 @@ def register(app):
         except Exception:
             pass
 
+    HOME_TOOLS = ("check_reply", "search_crm_messages", "draft_email_message", "draft_linkedin_message")
+
+    @app.post("/api/claude/home/<name>")
+    def claude_home_tool(name):
+        """The Home chat's own tools, for the connector (signed in as the person; not open to team members, like the Home chat)."""
+        if name not in HOME_TOOLS:
+            return jsonify({"error": "unknown"}), 404
+        from assistant.tools import run_tool
+        return jsonify(json.loads(run_tool(name, request.get_json(silent=True) or {})))
+
     # Settings: the address to paste into Claude, and who is connected (with Disconnect)
     @app.get("/api/me/claude")
     def my_claude():
@@ -462,7 +588,7 @@ ul{font-size:14px;line-height:1.6;margin:0 0 16px;padding-left:18px}b{color:#294
 </style></head><body><div class="card">
 <h1>Allow Claude to use your LyteKeepr?</h1>
 <p>Signed in as <b>{{WHO}}</b> {{EMAIL}}</p>
-<ul><li>See your contacts, funnels, tasks, reminders and recorded calls</li><li>Add tasks and reminders, and mark tasks done</li></ul>
+<ul><li>See your contacts, funnels, tasks, reminders, recorded calls and LinkedIn/Instagram messages</li><li>Add and update contacts, stages, outreach statuses, tasks and reminders</li><li>Write email and LinkedIn drafts that you send yourself from LyteKeepr</li></ul>
 <p>Claude sees only what you can see in LyteKeepr, and asks you before it changes anything. Disconnect any time in LyteKeepr Settings → Claude.</p>
 <form method="post" action="{{ACTION}}"><input type="hidden" name="grant" value="{{GRANT}}">
 <div class="row"><button class="no" name="choice" value="deny" type="submit">Cancel</button><button class="allow" name="choice" value="allow" type="submit">Allow</button></div></form>

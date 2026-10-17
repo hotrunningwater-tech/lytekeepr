@@ -798,6 +798,9 @@ def _ensure_lead(person_id: int, channel: str) -> int:
     with _crm() as c:
         person = c.execute("SELECT name FROM people WHERE person_id = ?", (person_id,)).fetchone()
         acct = c.execute("SELECT * FROM channel_accounts WHERE person_id = ? AND channel = ? ORDER BY account_id LIMIT 1", (person_id, channel)).fetchone()
+        if channel == "email":                        # a name placeholder can come first; the real address is the one with an @
+            acct = c.execute("""SELECT * FROM channel_accounts WHERE person_id = ? AND channel = 'email' AND channel_identifier LIKE '%@%'
+                                ORDER BY account_id LIMIT 1""", (person_id,)).fetchone() or acct
     if not person:
         raise store.ValidationError("no such person")
     with store._conn() as conn:
