@@ -137,6 +137,26 @@ def set_person_brand(person_id: int, brand) -> str:
     return key
 
 
+def assign_many(person_ids: list, brand) -> dict:
+    """Give many contacts one brand. Contacts in a funnel of another brand keep the funnel's brand (they are listed as skipped)."""
+    key = resolve(brand)
+    ids = sorted({int(i) for i in person_ids or []})
+    done, skipped = [], []
+    with _crm() as c:
+        for pid in ids:
+            row = c.execute("""SELECT p.name, f.name AS funnel_name, f.brand AS funnel_brand FROM people p
+                               LEFT JOIN funnels f ON f.funnel_id = p.funnel_id WHERE p.person_id = ?""", (pid,)).fetchone()
+            if not row:
+                continue
+            if row["funnel_brand"] and row["funnel_brand"] != key:
+                skipped.append({"contact_id": pid, "name": row["name"], "funnel": row["funnel_name"]})
+                continue
+            c.execute("UPDATE people SET brand = ? WHERE person_id = ?", (key, pid))
+            done.append(pid)
+    file_calendar(done)
+    return {"brand": key, "updated": len(done), "skipped": skipped}
+
+
 def set_funnel_brand(funnel_id: int, brand) -> str:
     """Give a funnel a brand; everyone in it takes that brand. Clearing it leaves the people's brands as they are."""
     key = resolve(brand)
@@ -256,6 +276,14 @@ def register(app):
         try:
             delete(key)
             return jsonify({"ok": True, "brands": all_brands()})
+        except store.ValidationError as exc:
+            return fail(exc)
+
+    @app.post("/api/crm/brands/assign")
+    def brands_assign():
+        body = request.get_json(silent=True) or {}
+        try:
+            return jsonify(assign_many(body.get("person_ids") or [], body.get("brand", "")))
         except store.ValidationError as exc:
             return fail(exc)
 

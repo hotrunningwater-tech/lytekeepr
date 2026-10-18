@@ -281,6 +281,7 @@
             </div>
             <button class="btn btn-secondary btn-small" type="button" id="crmMergeSelectedBtn" hidden>Merge selected (2)</button>
             <select class="demo-reset-input" id="crmMoveToFunnelSelect" hidden></select>
+            <button class="btn btn-secondary btn-small" type="button" id="crmSetBrandBtn" hidden>Set brand</button>
             <button class="btn btn-secondary btn-small" type="button" id="crmMoveToFunnelBtn" hidden>Move to funnel</button>
           </div>
           <div class="lks-chips" id="crmBatchChips" hidden></div>
@@ -1294,6 +1295,12 @@
           funnelTag.textContent = 'Funnel: ' + person.funnel_name + (person.funnel_stage_name ? ' — ' + person.funnel_stage_name : '');
           card.appendChild(funnelTag);
         }
+        if (person.brand) {
+          var brandTag = document.createElement('p');
+          brandTag.className = 'attention-copy crm-followup-tag';
+          brandTag.textContent = 'Brand: ' + (crmBrandNames[person.brand] || person.brand);
+          card.appendChild(brandTag);
+        }
         container.appendChild(card);
       });
       if (!noAlso) appendAlso(container, 'companies');
@@ -1307,6 +1314,9 @@
       crmMoveToFunnelSelect.hidden = true;
       crmMoveToFunnelBtn.hidden = !showMoveControls;
       crmMoveToFunnelBtn.textContent = 'Move ' + crmSelectedPersonIds.length + ' to funnel';
+      var brandBtn = document.getElementById('crmSetBrandBtn');           // admin only: brands are the admin's to hand out
+      brandBtn.hidden = !showMoveControls || !(window.lkMe && window.lkMe.role === 'admin');
+      brandBtn.textContent = 'Set brand for ' + crmSelectedPersonIds.length;
       // An empty .card-actions still eats flex-gap space as an empty row
       // even with all its buttons hidden — collapse the whole wrapper too.
       crmPeopleActions.hidden = crmPeopleList.hidden;
@@ -1769,6 +1779,45 @@
       });
     }
 
+    // Bulk brand: every selected contact gets one brand (those in a funnel of another brand keep the funnel's)
+    document.getElementById('crmSetBrandBtn').addEventListener('click', function () {
+      var ids = crmSelectedPersonIds.slice();
+      if (!ids.length || !window.lkContacts || !window.lkContacts.modal) return;
+      fetch('/api/crm/brands').then(function (r) { return r.json(); }).then(function (r) {
+        var card = document.createElement('div');
+        card.className = 'lks-card';
+        var title = document.createElement('h2'); title.textContent = 'Set the brand of ' + ids.length + (ids.length === 1 ? ' contact' : ' contacts');
+        var sel = document.createElement('select'); sel.className = 'demo-reset-input';
+        var none = document.createElement('option'); none.value = ''; none.textContent = 'No brand'; sel.appendChild(none);
+        (r.brands || []).forEach(function (b) { var o = document.createElement('option'); o.value = b.key; o.textContent = b.name; sel.appendChild(o); });
+        if (r.brands && r.brands.length) sel.value = r.brands[0].key;
+        var note = document.createElement('p'); note.className = 'lks-note';
+        note.textContent = 'Contacts in a funnel that has its own brand keep the funnel\'s brand; to change those, change the funnel\'s brand.';
+        var msg = document.createElement('p'); msg.className = 'lks-err'; msg.hidden = true;
+        var row = document.createElement('div'); row.className = 'lks-row';
+        var ok = document.createElement('button'); ok.className = 'btn btn-primary'; ok.type = 'button'; ok.textContent = 'Set brand';
+        var cancel = document.createElement('button'); cancel.className = 'btn lks-soft'; cancel.type = 'button'; cancel.textContent = 'Cancel';
+        cancel.onclick = function () { window.lkContacts.closeModal(true); };
+        ok.onclick = function () {
+          ok.disabled = true;
+          fetch('/api/crm/brands/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ person_ids: ids, brand: sel.value }) })
+            .then(function (res) { return res.json().then(function (d) { if (!res.ok) throw new Error(d.error || 'Could not set the brand'); return d; }); })
+            .then(function (d) {
+              loadCrmOverview();
+              if (!d.skipped.length) { window.lkContacts.closeModal(true); return; }
+              var funnels = {}; d.skipped.forEach(function (s) { funnels[s.funnel] = (funnels[s.funnel] || 0) + 1; });
+              msg.textContent = 'Done: ' + d.updated + ' updated. ' + d.skipped.length + ' kept their funnel\'s brand (' +
+                Object.keys(funnels).map(function (f) { return f + ': ' + funnels[f]; }).join(', ') + ').';
+              msg.hidden = false; ok.hidden = true; cancel.textContent = 'Close';
+            })
+            .catch(function (e) { msg.textContent = e.message; msg.hidden = false; ok.disabled = false; });
+        };
+        row.appendChild(ok); row.appendChild(cancel);
+        [title, sel, note, msg, row].forEach(function (el) { card.appendChild(el); });
+        window.lkContacts.modal(card);
+      });
+    });
+
     var crmRemoveConfirmBackdrop = document.getElementById('crmRemoveConfirmBackdrop');
     var crmRemoveConfirmText = document.getElementById('crmRemoveConfirmText');
     var crmRemoveConfirmBtn = document.getElementById('crmRemoveConfirmBtn');
@@ -2083,9 +2132,14 @@
         });
     }
 
+    var crmBrandNames = {};
     function loadCrmOverview() {
+      var brandsReady = fetch('/api/crm/brands').then(function (r) { return r.json(); }).then(function (r) {
+        crmBrandNames = {}; (r.brands || []).forEach(function (b) { crmBrandNames[b.key] = b.name; });
+      }).catch(function () {});
       fetch('/api/crm/overview')
         .then(function (res) { return res.json(); })
+        .then(function (data) { return brandsReady.then(function () { return data; }); })      // brand names are needed on the cards
         .then(function (data) {
           crmOverviewData = data;
           crmPeopleById = {};
