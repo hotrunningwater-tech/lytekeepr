@@ -48,12 +48,12 @@ def check(ok, what):
         problems.append(what)
 
 
-def mail(n, thread, sender, to, cc=(), body="", day="2026-10-0"):
+def mail(n, thread, sender, to, cc=(), body="", when=None):
     """One saved email, the way the Gmail tab stores it."""
     from gmail import storage
     who = lambda e: {"email": e, "name": e.split("@")[0].replace(".", " ").title()}
     msg = {"id": f"m{n}", "threadId": thread, "from": who(sender), "to": [who(e) for e in to], "cc": [who(e) for e in cc],
-           "subject": "Re: pilot", "receivedAt": f"2026-10-{10 + n:02d}T10:00:00", "textBody": body, "snippet": body[:80]}
+           "subject": "Re: pilot", "receivedAt": when or f"2026-10-{10 + n:02d}T10:00:00", "textBody": body, "snippet": body[:80]}
     with _profiles.use_profile("home"):
         storage.save_message(ME, msg)
         storage.upsert_index_entry(ME, msg)
@@ -77,8 +77,11 @@ def main():
     mail(4, "T3", "sarah@alpha.test", [ME], cc=["dave@delta.test"])
     mail(5, "T4", "noreply@notifications.test", [ME, "sarah@alpha.test"], cc=["michael@beta.test"])
     mail(6, "T5", "sarah@alpha.test", [ME] + [f"p{i}@crowd.test" for i in range(11)], cc=["michael@beta.test"])
+    # Sarah and Olga: two threads, but a year apart -> no suggestion (too far apart in time)
+    mail(7, "T6", "sarah@alpha.test", [ME, "olga@far.test"], when="2025-06-01T10:00:00")
+    mail(8, "T7", "sarah@alpha.test", [ME, "olga@far.test"])
     out = a.post("/api/crm/relationships/refresh").get_json()
-    check(out["emails"] == 6, "every saved email is read once")
+    check(out["emails"] == 8, "every saved email is read once")
     check(a.post("/api/crm/relationships/refresh").get_json()["emails"] == 0, "a second run reads nothing new")
     from lk_calendar import relationships as R
     with _profiles.use_profile("home"):
@@ -97,6 +100,7 @@ def main():
     kinds = {(s["kind"], s["email"]) for s in sug}
     check(("add_to_opportunity", "michael@beta.test") in kinds, "Michael is suggested for the Alpha pilot")
     check(not any(s["email"] == "dave@delta.test" for s in sug), "one shared thread is not enough for a suggestion")
+    check(not any(s["email"] == "olga@far.test" for s in sug), "two threads a year apart are not a repeat")
     check(("new_contact", "michael@beta.test") not in kinds, "no separate 'new contact' card when adding him to the opportunity already creates the contact")
     conns = a.get(f"/api/crm/people/{sarah}/connections").get_json()["connections"]
     check(conns and conns[0]["email"] == "michael@beta.test" and conns[0]["threads"] == 2, "Sarah's connections list Michael first")

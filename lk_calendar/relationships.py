@@ -23,6 +23,8 @@ from . import store
 log = logging.getLogger(__name__)
 MIN_THREADS = 2
 MAX_PEOPLE = 10
+CLOSE_DAYS = 90          # repeated threads count only when they happen within this many days of each other
+FADE_DAYS = 180          # a pair with nothing newer than this makes no suggestion
 GENERIC = re.compile(r"^(no-?reply|do-?not-?reply|donotreply|info|support|hello|contact|team|admin|notifications?|notify|mailer-daemon|postmaster|"
                      r"billing|invoices?|accounts?|sales|news|newsletters?|updates?|marketing|help|service|bounce[s]?|calendar|events?)([+._-].*)?$", re.I)
 GENERIC_DOMAINS = ("calendar.google.com", "docs.google.com", "zoom.us", "mailchimp", "sendgrid", "hubspot", "intercom", "linkedin.com", "facebookmail.com")
@@ -168,9 +170,14 @@ def connections(person_id: int, limit: int = 15) -> list[dict]:
         if not mine:
             return []
         marks = ",".join("?" for _ in mine)
-        rows = conn.execute(f"""SELECT CASE WHEN a IN ({marks}) THEN b ELSE a END AS other, COUNT(DISTINCT thread_id) AS threads, MAX(last_seen) AS last_seen
-                                FROM rel_pair_threads WHERE a IN ({marks}) OR b IN ({marks}) GROUP BY other ORDER BY threads DESC, last_seen DESC LIMIT ?""",
-                            [*mine, *mine, *mine, int(limit)]).fetchall()
+        per = {}
+        for r in conn.execute(f"""SELECT CASE WHEN a IN ({marks}) THEN b ELSE a END AS other, thread_id, MIN(first_seen) AS seen
+                                  FROM rel_pair_threads WHERE a IN ({marks}) OR b IN ({marks}) GROUP BY other, thread_id""", [*mine, *mine, *mine]):
+            per.setdefault(r["other"], []).append(r["seen"])
+        now = _now()
+        ranked = sorted(((other, _pair_stats(ds, now)) for other, ds in per.items()), key=lambda x: x[1]["last"], reverse=True)   # newest first...
+        ranked.sort(key=lambda x: -x[1]["score"])                                                                            # ...then strongest
+        rows = [{"other": o, "threads": st["threads"], "last_seen": st["last"], "score": st["score"], "recent": st["recent"]} for o, st in ranked[: int(limit)]]
         by_email = _contact_by_email(conn)
         names = {r["email"]: r["name"] for r in conn.execute("SELECT email, name FROM rel_people")}
         out = []
@@ -180,8 +187,39 @@ def connections(person_id: int, limit: int = 15) -> list[dict]:
             pid = by_email.get(r["other"])
             pname = conn.execute("SELECT name FROM people WHERE person_id = ?", (pid,)).fetchone()["name"] if pid else ""
             out.append({"email": r["other"], "name": pname or names.get(r["other"], "") or r["other"], "contact_id": pid,
-                        "threads": r["threads"], "last_seen": r["last_seen"]})
+                        "threads": r["threads"], "recent_threads": r["recent"], "last_seen": r["last_seen"], "strength": r["score"]})
     return out
+
+
+def _days(a: str, b: str) -> float:
+    from datetime import datetime
+    try:
+        return abs((datetime.fromisoformat(a[:16]) - datetime.fromisoformat(b[:16])).total_seconds()) / 86400
+    except ValueError:
+        return 9999.0
+
+
+def _weight(seen: str, now: str) -> float:
+    """How much one shared thread counts today: recent threads count fully, old ones fade."""
+    d = _days(seen, now)
+    return 1.0 if d <= CLOSE_DAYS else 0.5 if d <= FADE_DAYS else 0.2
+
+
+def _pair_stats(thread_dates: list, now: str) -> dict:
+    """threads (all), recent (inside FADE_DAYS), close (most threads within any CLOSE_DAYS window), score, last."""
+    dates = sorted(d for d in thread_dates if d)
+    close, j = 0, 0
+    for i in range(len(dates)):
+        while _days(dates[i], dates[j]) > CLOSE_DAYS:
+            j += 1
+        close = max(close, i - j + 1)
+    return {"threads": len(dates), "recent": sum(1 for d in dates if _days(d, now) <= FADE_DAYS), "close": close,
+            "score": round(sum(_weight(d, now) for d in dates), 2), "last": dates[-1] if dates else ""}
+
+
+def _qualifies(st: dict) -> bool:
+    """A suggestion needs repeats close in time (2+ threads within 90 days) and something in the last 6 months."""
+    return st["close"] >= MIN_THREADS and st["recent"] >= 1
 
 
 def _intro_of(conn, email: str, among: set) -> str:
@@ -198,9 +236,12 @@ def suggest() -> int:
         conn.executescript(opportunities.SCHEMA)
         by_email = _contact_by_email(conn)
         names = {r["email"]: r["name"] for r in conn.execute("SELECT email, name FROM rel_people")}
-        pairs = {}
-        for r in conn.execute("SELECT a, b, COUNT(DISTINCT thread_id) AS n, MAX(last_seen) AS last FROM rel_pair_threads GROUP BY a, b"):
-            pairs[(r["a"], r["b"])] = (r["n"], r["last"])
+        dates = {}
+        for r in conn.execute("SELECT a, b, thread_id, MIN(first_seen) AS seen FROM rel_pair_threads GROUP BY a, b, thread_id"):
+            dates.setdefault((r["a"], r["b"]), []).append(r["seen"])
+        now = _now()
+        stats = {k: _pair_stats(v, now) for k, v in dates.items()}
+        pairs = {k: (st["close"], st["last"]) for k, st in stats.items() if _qualifies(st)}      # only repeats close in time, not faded
         def together(x, y):
             return pairs.get((min(x, y), max(x, y)), (0, ""))[0]
         # 1. someone who keeps showing up with an opportunity's people, but is not on it
@@ -229,7 +270,8 @@ def suggest() -> int:
                 intro = _intro_of(conn, email, active_emails)
                 who = names.get(email) or email
                 mentions = conn.execute("SELECT COUNT(*) FROM rel_mentions WHERE person_id = ?", (pid,)).fetchone()[0] if pid else 0
-                reason = (f"{who} appeared in {n} separate email threads with {names.get(with_email) or with_email}"
+                last = stats.get((min(email, with_email), max(email, with_email)), {}).get("last", "")[:10]
+                reason = (f"{who} appeared in {n} separate email threads within 3 months with {names.get(with_email) or with_email} (last {last})"
                           + (f", who brought them in" if intro == with_email else (f"; introduced by {names.get(intro) or intro}" if intro else "")) + ".")
                 cur = conn.execute("""INSERT OR IGNORE INTO rel_suggestions (kind, opportunity_id, email, with_email, introducer, threads, mentions, reason, created_at, updated_at)
                                       VALUES ('add_to_opportunity', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -250,7 +292,7 @@ def suggest() -> int:
             who = names.get(r["newcomer"]) or r["newcomer"]
             cur = conn.execute("""INSERT OR IGNORE INTO rel_suggestions (kind, opportunity_id, email, with_email, introducer, threads, reason, created_at, updated_at)
                                   VALUES ('new_contact', 0, ?, ?, ?, ?, ?, ?, ?)""",
-                               (r["newcomer"], r["introducer"], r["introducer"], n, f"{intro_name} brought {who} into a conversation, and they have been in {n} threads together since.", _now(), _now()))
+                               (r["newcomer"], r["introducer"], r["introducer"], n, f"{intro_name} brought {who} into a conversation, and they have been in {n} threads together within 3 months.", _now(), _now()))
             made += cur.rowcount
     return made
 
