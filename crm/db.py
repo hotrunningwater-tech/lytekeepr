@@ -268,8 +268,10 @@ def init_db() -> None:
             ("people", {"headline": "TEXT", "location": "TEXT", "industry": "TEXT", "audience": "TEXT", "phone": "TEXT", "telegram": "TEXT",
                         "email": "TEXT", "website": "TEXT", "verified": "TEXT", "date_found": "TEXT", "extras": "TEXT", "source_file": "TEXT",
                         "batch": "TEXT", "created_at": "TEXT", "raw_notes": "TEXT",
-                        "owner_id": "INTEGER"}),       # who added the contact (empty = the admin)
+                        "owner_id": "INTEGER",         # who added the contact (empty = the admin)
+                        "brand": "TEXT NOT NULL DEFAULT ''"}),   # the brand (key) the contact belongs to; '' = none yet
             ("channel_accounts", {"url": "TEXT"}),
+            ("funnels", {"brand": "TEXT NOT NULL DEFAULT ''"}),     # a funnel's people take its brand
         ):
             have = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
             for col, ddl in cols.items():
@@ -327,7 +329,7 @@ def create_funnel(conn: sqlite3.Connection, name: str) -> int:
 def list_funnels(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT f.funnel_id, f.name, f.created_at, COUNT(p.person_id) AS people_count
+        SELECT f.funnel_id, f.name, f.brand, f.created_at, COUNT(p.person_id) AS people_count
         FROM funnels f
         LEFT JOIN people p ON p.funnel_id = f.funnel_id
         GROUP BY f.funnel_id
@@ -353,7 +355,7 @@ def list_funnel_stages(conn: sqlite3.Connection, funnel_id: int) -> list[dict]:
 
 
 def get_funnel_board(conn: sqlite3.Connection, funnel_id: int) -> dict | None:
-    funnel_row = conn.execute("SELECT funnel_id, name FROM funnels WHERE funnel_id = ?", (funnel_id,)).fetchone()
+    funnel_row = conn.execute("SELECT funnel_id, name, brand FROM funnels WHERE funnel_id = ?", (funnel_id,)).fetchone()
     if funnel_row is None:
         return None
     stages = conn.execute(
@@ -378,6 +380,7 @@ def get_funnel_board(conn: sqlite3.Connection, funnel_id: int) -> dict | None:
     return {
         "funnel_id": funnel_row["funnel_id"],
         "name": funnel_row["name"],
+        "brand": funnel_row["brand"] or "",
         "stages": [
             {
                 "stage_id": s["stage_id"],
@@ -762,7 +765,7 @@ def get_person_detail(conn: sqlite3.Connection, person_id: int) -> dict | None:
     slightly off around messages sent close together across channels."""
     row = conn.execute(
         """
-        SELECT p.person_id, p.name, p.job_title, p.person_status, p.notes, p.phone, p.telegram,
+        SELECT p.person_id, p.name, p.job_title, p.person_status, p.notes, p.phone, p.telegram, p.brand,
                (SELECT channel_identifier FROM channel_accounts e WHERE e.person_id = p.person_id AND e.channel = 'email' ORDER BY e.account_id LIMIT 1) AS email, p.raw_notes,
                co.company_name,
                fn.funnel_id, fn.name AS funnel_name,
@@ -1195,7 +1198,7 @@ def get_overview(conn: sqlite3.Connection) -> dict:
     people_rows = conn.execute(
         """
         SELECT
-            p.person_id, p.name, p.job_title, p.person_status, p.batch, p.created_at,
+            p.person_id, p.name, p.job_title, p.person_status, p.batch, p.created_at, p.brand,
             (SELECT channel_identifier FROM channel_accounts e WHERE e.person_id = p.person_id AND e.channel = 'email' ORDER BY e.account_id LIMIT 1) AS email, p.phone, p.telegram, p.location, p.industry, p.website, p.notes,
             co.company_name,
             fn.funnel_id, fn.name AS funnel_name,

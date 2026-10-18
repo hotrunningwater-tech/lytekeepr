@@ -59,7 +59,10 @@ LATER_STATUSES = {
     "onboarding": ("Onboarding", "none", ""),
     "completed": ("Completed", "closed", ""),
 }
-PROJECTS = ("lytekeepr", "aspan", "nexy", "google")   # "google" = read-only events synced from Google Calendar
+# Brands (the businesses this account runs) live in the brands table and can be edited; these are the first ones.
+# "google" is not a brand: it marks read-only events synced from Google Calendar (a calendar source).
+DEFAULT_BRANDS = (("lytekeepr", "LyteKeepr", "#7fa8b8"), ("aspan", "Aspan", "#e98b74"), ("nexy", "Nexy", "#21493f"))
+CALENDAR_SOURCES = ("google",)
 MEETING_STATUSES = {"scheduled": "", "completed": "completed", "no_show": "no_show", "cancelled": "cancelled"}   # stored value; "" = scheduled
 MEETING_ALIASES = {"scheduled": "scheduled", "upcoming": "scheduled", "": "scheduled", "completed": "completed", "complete": "completed",
                    "done": "completed", "held": "completed", "no show": "no_show", "noshow": "no_show", "no-show": "no_show",
@@ -186,6 +189,14 @@ CREATE TABLE IF NOT EXISTS funnel_shares (
     PRIMARY KEY (user_id, funnel_id)
 );
 
+CREATE TABLE IF NOT EXISTS brands (
+  key TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS completions (
   event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   occ_date TEXT NOT NULL,
@@ -252,8 +263,32 @@ def _conn():
     if conn.execute("SELECT COUNT(*) FROM status_buckets").fetchone()[0] == 0:
         conn.executemany("INSERT OR IGNORE INTO status_buckets (channel, status_key, bucket) VALUES (?, ?, ?)",
                          [(ch, key, b) for (ch, key), b in DEFAULT_BUCKETS.items()])
+    if conn.execute("SELECT COUNT(*) FROM brands").fetchone()[0] == 0:
+        conn.executemany("INSERT OR IGNORE INTO brands (key, name, color, position) VALUES (?, ?, ?, ?)",
+                         [(k, n, c, i) for i, (k, n, c) in enumerate(DEFAULT_BRANDS)])
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_events_external ON events(external_id) WHERE external_id != ''")
     return conn
+
+
+def brand_keys() -> list:
+    """The brand keys, in order. A plain read (no schema work), safe to call while another connection is writing."""
+    try:
+        raw = sqlite3.connect(db_path(), timeout=10)
+        try:
+            return [r[0] for r in raw.execute("SELECT key FROM brands ORDER BY position, created_at, key")]
+        finally:
+            raw.close()
+    except sqlite3.Error:
+        return [k for k, _, _ in DEFAULT_BRANDS]
+
+
+def default_project(preferred: str = "") -> str:
+    """preferred if it is still a brand, else LyteKeepr, else the first brand."""
+    keys = brand_keys()
+    for k in (preferred, "lytekeepr"):
+        if k and k in keys:
+            return k
+    return keys[0] if keys else "lytekeepr"
 
 
 def now_local() -> datetime:
@@ -292,9 +327,11 @@ def clean(data: dict, partial_from: dict | None = None) -> dict:
     title = str(base.get("title", "")).strip()
     if not title:
         raise ValidationError("title is required")
-    project = base.get("project", "lytekeepr")
-    if project not in PROJECTS:
-        raise ValidationError(f"project must be one of {', '.join(PROJECTS)}")
+    project = base.get("project") or default_project()
+    if project not in CALENDAR_SOURCES:
+        keys = brand_keys()
+        if project not in keys:
+            raise ValidationError(f"project must be one of the brands: {', '.join(keys)}")
     kind = base.get("kind", "task")
     if kind not in KINDS:
         raise ValidationError(f"kind must be one of {', '.join(KINDS)}")

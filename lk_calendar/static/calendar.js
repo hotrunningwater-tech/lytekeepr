@@ -2,12 +2,21 @@
 (function () {
   'use strict';
 
+  // Brands (editable, loaded from /api/crm/brands) plus the Google calendar source; these are the first values until they load.
   var PROJECTS = {
     lytekeepr: { label: 'LyteKeepr', color: '#7fa8b8' },
-    aspan: { label: 'Aspan CRM', color: '#e98b74' },
+    aspan: { label: 'Aspan', color: '#e98b74' },
     nexy: { label: 'Nexy', color: '#21493f' },
     google: { label: 'Google', color: '#7b6fa8' }
   };
+  function setBrands(r) {
+    if (!r || !r.brands) return;
+    var next = {};
+    r.brands.concat(r.sources || []).forEach(function (b) { next[b.key] = { label: b.name, color: b.color }; });
+    Object.keys(PROJECTS).forEach(function (k) { delete PROJECTS[k]; });
+    Object.keys(next).forEach(function (k) { PROJECTS[k] = next[k]; });
+  }
+  function proj(key) { return PROJECTS[key] || { label: key || '—', color: '#9aa7ad' }; }
   var KINDS = { task: 'Task', meeting: 'Meeting', reminder: 'Reminder' };
   var REPEAT_LABELS = { none: 'Does not repeat', daily: 'Every day', weekdays: 'Every weekday', weekly: 'Weekly on selected days' };
   var DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -121,8 +130,10 @@
     return Promise.all([
       api('GET', '/api/calendar/events?start=' + start + '&end=' + end),
       api('GET', '/api/calendar/agenda'),
-      api('GET', '/api/calendar/google/status').catch(function () { return null; })
+      api('GET', '/api/calendar/google/status').catch(function () { return null; }),
+      api('GET', '/api/crm/brands').catch(function () { return null; })
     ]).then(function (r) {
+      setBrands(r[3]);
       state.google = r[2];
       state.events = r[0].events; state.me = r[0].me;
       state.now = r[0].now;
@@ -161,7 +172,7 @@
     list.forEach(function (e) {
       if (e.lead && e.lead.bucket === 'cold') {
         if (e.done) return;                                // finished cold tasks simply drop out of the group
-        var kind = itemKind(e), key = 'g:' + e.date + ':' + e.lead.channel + ':' + kind, g = groups[key];
+        var kind = itemKind(e), key = 'g:' + e.date + ':' + e.lead.channel + ':' + kind + ':' + e.project, g = groups[key];      // one group per brand too
         if (!g) {
           g = groups[key] = { group: true, id: key, date: e.date, project: e.project, kind: 'reminder', untimed: 1, source: 'auto', repeat: 'none',
             start_time: '08:00', duration_min: 15, notes: '', done: false, members: [], gkind: kind, channel: e.lead.channel };
@@ -201,7 +212,7 @@
       var sel = state.selected && state.selected.id === e.id && state.selected.date === e.date;
       var label = e.group ? ICONS[e.gkind] + ' ' + e.members.length + ' ' + channelLabel(e.channel) : pillLabel(e);
       list.appendChild(h('button', { type: 'button', class: 'lkc-pill' + (e.group ? ' group' : '') + (e.done ? ' done' : '') + (sel ? ' sel' : ''),
-        title: e.title, style: '--c:' + PROJECTS[e.project].color, onclick: function (ev) { ev.stopPropagation(); select(e.id, e.date); } }, label));
+        title: e.title, style: '--c:' + proj(e.project).color, onclick: function (ev) { ev.stopPropagation(); select(e.id, e.date); } }, label));
     });
     cell.appendChild(list);
     if (items.length > 2) cell.appendChild(h('span', { class: 'lkc-strip-more', title: 'Show all' }, '+' + (items.length - 2)));
@@ -281,7 +292,7 @@
           type: 'button',
           title: e.title + ' \u00b7 ' + label12(e.start_time),
           class: 'lkc-ev ' + e.kind + (e.done ? ' done' : '') + (sel ? ' sel' : '') + (e._h < 40 ? ' short' : ''),
-          style: 'top:' + e._top + 'px;height:' + e._h + 'px;left:2px;width:calc(100% - 4px);background:' + PROJECTS[e.project].color + ';--c:' + PROJECTS[e.project].color,
+          style: 'top:' + e._top + 'px;height:' + e._h + 'px;left:2px;width:calc(100% - 4px);background:' + proj(e.project).color + ';--c:' + proj(e.project).color,
           onclick: function () { select(e.id, e.date); }
         }, [e.title, h('small', {}, label12(e.start_time) + (e.repeat !== 'none' ? ' \u00b7 repeats' : ''))]));
       });
@@ -302,14 +313,14 @@
   }
 
   /* ---------- sidebar ---------- */
-  function dot(project) { return h('i', { style: 'background:' + PROJECTS[project].color }); }
+  function dot(project) { return h('i', { style: 'background:' + proj(project).color }); }
 
   function agendaRow(o, over) {
     var when = o.untimed ? 'no specific time' : label12(o.start_time);
     return h('div', { class: 'lkc-row' + (over ? ' over' : '') + (o.done ? ' done' : ''), onclick: function () { jumpTo(o.id, o.date); } }, [
       dot(o.project),
       h('div', {}, [h('b', {}, (o.group ? ICONS[o.gkind] + ' ' : '') + o.title),
-        h('span', {}, (over ? 'Overdue \u00b7 ' : '') + longDate(o.date) + ' \u00b7 ' + when + ' \u00b7 ' + PROJECTS[o.project].label)])
+        h('span', {}, (over ? 'Overdue \u00b7 ' : '') + longDate(o.date) + ' \u00b7 ' + when + ' \u00b7 ' + proj(o.project).label)])
     ]);
   }
   var SECT_KEY = 'lkcSections';
@@ -522,7 +533,8 @@
     }
     return [h('div', { class: 'lkc-card lkc-detail' }, [
       h('div', { class: 'lkc-top' }, [
-        h('span', { class: 'lkc-chip' }, [dot(e.project), PROJECTS[e.project].label]),
+        h('span', { class: 'lkc-chip' }, [dot(e.project), proj(e.project).label]),
+        e.brand && e.brand !== e.project ? h('span', { class: 'lkc-chip', title: 'The brand of the invited contact' }, [dot(e.brand), proj(e.brand).label]) : null,
         h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: closeSide }, '\u00d7')
       ]),
       h('h2', { class: 'lkc-title' }, e.title), grid,
@@ -565,7 +577,7 @@
     });
     return [h('div', { class: 'lkc-card lkc-detail' }, [
       h('div', { class: 'lkc-top' }, [
-        h('span', { class: 'lkc-chip' }, [dot(g.project), PROJECTS[g.project].label]),
+        h('span', { class: 'lkc-chip' }, [dot(g.project), proj(g.project).label]),
         h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: closeSide }, '\u00d7')
       ]),
       h('h2', { class: 'lkc-title' }, g.title), grid,
@@ -650,7 +662,7 @@
   function renderImport() {
     var im = state.importState;
     var chanSel = h('select', { id: 'lkcChannel', onchange: function () { im.channel = this.value; } }, Object.keys(CHANNELS).map(function (k) {
-      return h('option', { value: k, selected: im.channel === k }, CHANNELS[k].label + ' leads → ' + PROJECTS[CHANNELS[k].project].label);
+      return h('option', { value: k, selected: im.channel === k }, CHANNELS[k].label + ' leads → ' + proj(CHANNELS[k].project).label);
     }));
     var fileInput = h('input', { type: 'file', accept: '.csv,text/csv', hidden: true, id: 'lkcFile', onchange: function () {
       setFile(im, this.files[0]);
@@ -718,8 +730,8 @@
     var kindTabs = h('div', { class: 'demo-reset-tabs' }, Object.keys(KINDS).map(function (k) {
       return h('button', { type: 'button', class: 'demo-reset-tab' + (f.kind === k ? ' is-active' : ''), onclick: function () { sync(); f.kind = k; render(); } }, KINDS[k]);
     }));
-    var projPick = h('div', { class: 'lkc-projpick' }, Object.keys(PROJECTS).map(function (p) {
-      return h('span', { class: 'lkc-chip' + (f.project === p ? ' on' : ''), onclick: function () { sync(); f.project = p; render(); } }, [dot(p), PROJECTS[p].label]);
+    var projPick = h('div', { class: 'lkc-projpick' }, Object.keys(PROJECTS).filter(function (p) { return p !== 'google' || f.project === 'google'; }).map(function (p) {
+      return h('span', { class: 'lkc-chip' + (f.project === p ? ' on' : ''), onclick: function () { sync(); f.project = p; render(); } }, [dot(p), proj(p).label]);
     }));
     var repeatSel = h('select', { id: 'lkcRepeat', onchange: function () { sync(); render(); } }, Object.keys(REPEAT_LABELS).map(function (r) {
       return h('option', { value: r, selected: f.repeat === r }, REPEAT_LABELS[r]);
@@ -1093,7 +1105,7 @@
     $('#lkcRange').textContent = s.toLocaleString('en-US', opts) + ' ' + s.getUTCDate() + ' – ' +
       (s.getUTCMonth() === e.getUTCMonth() ? '' : e.toLocaleString('en-US', opts) + ' ') + e.getUTCDate() + ', ' + e.getUTCFullYear();
     var chips = Object.keys(PROJECTS).map(function (p) {
-      return h('span', { class: 'lkc-chip' + (state.hidden[p] ? ' off' : ''), onclick: function () { state.hidden[p] = !state.hidden[p]; render(); } }, [dot(p), PROJECTS[p].label]);
+      return h('span', { class: 'lkc-chip' + (state.hidden[p] ? ' off' : ''), onclick: function () { state.hidden[p] = !state.hidden[p]; render(); } }, [dot(p), proj(p).label]);
     });
     var people = {};                                // whose items are on screen: one pill each when there is more than one person
     state.events.forEach(function (e) { if (e.who_id != null) people[e.who_id] = e.who_name; });

@@ -164,7 +164,7 @@ def counts_by_stage(conn, funnel_id: int) -> dict:
 
 def get(opp_id: int) -> dict | None:
     with _crm() as conn:
-        row = conn.execute("""SELECT o.*, c.company_name, f.name AS funnel_name, s.name AS stage_name FROM opportunities o
+        row = conn.execute("""SELECT o.*, c.company_name, f.name AS funnel_name, f.brand AS brand, s.name AS stage_name FROM opportunities o
                               LEFT JOIN companies c ON c.company_id = o.company_id LEFT JOIN funnels f ON f.funnel_id = o.funnel_id
                               LEFT JOIN funnel_stages s ON s.stage_id = o.stage_id WHERE o.opportunity_id = ?""", (opp_id,)).fetchone()
         if not row:
@@ -178,6 +178,7 @@ def get(opp_id: int) -> dict | None:
             done = cal.execute("SELECT 1 FROM completions WHERE event_id = ? AND occ_date = ?", (e["id"], e["start_date"])).fetchone()
             tasks.append({**dict(e), "done": bool(done)})
     return {"opportunity_id": row["opportunity_id"], "name": row["name"], "funnel_id": row["funnel_id"], "funnel": row["funnel_name"] or "",
+            "brand": row["brand"] or "",                 # an opportunity's brand is its funnel's
             "stage_id": row["stage_id"], "stage": row["stage_name"] or "", "stages": stages, "company": row["company_name"] or "",
             "notes": row["notes"], "created_at": row["created_at"], "updated_at": row["updated_at"], "owner_id": row["owner_id"],
             "participants": people, "summary": summary_line(people), "tasks": tasks, "history": log}
@@ -371,7 +372,7 @@ def add_task(opp_id: int, title: str, day: str, time: str | None = None, owner_i
     if not o:
         raise OpportunityError("No such opportunity.")
     store.check_not_past(day, time or "", untimed=not time)
-    ev = store.create_event({"title": (title or "").strip() or f"Next step: {o['name']}", "project": "lytekeepr", "kind": "task", "start_date": day,
+    ev = store.create_event({"title": (title or "").strip() or f"Next step: {o['name']}", "project": store.default_project(o.get("brand", "")), "kind": "task", "start_date": day,
                              "start_time": time or "08:00", "untimed": not time, "notes": f"Opportunity: {o['name']}"})
     with store._conn() as cal:
         cal.execute("UPDATE events SET lead_ref = ?, owner_id = ? WHERE id = ?", (f"opp:{opp_id}", owner_id, ev["id"]))

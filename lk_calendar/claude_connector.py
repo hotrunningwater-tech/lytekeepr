@@ -109,6 +109,20 @@ def disconnect(user_id: int, profile_id: str, client_id: str) -> None:
 
 
 # ------------------------------------------------------------------ tools (each one is a call to the app's own API, as the person)
+def _brand_key(call, need, text):
+    """A brand name or key → its key; None when no brand was asked for; '' for 'none'. Unknown brands are an error listing the real ones."""
+    t = str(text or "").strip()
+    if not t:
+        return None
+    if t.lower() in ("none", "no brand", "unassigned"):
+        return ""
+    brands = need(*call("GET", "/api/crm/brands"))["brands"]
+    for b in brands:
+        if t.lower() in (b["key"].lower(), b["name"].lower()):
+            return b["key"]
+    raise ValueError(f"There is no brand '{t}'. Brands: {', '.join(b['name'] for b in brands)}.")
+
+
 def _strip_google(items: list) -> list:
     return [e for e in items or [] if e.get("source") != "google"]
 
@@ -119,9 +133,20 @@ TOOLS = [
                      "a contact (with their own funnel and stage, if any) and every opportunity they are on (with their role), plus opportunities "
                      "whose name or company matches. A person can be a single contact entry in a funnel, a participant in an opportunity, or both."),
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}, "read": True},
+    {"name": "list_brands", "title": "List brands",
+     "description": ("The brands (businesses) this account runs, e.g. LyteKeepr, Aspan, Nexy. Contacts, funnels and calendar items each belong to one brand; "
+                     "a contact in a funnel has the funnel's brand. Contacts with no brand yet show brand ''."),
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "create_brand", "title": "Add a brand", "description": "Add a new brand (business). Only when the user asks for it.",
+     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}, "read": False},
+    {"name": "set_funnel_brand", "title": "Set a funnel's brand",
+     "description": "Make a funnel belong to a brand. Everyone in the funnel takes that brand, and their follow-ups are filed under it. Empty brand clears the funnel's brand.",
+     "inputSchema": {"type": "object", "properties": {"funnel_id": {"type": "integer"}, "brand": {"type": "string", "description": "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
+                     "required": ["funnel_id", "brand"]}, "read": False},
     {"name": "search_contacts", "title": "Search contacts",
-     "description": "Find contacts in LyteKeepr by name, company, email or notes. Returns id, name, company, email, channel, funnel and stage.",
+     "description": "Find contacts in LyteKeepr by name, company, email or notes. Returns id, name, company, email, channel, brand, funnel and stage.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Words to look for; empty lists the newest contacts."},
+                                                      "brand": {"type": "string", "description": "Only contacts of this brand (name or key); 'none' = contacts with no brand yet."},
                                                       "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 15}}}, "read": True},
     {"name": "get_contact", "title": "Contact details",
      "description": "Everything about one contact: profile, notes, funnel and stage, LinkedIn/Instagram messages, follow-ups and their recorded calls (with summaries). Use search_contacts first to get the id.",
@@ -143,7 +168,8 @@ TOOLS = [
      "description": "Add a task to the LyteKeepr calendar. Use for follow-ups too (e.g. 'Follow up with Sara about pricing'). Today or later only.",
      "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
                                                       "time": {"type": "string", "description": "HH:MM, 24-hour; leave out for no specific time"},
-                                                      "notes": {"type": "string"}}, "required": ["title", "date"]}, "read": False},
+                                                      "notes": {"type": "string"}, "brand": {"type": "string", "description": "Which brand the task is for; default LyteKeepr. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
+                     "required": ["title", "date"]}, "read": False},
     {"name": "create_reminder", "title": "Create a reminder", "description": "A reminder that shows on the LyteKeepr Home page under 'Action needed' from its due date.",
      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}, "due_date": {"type": "string", "description": "YYYY-MM-DD"}},
                      "required": ["text", "due_date"]}, "read": False},
@@ -156,13 +182,17 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string", "description": "The person's name; leave empty if only a handle is known"},
                                                       "company": {"type": "string"}, "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
                                                       "instagram": {"type": "string", "description": "Instagram handle like @name (or the instagram.com link)"},
-                                                      "linkedin": {"type": "string", "description": "LinkedIn profile link"}, "notes": {"type": "string"}}}, "read": False},
+                                                      "linkedin": {"type": "string", "description": "LinkedIn profile link"}, "notes": {"type": "string"},
+                                                      "brand": {"type": "string", "description": "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}}}, "read": False},
     {"name": "update_contact", "title": "Update a contact",
      "description": "Change a contact's details, or add a note (add_note is appended with today's date; it never replaces the existing notes). Only the fields given change.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "name": {"type": "string"}, "company": {"type": "string"},
                                                       "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
                                                       "instagram": {"type": "string", "description": "Instagram handle like @name"}, "linkedin": {"type": "string", "description": "LinkedIn profile link"},
-                                                      "add_note": {"type": "string"}}, "required": ["contact_id"]}, "read": False},
+                                                      "add_note": {"type": "string"},
+                                                      "brand": {"type": "string", "description": "Give the contact this brand ('' removes it). A contact in a branded funnel keeps the funnel's brand: "
+                                                                                                 "change the funnel's brand or move them instead. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
+                     "required": ["contact_id"]}, "read": False},
     {"name": "move_contact_stage", "title": "Move to a funnel stage",
      "description": "Move a contact to a stage of their funnel by the stage's name (e.g. 'In conversation'). Only the stage changes: outreach statuses and follow-ups stay as they are (use set_outreach_status for those). Give funnel_id to put them into a funnel they are not in yet.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "stage": {"type": "string"}, "funnel_id": {"type": "integer"}},
@@ -287,11 +317,21 @@ def _run_tool(call, name: str, args: dict):
                 for o in need(*call("GET", f"/api/crm/opportunities?q={q}"))["opportunities"] if o["opportunity_id"] not in seen]
         return {"contacts": people, "other_matching_opportunities": opps,
                 "note": "Nothing matched." if not people and not opps else ""}
+    if name == "list_brands":
+        return need(*call("GET", "/api/crm/brands"))["brands"]
+    if name == "create_brand":
+        return need(*call("POST", "/api/crm/brands", {"name": args.get("name", "")}))["brand"]
+    if name == "set_funnel_brand":
+        return need(*call("POST", f"/api/crm/funnels/{int(args['funnel_id'])}/brand", {"brand": args.get("brand", "")}))
     if name == "search_contacts":
-        q = urllib.parse.urlencode({"q": str(args.get("query") or ""), "limit": max(1, min(int(args.get("limit") or 15), 50))})
+        limit = max(1, min(int(args.get("limit") or 15), 50))
+        wanted = _brand_key(call, need, args.get("brand"))
+        q = urllib.parse.urlencode({"q": str(args.get("query") or ""), "limit": 500 if wanted is not None else limit})
         rows = need(*call("GET", f"/api/calendar/contacts?{q}"))["contacts"]
+        if wanted is not None:
+            rows = [c for c in rows if (c.get("brand") or "") == wanted][:limit]
         return [{"id": c["id"], "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "instagram": c.get("instagram") or None, "channel": c.get("channel"),
-                 "funnel": c.get("funnel_name") or "", "stage": c.get("stage_name") or "", "job_title": c.get("job_title")} for c in rows]
+                 "brand": c.get("brand") or "", "funnel": c.get("funnel_name") or "", "stage": c.get("stage_name") or "", "job_title": c.get("job_title")} for c in rows]
     if name == "get_contact":
         pid = int(args["contact_id"])
         detail = need(*call("GET", f"/api/crm/people/{pid}"))
@@ -324,7 +364,7 @@ def _run_tool(call, name: str, args: dict):
     if name == "get_call":
         return need(*call("GET", f"/api/calls/{int(args['call_id'])}"))["call"]
     if name == "create_task":
-        body = {"title": str(args.get("title") or "").strip(), "project": "lytekeepr", "kind": "task", "start_date": args.get("date"),
+        body = {"title": str(args.get("title") or "").strip(), "project": _brand_key(call, need, args.get("brand")) or "lytekeepr", "kind": "task", "start_date": args.get("date"),
                 "start_time": args.get("time") or "08:00", "untimed": not args.get("time"), "notes": str(args.get("notes") or "")}
         return need(*call("POST", "/api/calendar/events", body))
     if name == "create_reminder":
@@ -332,14 +372,17 @@ def _run_tool(call, name: str, args: dict):
     if name == "mark_task_done":
         return need(*call("POST", f"/api/calendar/events/{int(args['task_id'])}/done", {"date": args["date"], "done": bool(args.get("done", True))}))
     if name == "create_contact":
-        body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "instagram", "notes") if args.get(k)}
+        body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "instagram", "notes", "brand") if args.get(k)}
         if args.get("linkedin") or args.get("profile_url"):
             body["url"] = args.get("linkedin") or args.get("profile_url")
         c = need(*call("POST", "/api/calendar/contacts", body))
-        return {"id": c.get("id"), "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "instagram": c.get("instagram"), "link": c.get("url")}
+        return {"id": c.get("id"), "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "instagram": c.get("instagram"), "link": c.get("url"),
+                "brand": c.get("brand") or ""}
     if name == "update_contact":
         pid = int(args["contact_id"])
         body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "instagram") if args.get(k)}
+        if "brand" in args and args["brand"] is not None:
+            body["brand"] = args["brand"]
         if args.get("linkedin") or args.get("profile_url"):
             body["url"] = args.get("linkedin") or args.get("profile_url")
         if args.get("add_note"):
@@ -349,7 +392,7 @@ def _run_tool(call, name: str, args: dict):
         if not body:
             raise ValueError("Nothing to change.")
         c = need(*call("PUT", f"/api/calendar/contacts/{pid}", body))
-        return {"id": c.get("id"), "name": c.get("display"), "updated": sorted(body)}
+        return {"id": c.get("id"), "name": c.get("display"), "updated": sorted(body), "brand": c.get("brand") or ""}
     if name == "move_contact_stage":
         pid = int(args["contact_id"])
         person = need(*call("GET", f"/api/crm/people/{pid}"))

@@ -95,6 +95,7 @@ import re
 _PERSON_PATHS = (re.compile(r"^/api/crm/people/(\d+)(/.*)?$"), re.compile(r"^/api/calendar/contacts/(\d+)(/.*)?$"), re.compile(r"^/api/calendar/people/(\d+)(/.*)?$"))
 _FUNNEL_PATH = re.compile(r"^/api/crm/funnels/(\d+)/(board|delete|stages)$")
 _STRUCTURE_PATHS = (re.compile(r"^/api/crm/funnels/\d+/stages$"), re.compile(r"^/api/crm/funnels/stages/\d+/(rename|move-position|delete)$"))
+_FUNNEL_BRAND_PATH = re.compile(r"^/api/crm/funnels/\d+/brand$")
 _LEAD_PATH = re.compile(r"^/api/calendar/leads/(\d+)$")
 _EVENT_PATH = re.compile(r"^/api/calendar/events/(\d+)(/.*)?$")
 _COMPANY_PATH = re.compile(r"^/api/calendar/companies/(\d+)$")
@@ -140,6 +141,8 @@ def guard(path: str, method: str, body: dict):
         return denied("that funnel")
     if any(p.match(path) for p in _STRUCTURE_PATHS):
         return denied("changing funnel stages (ask the admin)")
+    if (path.startswith("/api/crm/brands") and method != "GET") or _FUNNEL_BRAND_PATH.match(path):
+        return denied("changing brands (ask the admin)")
     if path == "/api/crm/funnels/move":
         ids = body.get("person_ids") if isinstance(body.get("person_ids"), list) else []
         if any(not can_person(i) for i in ids) or (body.get("funnel_id") is not None and not can_funnel(body.get("funnel_id"))):

@@ -570,6 +570,12 @@ def crm_create_funnel():
         conn.commit()
     finally:
         conn.close()
+    if body.get("brand"):
+        from lk_calendar import brands
+        try:
+            brands.set_funnel_brand(funnel_id, body.get("brand"))
+        except Exception as exc:
+            return jsonify({"ok": True, "funnel_id": funnel_id, "warning": str(exc)})
     from lk_calendar import access, users as lk_users
     creator = lk_users.current_id()
     if creator and not access.is_full():             # the person who makes a funnel always sees it
@@ -613,6 +619,8 @@ def crm_move_to_funnel():
             lk_contacts.ensure_leads(person_ids)      # everyone in a funnel has a status per channel (new = no task)
             lk_contacts.apply_history_status(person_ids)   # already written to before joining: "email sent", dated by the last message
             lk_contacts.sync_stages(person_ids)       # people who already have statuses land in the matching stage
+            from lk_calendar import brands
+            brands.joined_funnel(person_ids, funnel_id)   # they take the funnel's brand
         except Exception:
             app.logger.exception("stage sync after funnel move failed")
     return jsonify({"ok": True})

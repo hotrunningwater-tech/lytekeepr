@@ -2,7 +2,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_from_directory
 
-from . import access, users, chat, contact_ai, contacts, google_sync, leads, profile, store
+from . import access, brands, users, chat, contact_ai, contacts, google_sync, leads, profile, store
 
 bp = Blueprint("lk_calendar", __name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -52,6 +52,7 @@ def list_events():
     if not start or not end:
         return jsonify({"error": "start and end are required"}), 400
     events = _one_per_meeting([e for e in store.occurrences(start, end) if access.can_event(e)])      # "Everything" sees the admin's Google meetings too
+    brands.meeting_brands(events)
     return jsonify({"now": store.now_local().strftime("%Y-%m-%dT%H:%M"), "events": _with_people(events), "me": users.current_id()})
 
 
@@ -65,6 +66,7 @@ def agenda():
     data = store.agenda()
     for key in ("overdue", "today", "upcoming"):
         data[key] = _with_people(_one_per_meeting([e for e in data[key] if access.can_event(e)]))
+        brands.meeting_brands(data[key])
     data["badge"] = len(data["overdue"]) + sum(1 for o in data["today"] if not o["done"])
     return jsonify(data)
 

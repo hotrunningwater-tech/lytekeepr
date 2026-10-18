@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=33">
+<link rel="stylesheet" href="styles.css?v=34">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=people1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -301,6 +301,7 @@
           <div class="crm-funnel-board-header">
             <h2 id="crmFunnelBoardTitle">Funnel</h2>
             <select class="demo-reset-input" id="crmFunnelBoardSelect" hidden></select>
+            <select class="demo-reset-input crm-funnel-brand" id="crmFunnelBrandSelect" title="The brand this funnel belongs to; its contacts take it" aria-label="Funnel brand" hidden></select>
             <div class="lks-search-pill crm-funnel-search" id="crmFunnelSearchPill" hidden><input type="search" id="crmFunnelSearchInput" placeholder="Search this funnel" autocomplete="off" aria-label="Search this funnel"></div>
             <button class="btn btn-secondary btn-small" type="button" id="crmEditStagesBtn" hidden>Edit stages</button>
             <button class="btn btn-remove btn-small" type="button" id="crmDeleteFunnelBtn" hidden>Delete</button>
@@ -394,6 +395,7 @@
           <button type="button" data-view="team" hidden>Team</button>
           <button type="button" data-view="calls" hidden>Calls (Fathom)</button>
           <button type="button" data-view="claude">Claude</button>
+          <button type="button" data-view="brands" hidden>Brands</button>
         </nav>
         <div class="lks-main" id="lksMain"></div>
       </div>
@@ -568,8 +570,8 @@
 </div>
 
 <script src="chat.js"></script>
-<script src="lk-calendar/calendar.js?v=people2"></script>
-<script src="lk-calendar/settings.js?v=ig1"></script>
+<script src="lk-calendar/calendar.js?v=brand1"></script>
+<script src="lk-calendar/settings.js?v=brand1"></script>
 <script src="lk-calendar/opportunities.js?v=lead2"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
@@ -1325,7 +1327,35 @@
       document.getElementById('crmEditStagesBtn').hidden = !selectedFunnel;
       document.getElementById('crmNewOpportunityBtn').hidden = !selectedFunnel;
       document.getElementById('crmFunnelSearchPill').hidden = !selectedFunnel;
+      fillCrmFunnelBrand(selectedFunnel);
     }
+    // The funnel's brand (admin only): everyone in the funnel takes it, and their follow-ups are filed under it.
+    var crmBrandList = null;
+    function fillCrmFunnelBrand(funnel) {
+      var sel = document.getElementById('crmFunnelBrandSelect');
+      var admin = window.lkMe && window.lkMe.role === 'admin';
+      if (!funnel || !admin) { sel.hidden = true; return; }
+      (crmBrandList ? Promise.resolve(crmBrandList) : fetch('/api/crm/brands').then(function (r) { return r.json(); }).then(function (r) { crmBrandList = r.brands || []; return crmBrandList; }))
+        .then(function (list) {
+          sel.replaceChildren();
+          var none = document.createElement('option'); none.value = ''; none.textContent = 'No brand'; sel.appendChild(none);
+          list.forEach(function (b) { var o = document.createElement('option'); o.value = b.key; o.textContent = b.name; sel.appendChild(o); });
+          sel.value = funnel.brand || '';
+          sel.dataset.funnelId = funnel.funnel_id;
+          sel.hidden = false;
+        }).catch(function () { sel.hidden = true; });
+    }
+    document.getElementById('crmFunnelBrandSelect').addEventListener('change', function () {
+      var sel = this, fid = sel.dataset.funnelId, key = sel.value;
+      fetch('/api/crm/funnels/' + fid + '/brand', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: key }) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Could not change the brand'); }); })
+        .then(function () {
+          var f = crmFunnelsData.find(function (x) { return String(x.funnel_id) === String(fid); });
+          if (f) f.brand = key;
+          loadCrmOverview();
+        })
+        .catch(function (e) { alert(e.message); });
+    });
     document.getElementById('crmFunnelSearchInput').addEventListener('input', function () {
       crmFunnelQuery = this.value.trim().replace(/^@/, '').toLowerCase();
       applyCrmFunnelSearch();

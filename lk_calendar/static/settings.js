@@ -451,6 +451,22 @@
   }
 
 
+  var brandCache = null;                              // the brands list, fetched once (cleared when Settings → Brands changes it)
+  function getBrands() {
+    return brandCache ? Promise.resolve(brandCache) : api('GET', '/api/crm/brands').then(function (r) { brandCache = r.brands; return brandCache; }).catch(function () { return []; });
+  }
+  // A contact's brand: a <select> filled once the brands arrive. In a branded funnel the brand comes from the funnel and can't be changed here.
+  function brandField(c) {
+    var fromFunnel = !!c.funnel_brand;
+    var sel = h('select', { class: 'demo-reset-input', disabled: fromFunnel, 'aria-label': 'Brand' }, [h('option', { value: '' }, 'No brand yet')]);
+    getBrands().then(function (list) {
+      list.forEach(function (b) { sel.appendChild(h('option', { value: b.key, selected: (c.funnel_brand || c.brand) === b.key }, b.name)); });
+      sel.lksStart = sel.value;
+    });
+    sel.lksFromFunnel = fromFunnel;
+    return h('div', { class: 'lks-opt' }, [h('label', {}, fromFunnel ? 'Brand (from the funnel ' + (c.funnel_name || '') + ')' : 'Brand'), sel]);
+  }
+
   var FORM_FIELDS = [['name', 'Name'], ['job_title', 'Job title / vocation'], ['url', 'URL (profile link)'], ['instagram', 'Instagram'], ['headline', 'Headline / bio'], ['phone', 'Phone / WhatsApp'],
     ['telegram', 'Telegram'], ['email', 'Email'], ['location', 'Location'], ['industry', 'Industry / type'], ['website', 'Website'], ['notes', 'Notes']];
 
@@ -467,13 +483,14 @@
       vals[f[0]] = el; return h('div', { class: 'lks-opt' + (f[0] === 'notes' || f[0] === 'headline' ? ' wide' : '') }, [h('label', {}, f[0] === 'notes' ? [f[1] + ' ', copyPill(function () { return el.value; }), expander(el, 5)] : f[1]), el]);
     });
     var company = chipField(c.company || '', { multi: false, placeholder: 'Company (leave empty for none)' });
+    var brandBox = brandField(c), brandSel = brandBox.querySelector('select');
     var rawField = h('textarea', { rows: 3, class: 'lks-rawfield', placeholder: 'Whatever you paste into the AI is copied here automatically.' }, c.raw_notes || '');
     acceptChips(company); Object.keys(vals).forEach(function (k) { acceptChips(vals[k]); });
     var err = h('p', { class: 'lks-err', hidden: true });
     var formCard = h('div', { class: 'lks-card lks-form' }, [
       page ? null : h('h2', {}, isNew ? 'New contact' : 'Edit contact'),
       h('div', { class: 'lks-opt wide' }, [h('label', {}, 'Company'), company]),
-      h('div', { class: 'lks-opts' }, inputs),
+      h('div', { class: 'lks-opts' }, [brandBox].concat(inputs)),
       h('div', { class: 'lks-opt wide' }, [h('label', {}, ['Raw notes (saved by code, exactly what you paste) ',
         copyPill(function () { return rawField.value; }), expander(rawField, 3)]), rawField]),
       err,
@@ -486,11 +503,13 @@
       formCard.classList.toggle('lks-ro', !b);
       [company].concat(Object.keys(vals).map(function (k) { return vals[k]; })).forEach(function (el) { if (el.lksChips) el.classList.toggle('lks-ro', !b); else el.readOnly = !b; });
       rawField.readOnly = !b;
+      brandSel.disabled = !b || brandSel.lksFromFunnel;
     }
     function save() {
       var body = { company: company.value.trim(), channel: c.channel || '', batch: c.batch || '' };
       Object.keys(vals).forEach(function (k) { body[k] = vals[k].value; });
       body.raw_notes = rawField.value;
+      if (!brandSel.lksFromFunnel && brandSel.value !== (brandSel.lksStart || '')) body.brand = brandSel.value;      // only a change is sent
       if (isNew && body.company === '' && c.company_id && !c.company) body.company_id = c.company_id;      // only a company that never had a name; a name you cleared stays cleared
       if (!isNew) delete body.channel;
       err.hidden = true;
@@ -664,6 +683,7 @@
     return api('GET', '/api/me').then(function (r) {
       me = r; window.lkMe = r; showChip(r);
       var tb = nav.querySelector('[data-view=team]'); if (tb) tb.hidden = r.role !== 'admin';      // admin only
+      var bb = nav.querySelector('[data-view=brands]'); if (bb) bb.hidden = r.role !== 'admin';     // admin only
       var cb = nav.querySelector('[data-view=calls]'); if (cb) cb.hidden = false;                  // everyone: their own Fathom
       return r;
     }).catch(function () { return null; });
@@ -710,7 +730,7 @@
   function showSettings(view) {
     currentSettingsView = view;
     nav.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.view === view); });
-    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else if (view === 'claude') claudeView(); else detailsView();
+    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else if (view === 'claude') claudeView(); else if (view === 'brands') brandsView(); else detailsView();
   }
   nav.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { showSettings(b.dataset.view); }); });
 
@@ -817,6 +837,38 @@
   }
 
   /* Claude: use LyteKeepr from the Claude app (phone or web). The address to add as a connector, and who is connected. */
+  /* Brands: the businesses this account runs. Funnels, contacts and calendar items each belong to one. */
+  function brandsView() {
+    main.replaceChildren();
+    var card = h('div', { class: 'lks-card' }, [h('h2', {}, 'Brands'), h('p', {}, 'Loading…')]);
+    main.appendChild(card);
+    var err = h('p', { class: 'lks-err', hidden: true });
+    function show(e) { err.hidden = false; err.textContent = e.message; }
+    api('GET', '/api/crm/brands').then(function (r) {
+      brandCache = r.brands;
+      var rows = r.brands.map(function (b) {
+        var color = h('input', { type: 'color', value: b.color, class: 'lks-brand-color', 'aria-label': 'Colour of ' + b.name });
+        var name = h('input', { type: 'text', value: b.name, 'aria-label': 'Brand name' });
+        color.addEventListener('change', function () { api('PUT', '/api/crm/brands/' + encodeURIComponent(b.key), { color: color.value }).then(function () { brandCache = null; }).catch(show); });
+        name.addEventListener('change', function () { api('PUT', '/api/crm/brands/' + encodeURIComponent(b.key), { name: name.value }).then(function () { brandCache = null; }).catch(function (e) { name.value = b.name; show(e); }); });
+        var del = h('button', { class: 'btn lks-soft btn-small', type: 'button', onclick: function () {
+          askConfirm('Delete the brand “' + b.name + '”? Only possible when no funnel, contact or calendar item uses it.', 'Delete').then(function (yes) {
+            if (yes) api('POST', '/api/crm/brands/' + encodeURIComponent(b.key) + '/delete').then(function () { brandCache = null; brandsView(); }).catch(show);
+          });
+        } }, 'Delete');
+        return h('div', { class: 'lks-row lks-brand-row' }, [color, name, del]);
+      });
+      var newName = h('input', { type: 'text', placeholder: 'New brand, e.g. Windowly' });
+      var add = h('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: function () {
+        if (!newName.value.trim()) return;
+        api('POST', '/api/crm/brands', { name: newName.value }).then(function () { brandCache = null; brandsView(); }).catch(show);
+      } }, 'Add brand');
+      card.replaceChildren.apply(card, [h('h2', {}, 'Brands'),
+        h('p', {}, 'The businesses you run from this account. Each funnel belongs to a brand and its contacts take that brand; contacts outside funnels get theirs on the contact. Follow-ups and tasks are filed under the contact\'s brand. You can also ask Claude to assign brands.')]
+        .concat(rows, [h('div', { class: 'lks-row lks-brand-row' }, [newName, add]), err]));
+    }).catch(function (e) { card.replaceChildren(h('h2', {}, 'Brands'), h('p', {}, e.message)); });
+  }
+
   function claudeView() {
     main.replaceChildren();
     var card = h('div', { class: 'lks-card' }, [h('h2', {}, 'Claude'), h('p', {}, 'Loading…')]);

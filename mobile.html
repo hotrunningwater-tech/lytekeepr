@@ -229,13 +229,14 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
 (function () {
   'use strict';
   var PREFIX = window.LK_PREFIX || '';
-  var PROJECTS = { lytekeepr: 'LyteKeepr', aspan: 'Aspan CRM', nexy: 'Nexy', google: 'Google' };
+  var PROJECTS = { lytekeepr: 'LyteKeepr', aspan: 'Aspan', nexy: 'Nexy', google: 'Google' };       // brands (loaded from the server) + the Google source
+  var COLORS = { lytekeepr: '#7fa8b8', aspan: '#e98b74', nexy: '#21493f', google: '#7b6fa8' };
   var CH = { linkedin: 'LinkedIn', instagram: 'Instagram', email: 'Email' };
   var $ = function (id) { return document.getElementById(id); };
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function initials(n) { return String(n || '?').trim().split(/\s+/).map(function (w) { return w[0]; }).slice(0, 2).join('').toUpperCase(); }
-  function dot(p) { return '<i class="dot p-' + (PROJECTS[p] ? p : 'lytekeepr') + '"></i>'; }
+  function dot(p) { return '<i class="dot" style="background:' + esc(COLORS[p] || '#9aa7ad') + '"></i>'; }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function toUTC(iso) { var p = iso.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
   function fmt(d) { return d.toISOString().slice(0, 10); }
@@ -268,7 +269,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
     list.forEach(function (e) {
       if (e.lead && e.lead.bucket === 'cold') {
         if (e.done) return;
-        var key = e.date + ':' + e.lead.channel + ':' + kindOf(e), g = groups[key];
+        var key = e.date + ':' + e.lead.channel + ':' + kindOf(e) + ':' + e.project, g = groups[key];
         if (!g) { g = groups[key] = { group: true, id: 'g' + key, date: e.date, project: e.project, untimed: 1, start_time: '08:00', members: [], gkind: kindOf(e), channel: e.lead.channel }; out.push(g); }
         g.members.push(e);
       } else out.push(e);
@@ -773,8 +774,10 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
   function refresh() {
     state.eventsCache = {};
     return Promise.all([api('GET', '/api/calendar/agenda'), api('GET', '/api/calls/attention').catch(function () { return { ready: [], missing: [] }; }),
-                        api('GET', '/api/crm/suggestions').catch(function () { return { suggestions: [] }; })])
+                        api('GET', '/api/crm/suggestions').catch(function () { return { suggestions: [] }; }),
+                        api('GET', '/api/crm/brands').catch(function () { return null; })])
       .then(function (r) {
+        if (r[3] && r[3].brands) r[3].brands.concat(r[3].sources || []).forEach(function (b) { PROJECTS[b.key] = b.name; COLORS[b.key] = b.color; });
         state.agenda = r[0]; state.calls = r[1] || { ready: [], missing: [] }; state.suggestions = (r[2] && r[2].suggestions) || [];
         state.now = r[0].now; state.today = r[0].now.slice(0, 10);
         if (!state.cal.anchor) { state.cal.anchor = state.today; state.cal.sel = state.today; }

@@ -23,7 +23,7 @@ from urllib.parse import unquote
 
 from crm import db as crm
 
-from . import leads, store
+from . import brands, leads, store
 
 FIELDS = [   # key, label  (business_name becomes the company; status/dates feed the funnel entry)
     ("name", "Name"), ("url", "URL (profile link)"), ("business_name", "Business name"), ("job_title", "Job title"),
@@ -383,7 +383,7 @@ def _account_link(a) -> str:
 
 
 def contact_dict(conn, pid: int) -> dict | None:
-    r = conn.execute("""SELECT p.*, co.company_name, fn.name AS funnel_name, fs.name AS stage_name FROM people p
+    r = conn.execute("""SELECT p.*, co.company_name, fn.name AS funnel_name, fn.brand AS funnel_brand, fs.name AS stage_name FROM people p
                         LEFT JOIN companies co ON co.company_id = p.company_id LEFT JOIN funnels fn ON fn.funnel_id = p.funnel_id
                         LEFT JOIN funnel_stages fs ON fs.stage_id = p.funnel_stage_id WHERE p.person_id = ?""", (pid,)).fetchone()
     if not r:
@@ -403,6 +403,7 @@ def contact_dict(conn, pid: int) -> dict | None:
         d["email"] = next((a["channel_identifier"] for a in accts if a["channel"] == "email" and "@" in (a["channel_identifier"] or "")), "")
     d["instagram"] = next(("@" + a["channel_identifier"] for a in accts if a["channel"] == "instagram" and a["channel_identifier"]
                            and not a["channel_identifier"].startswith("name:")), "")
+    d["brand"], d["funnel_brand"] = d.get("brand") or "", d.get("funnel_brand") or ""      # funnel_brand set = the brand comes from the funnel
     d["display"] = d["name"] or d["company"] or "(no name)"
     d["funnels"] = [{"channel": d["funnel_name"], "status": d["stage_name"] or "", "status_date": ""}] if d.get("funnel_id") else []
     return d
@@ -666,6 +667,7 @@ def _set_instagram(conn, person_id: int, handle: str, name: str) -> None:
 
 def create_contact(data: dict) -> dict:
     check_formats(data)
+    brand = brands.resolve(data.get("brand")) if data.get("brand") else ""      # checked before anything is saved
     handle = instagram_handle(data.get("instagram"))
     if handle and not str(data.get("name", "")).strip() and not str(data.get("company", "")).strip():
         data = {**data, "name": "@" + handle}                        # known only by their handle (like imported Instagram leads)
@@ -689,11 +691,16 @@ def create_contact(data: dict) -> dict:
         _ensure_email_account(conn, pid, str(data.get("email", "")), str(data.get("name", "")) or company_name)
         if handle:
             _set_instagram(conn, pid, handle, str(data.get("name", "")) or "@" + handle)
+        if brand:
+            conn.execute("UPDATE people SET brand = ? WHERE person_id = ?", (brand, pid))
         return contact_dict(conn, pid)
 
 
 def update_contact(contact_id: int, data: dict) -> dict | None:
     check_formats(data)
+    if "brand" in data and get_contact(contact_id):
+        if (data.get("brand") or "") != brands.person_brand(contact_id):
+            brands.set_person_brand(contact_id, data.get("brand"))       # refuses a brand that clashes with the contact's funnel
     with _crm() as conn:
         cur = conn.execute("SELECT * FROM people WHERE person_id = ?", (contact_id,)).fetchone()
         if not cur:
@@ -871,7 +878,7 @@ def _ensure_lead(person_id: int, channel: str) -> int:
             return existing["id"]
         return conn.execute("""INSERT INTO leads (channel, project, contact, status, status_date, follow_up_date, url, notes, updated_at, person_id)
                                VALUES (?, ?, ?, 'new', ?, '', ?, '', ?, ?)""",
-                            (channel, leads.CHANNELS[channel]["project"], contact, store.now_local().date().isoformat(), url,
+                            (channel, brands.lead_project(person_id, channel), contact, store.now_local().date().isoformat(), url,
                              store.now_local().isoformat(), person_id)).lastrowid
 
 

@@ -28,7 +28,6 @@ _sent: deque = deque()
 _sent_lock = threading.Lock()
 _pending: dict[str, dict] = {}   # confirmation id -> staged action (single user, in memory)
 
-PROJECT_ENUM = [p for p in store.PROJECTS if p != 'google']   # 'google' rows only come from the Google sync
 _DATE = {"type": "string", "description": "Date as YYYY-MM-DD (Montreal time)."}
 _TIME = {"type": "string", "description": "24-hour time HH:MM, e.g. 14:30."}
 
@@ -45,8 +44,8 @@ TOOLS = [
     _tool("create_event",
           "Create a task, meeting or reminder. Use repeat 'daily', 'weekdays' or 'weekly' (with repeat_days) for recurring items.",
           {"title": {"type": "string"},
-           "project": {"type": "string", "enum": PROJECT_ENUM,
-                       "description": "lytekeepr, aspan (Aspan CRM) or nexy. Default lytekeepr if not stated."},
+           "project": {"type": "string",
+                       "description": "The brand key (e.g. lytekeepr, aspan, nexy). Default lytekeepr if not stated."},
            "kind": {"type": "string", "enum": list(store.KINDS)},
            "date": _DATE, "time": _TIME,
            "no_specific_time": {"type": "boolean", "description": "True for to-dos that belong to the day but have no clock time (shown in the top strip). Time is then ignored."},
@@ -59,7 +58,7 @@ TOOLS = [
           "Change an existing item (get its id from list_events/get_agenda). Only pass fields to change. "
           "For a repeating item this changes the whole series; date is the series start.",
           {"event_id": {"type": "integer"}, "title": {"type": "string"},
-           "project": {"type": "string", "enum": PROJECT_ENUM}, "kind": {"type": "string", "enum": list(store.KINDS)},
+           "project": {"type": "string", "description": "The brand key"}, "kind": {"type": "string", "enum": list(store.KINDS)},
            "date": _DATE, "time": _TIME, "duration_min": {"type": "integer"},
            "repeat": {"type": "string", "enum": list(store.REPEATS)},
            "repeat_days": {"type": "array", "items": {"type": "integer"}}, "notes": {"type": "string"}},

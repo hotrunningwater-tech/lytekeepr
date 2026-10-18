@@ -325,6 +325,8 @@ def _after_change(conn, lead: dict) -> None:
         from . import contacts
         person_id = contacts.link_lead(conn, lead)
         if person_id:
+            from . import brands
+            brands.file_lead(conn, lead, person_id)      # its tasks are filed under the contact's brand
             contacts.sync_stage(conn, person_id)
     except Exception:
         logging.getLogger(__name__).exception("could not update the CRM for lead %s", lead.get("id"))
