@@ -142,7 +142,7 @@
   }
 
   function addBox(o) {
-    var q = h('input', { type: 'text', placeholder: 'Add a person: type a name, company or email', autocomplete: 'off' });
+    var q = h('input', { type: 'text', placeholder: 'Search contacts to add: name, company or email', autocomplete: 'off' });
     var res = h('div', { class: 'lko-suggest' });
     var t = null;
     function add(id) { refreshWith(api('POST', '/api/crm/opportunities/' + o.opportunity_id + '/participants', { contact_id: id })); }
