@@ -51,7 +51,7 @@
   function noteItem(n, refresh) {
     var text = h('div', { class: 'lko-note-text' }, n.text);
     return h('div', { class: 'lko-note' }, [
-      h('div', { class: 'lko-note-head' }, [h('small', {}, stamp(n.happened_at) + (n.who ? ' · ' + n.who : '')), editTools(n, text, refresh)]), text]);
+      h('div', { class: 'lko-note-head' }, [h('small', {}, stamp(n.happened_at) + (n.who ? ' · by ' + n.who : '')), n.mine ? editTools(n, text, refresh) : null]), text]);
   }
   function editTools(n, textEl, refresh) {
     return h('span', {}, [
@@ -101,7 +101,7 @@
     var with_ = (m.people || []).map(function (p) { return p.name; });
     var extra = [showPeople && with_.length ? 'With ' + with_.join(', ') : '', m.opportunity ? 'About: ' + m.opportunity : ''].filter(Boolean).join(' · ');
     return h('div', { class: 'crm-detail-message is-logged' }, [meta, extra ? h('p', { class: 'crm-call-who' }, extra) : null, text,
-      refresh ? editTools({ record_id: m.record_id, text: m.message_text, kind: 'conversation' }, text, refresh) : null]);
+      refresh && m.mine ? editTools({ record_id: m.record_id, text: m.message_text, kind: 'conversation' }, text, refresh) : null]);
   }
 
   /* ---------- an opportunity's combined history ---------- */

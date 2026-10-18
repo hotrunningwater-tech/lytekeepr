@@ -70,7 +70,28 @@ def _crm():
     from .contacts import _crm as crm
     with crm() as conn:
         conn.executescript(SCHEMA)
+        for table in ("docs", "doc_folders", "doc_tabs"):      # who created it (added later: older rows have none = the admin's)
+            have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+            if "created_by_id" not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN created_by_id INTEGER")
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
         yield conn
+
+
+def _me() -> tuple:
+    from . import users
+    return _who(), users.current_id()
+
+
+def _mine(row) -> bool:
+    """Only whoever created something (or the admin) may delete it."""
+    from . import users
+    return users.is_admin() or (row["created_by_id"] is not None and row["created_by_id"] == users.current_id())
+
+
+def _must_be_mine(row, what: str) -> None:
+    if not _mine(row):
+        raise DocError(f"Only {row['created_by'] or 'whoever created it'} or the admin can delete this {what}.")
 
 
 def _now() -> str:
@@ -78,12 +99,8 @@ def _now() -> str:
 
 
 def _who() -> str:
-    try:
-        from flask import g
-        user = getattr(g, "user", None) or {}
-        return user.get("name") or user.get("email") or ""
-    except RuntimeError:
-        return ""
+    from .opportunities import _actor
+    return _actor()
 
 
 # ------------------------------------------------------------------ where things live, and who may see them
@@ -197,7 +214,7 @@ def tree(brand=None, funnel_id=None) -> dict:
     with _crm() as conn:
         cond, args = ("funnel_id = ?", [fid]) if fid else ("funnel_id IS NULL AND brand = ?", [key])
         folders = [dict(r) for r in conn.execute(f"SELECT folder_id, parent_id, name, updated_at FROM doc_folders WHERE {cond} AND deleted_at = '' ORDER BY lower(name)", args)]
-        docs = [dict(r) for r in conn.execute(f"""SELECT doc_id, folder_id, title, updated_at, length(body) AS chars FROM docs WHERE {cond} AND deleted_at = ''
+        docs = [dict(r) for r in conn.execute(f"""SELECT doc_id, folder_id, title, created_by, updated_at, length(body) AS chars FROM docs WHERE {cond} AND deleted_at = ''
                                                   ORDER BY lower(title)""", args)]
         tabs: dict = {}
         if docs:
@@ -236,11 +253,11 @@ def _section(text: str, section) -> str | None:
 def read(doc_id, tab=None, section=None) -> dict:
     with _crm() as conn:
         d = _doc(conn, doc_id)
-        tabs = [dict(r) for r in conn.execute("SELECT tab_id, name, body, updated_at FROM doc_tabs WHERE doc_id = ? AND deleted_at = '' ORDER BY position, tab_id", (d["doc_id"],))]
+        tabs = [dict(r) for r in conn.execute("SELECT tab_id, name, body, updated_at, created_by FROM doc_tabs WHERE doc_id = ? AND deleted_at = '' ORDER BY position, tab_id", (d["doc_id"],))]
         where = _where(conn, d["brand"], d["funnel_id"], d["folder_id"])
         t = _tab(conn, d["doc_id"], tab)
     out = {"doc_id": d["doc_id"], "title": d["title"], "where": where, "brand": d["brand"], "funnel_id": d["funnel_id"], "folder_id": d["folder_id"],
-           "updated_at": d["updated_at"], "updated_by": d["updated_by"]}
+           "created_by": d["created_by"], "updated_at": d["updated_at"], "updated_by": d["updated_by"]}
     if t or section:
         text = t["body"] if t else d["body"]
         if section:
@@ -310,8 +327,9 @@ def create_folder(name: str, brand=None, funnel_id=None, parent_id=None) -> dict
         else:
             key, fid = scope(brand, funnel_id)
             _need(key, fid)
-        cur = conn.execute("INSERT INTO doc_folders (brand, funnel_id, parent_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-                           (key, fid, int(parent_id) if parent_id else None, name, _now(), _now()))
+        who, uid = _me()
+        cur = conn.execute("INSERT INTO doc_folders (brand, funnel_id, parent_id, name, created_at, updated_at, created_by, created_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                           (key, fid, int(parent_id) if parent_id else None, name, _now(), _now(), who, uid))
         return {"folder_id": cur.lastrowid, "name": name, "where": _where(conn, key, fid, int(parent_id) if parent_id else None)}
 
 
@@ -356,9 +374,14 @@ def delete_folder(folder_id, with_contents: bool = False) -> dict:
     """An empty folder goes at once; one with things in it only with with_contents (everything inside goes too). Kept in the database, marked deleted."""
     with _crm() as conn:
         f = _folder(conn, folder_id)
+        _must_be_mine(f, "folder")
         ids = [f["folder_id"]] + _descendants(conn, f["folder_id"])
         marks = ",".join("?" for _ in ids)
         n_docs = conn.execute(f"SELECT COUNT(*) FROM docs WHERE folder_id IN ({marks}) AND deleted_at = ''", ids).fetchone()[0]
+        for x in conn.execute(f"SELECT * FROM doc_folders WHERE folder_id IN ({marks}) AND deleted_at = ''", ids).fetchall() + \
+                conn.execute(f"SELECT * FROM docs WHERE folder_id IN ({marks}) AND deleted_at = ''", ids).fetchall():
+            if not _mine(x):                              # someone else's things inside: they stay theirs to delete
+                raise DocError(f"This folder holds things {x['created_by'] or 'someone else'} created; only they or the admin can delete those.")
         if (n_docs or len(ids) > 1) and not with_contents:
             raise DocError(f"“{f['name']}” has {len(ids) - 1} folder(s) and {n_docs} document(s) inside. Confirm deleting it with everything in it.")
         now = _now()
@@ -379,13 +402,15 @@ def create_doc(title: str, brand=None, funnel_id=None, folder_id=None, content: 
         else:
             key, fid = scope(brand, funnel_id)
             _need(key, fid)
-        cur = conn.execute("INSERT INTO docs (brand, funnel_id, folder_id, title, body, created_at, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                           (key, fid, int(folder_id) if folder_id else None, title, (content or "")[:MAX_TEXT], _now(), _now(), _who()))
+        who, uid = _me()
+        cur = conn.execute("""INSERT INTO docs (brand, funnel_id, folder_id, title, body, created_at, updated_at, updated_by, created_by, created_by_id)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (key, fid, int(folder_id) if folder_id else None, title, (content or "")[:MAX_TEXT], _now(), _now(), who, who, uid))
         doc_id = cur.lastrowid
         for i, t in enumerate(tabs or []):
             if (t.get("name") or "").strip():
-                conn.execute("INSERT INTO doc_tabs (doc_id, name, body, position, updated_at) VALUES (?, ?, ?, ?, ?)",
-                             (doc_id, t["name"].strip()[:200], (t.get("content") or "")[:MAX_TEXT], i, _now()))
+                conn.execute("INSERT INTO doc_tabs (doc_id, name, body, position, updated_at, created_by, created_by_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (doc_id, t["name"].strip()[:200], (t.get("content") or "")[:MAX_TEXT], i, _now(), who, uid))
         return {"doc_id": doc_id, "title": title, "where": _where(conn, key, fid, int(folder_id) if folder_id else None)}
 
 
@@ -409,6 +434,7 @@ def update_doc(doc_id, title=None, folder_id=None, brand=None, funnel_id=None, t
 def delete_doc(doc_id) -> dict:
     with _crm() as conn:
         d = _doc(conn, doc_id)
+        _must_be_mine(d, "document")
         conn.execute("UPDATE docs SET deleted_at = ? WHERE doc_id = ?", (_now(), d["doc_id"]))
         return {"deleted": d["title"]}
 
@@ -464,7 +490,9 @@ def create_tab(doc_id, name: str, content: str = "", position=None) -> dict:
         if conn.execute("SELECT 1 FROM doc_tabs WHERE doc_id = ? AND lower(name) = lower(?) AND deleted_at = ''", (d["doc_id"], name)).fetchone():
             raise DocError(f"This document already has a tab “{name}”.")
         tabs = [r["tab_id"] for r in conn.execute("SELECT tab_id FROM doc_tabs WHERE doc_id = ? AND deleted_at = '' ORDER BY position, tab_id", (d["doc_id"],))]
-        cur = conn.execute("INSERT INTO doc_tabs (doc_id, name, body, position, updated_at) VALUES (?, ?, ?, ?, ?)", (d["doc_id"], name, (content or "")[:MAX_TEXT], len(tabs), _now()))
+        who, uid = _me()
+        cur = conn.execute("INSERT INTO doc_tabs (doc_id, name, body, position, updated_at, created_by, created_by_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                           (d["doc_id"], name, (content or "")[:MAX_TEXT], len(tabs), _now(), who, uid))
         if position is not None:
             _reorder(conn, d["doc_id"], cur.lastrowid, int(position))
         conn.execute("UPDATE docs SET updated_at = ?, updated_by = ? WHERE doc_id = ?", (_now(), _who(), d["doc_id"]))
@@ -499,6 +527,7 @@ def delete_tab(doc_id, tab) -> dict:
         t = _tab(conn, d["doc_id"], tab)
         if t is None:
             raise DocError("Which tab?")
+        _must_be_mine(t, "tab")
         conn.execute("UPDATE doc_tabs SET deleted_at = ? WHERE tab_id = ?", (_now(), t["tab_id"]))
         return {"deleted_tab": t["name"]}
 

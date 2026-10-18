@@ -85,6 +85,7 @@ def _can(person_id) -> bool:
 
 def _row(conn, r) -> dict:
     d = dict(r)
+    d["mine"] = _mine(r)                              # may this person change or delete it
     others = [x["person_id"] for x in conn.execute("SELECT person_id FROM contact_record_people WHERE record_id = ?", (d["record_id"],))]
     ids = [d["person_id"]] + [p for p in others if p != d["person_id"]]
     names = {x["person_id"]: x["name"] for x in conn.execute(f"SELECT person_id, name FROM people WHERE person_id IN ({','.join('?' for _ in ids)})", ids)}
@@ -98,10 +99,18 @@ def _row(conn, r) -> dict:
     return d
 
 
+def _mine(r) -> bool:
+    """Only whoever saved a note or conversation (or the admin) may change or delete it."""
+    from . import users
+    return users.is_admin() or (r["user_id"] is not None and r["user_id"] == users.current_id())
+
+
 def _record(conn, record_id) -> dict:
     r = conn.execute("SELECT * FROM contact_records WHERE record_id = ? AND deleted_at = ''", (int(record_id),)).fetchone()
     if not r or not _can(r["person_id"]):
         raise RecordError("No such note.")
+    if not _mine(r):
+        raise RecordError(f"Only {r['who'] or 'whoever saved it'} or the admin can change or delete this.")
     return dict(r)
 
 
@@ -181,7 +190,7 @@ def as_message(r: dict) -> dict:
     """A logged conversation shaped like the other entries of a communication history."""
     return {"message_id": f"record:{r['record_id']}", "record_id": r["record_id"], "channel": r["channel"] or "conversation", "logged": True,
             "direction": "logged", "sender": r["who"] or "", "message_text": r["text"], "timestamp": r["happened_at"],
-            "people": r["people"], "opportunity_id": r["opportunity_id"], "opportunity": r.get("opportunity", "")}
+            "people": r["people"], "opportunity_id": r["opportunity_id"], "opportunity": r.get("opportunity", ""), "mine": r.get("mine", False)}
 
 
 def person_history(person_id: int) -> list:

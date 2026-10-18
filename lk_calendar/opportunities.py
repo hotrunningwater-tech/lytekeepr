@@ -71,10 +71,14 @@ def _now() -> str:
 
 
 def _actor() -> str:
+    """Who is doing this, for the "by …" tags: their name, else their email; the admin without either gets their signing name or "Admin"."""
     try:
         from flask import g
         user = getattr(g, "user", None) or {}
-        return user.get("name") or user.get("email") or ""
+        name = user.get("name") or user.get("email") or ""
+        if not name and (not user or user.get("role") == "admin"):
+            name = store.get_setting("sender_name").strip() or "Admin"
+        return name
     except RuntimeError:
         return ""
 

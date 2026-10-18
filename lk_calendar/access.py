@@ -156,6 +156,13 @@ def can_event(event: dict) -> bool:
     return event.get("owner_id") is not None and event.get("owner_id") == (_current() or {}).get("id")      # incl. their own Google Calendar
 
 
+def _added_by_me(person_id) -> bool:
+    from . import contacts
+    with contacts._crm() as conn:
+        row = conn.execute("SELECT owner_id FROM people WHERE person_id = ?", (int(person_id),)).fetchone()
+    return bool(row and row["owner_id"] is not None and row["owner_id"] == users.current_id())
+
+
 def can_company(company_id) -> bool:
     ids = person_ids()
     if ids is None:
@@ -167,6 +174,11 @@ def can_company(company_id) -> bool:
 
 def guard(path: str, method: str, body: dict):
     """A 403 response when this request touches something the person may not see, else None. Admins and full-access people pass at once."""
+    if not users.is_admin():                     # deleting a contact (and its messages) is for the admin or whoever added it, whatever their access
+        removing = (method == "DELETE" and re.match(r"^/api/calendar/contacts/(\d+)$", path)) or re.match(r"^/api/crm/people/(\d+)/delete$", path)
+        gone = int(removing.group(1)) if removing else (int((body or {}).get("merge_person_id") or 0) if path == "/api/crm/people/merge" else 0)
+        if gone and not _added_by_me(gone):
+            return jsonify({"error": "Only the admin or whoever added this contact can delete it (or merge it away)."}), 403
     if is_full() or not path.startswith(("/api/crm/", "/api/calendar/")):
         return None
     for pattern in _PERSON_PATHS:

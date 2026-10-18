@@ -55,7 +55,7 @@
     return [
       h('button', { class: 'lko-link', type: 'button', onclick: function () { state.doc = null; render(); } }, '← All documents'),
       h('h2', { class: 'lkd-title' }, d.title),
-      h('p', { class: 'lks-note' }, d.where + ' · updated ' + when(d.updated_at) + (d.updated_by ? ' by ' + d.updated_by : '')),
+      h('p', { class: 'lks-note' }, d.where + (d.created_by ? ' · created by ' + d.created_by : '') + ' · updated ' + when(d.updated_at) + (d.updated_by ? ' by ' + d.updated_by : '')),
       tabs.length > 1 ? h('div', { class: 'demo-reset-tabs lkd-tabs' }, tabs.map(function (t) {
         return h('button', { type: 'button', class: 'demo-reset-tab' + (state.tab === t.key ? ' is-active' : ''), onclick: function () { state.tab = t.key; render(); } }, t.name);
       })) : null,
