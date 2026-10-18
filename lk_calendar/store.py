@@ -189,6 +189,13 @@ CREATE TABLE IF NOT EXISTS funnel_shares (
     PRIMARY KEY (user_id, funnel_id)
 );
 
+CREATE TABLE IF NOT EXISTS brand_access (
+  user_id INTEGER NOT NULL,
+  brand TEXT NOT NULL,
+  scope TEXT NOT NULL,           -- 'all' = the whole brand; 'funnels' = only the funnels of that brand shared with them
+  PRIMARY KEY (user_id, brand)
+);
+
 CREATE TABLE IF NOT EXISTS brands (
   key TEXT PRIMARY KEY,
   name TEXT NOT NULL,

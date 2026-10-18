@@ -103,6 +103,7 @@ def delete(key: str) -> None:
                                     "or outreach records. Move them to another brand first.")
     with store._conn() as conn:
         conn.execute("DELETE FROM brands WHERE key = ?", (key,))
+        conn.execute("DELETE FROM brand_access WHERE brand = ?", (key,))
 
 
 # ------------------------------------------------------------------ contacts and funnels
@@ -230,7 +231,9 @@ def register(app):
 
     @app.get("/api/crm/brands")
     def brands_list():
-        return jsonify({"brands": all_brands(), "sources": [{"key": "google", "name": "Google", "color": "#7b6fa8"}]})
+        from . import access
+        return jsonify({"brands": [b for b in all_brands() if access.brand_allowed(b["key"])],      # a member sees only their brands
+                        "sources": [{"key": "google", "name": "Google", "color": "#7b6fa8"}]})
 
     @app.post("/api/crm/brands")
     def brands_create():

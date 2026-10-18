@@ -142,7 +142,37 @@ def list_users() -> list[dict]:
         shares: dict = {}
         for r in conn.execute("SELECT user_id, funnel_id FROM funnel_shares"):
             shares.setdefault(r["user_id"], []).append(r["funnel_id"])
-        return [{**_public(r), "funnel_ids": sorted(shares.get(r["id"], []))} for r in conn.execute("SELECT * FROM users ORDER BY role = 'admin' DESC, email")]
+        scopes: dict = {}
+        for r in conn.execute("SELECT user_id, brand, scope FROM brand_access"):
+            scopes.setdefault(r["user_id"], {})[r["brand"]] = r["scope"]
+        return [{**_public(r), "funnel_ids": sorted(shares.get(r["id"], [])), "brands": scopes.get(r["id"], {})}
+                for r in conn.execute("SELECT * FROM users ORDER BY role = 'admin' DESC, email")]
+
+
+BRAND_SCOPES = ("all", "funnels")
+
+
+def brand_access(user_id: int) -> dict:
+    """{brand key: 'all' | 'funnels'} for a team member. Empty = brands not chosen for them yet: their shared funnels decide, as before."""
+    with store._conn() as conn:
+        return {r["brand"]: r["scope"] for r in conn.execute("SELECT brand, scope FROM brand_access WHERE user_id = ?", (user_id,))}
+
+
+def set_brand_access(user_id: int, scopes: dict) -> dict:
+    """Which brands a member may see: 'all' = the whole brand, 'funnels' = only that brand's funnels shared with them. A brand left out is blocked."""
+    _must_be_user(user_id)
+    keys = set(store.brand_keys())
+    clean = {}
+    for k, v in (scopes or {}).items():
+        if k not in keys:
+            raise store.ValidationError(f"no such brand: {k}")
+        if v not in BRAND_SCOPES:
+            raise store.ValidationError("each brand is 'all' or 'funnels'")
+        clean[k] = v
+    with store._conn() as conn:
+        conn.execute("DELETE FROM brand_access WHERE user_id = ?", (user_id,))
+        conn.executemany("INSERT INTO brand_access (user_id, brand, scope) VALUES (?, ?, ?)", [(user_id, k, v) for k, v in clean.items()])
+    return clean
 
 
 def funnels_shared_with(user_id: int) -> set:
@@ -224,6 +254,7 @@ def remove_user(user_id: int) -> None:
     row = _must_be_user(user_id)
     with store._conn() as conn:
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.execute("DELETE FROM brand_access WHERE user_id = ?", (user_id,))
     from profiles.store import get_active_profile_id
     from . import directory
     directory.remove_member(row["email"], get_active_profile_id())
@@ -294,7 +325,8 @@ def register(app):
         crm_db.init_db()
         conn = crm_db.get_connection()
         try:
-            return jsonify({"funnels": [{"funnel_id": f["funnel_id"], "name": f["name"], "people_count": f["people_count"]} for f in crm_db.list_funnels(conn)]})
+            return jsonify({"funnels": [{"funnel_id": f["funnel_id"], "name": f["name"], "people_count": f["people_count"], "brand": f["brand"] or ""}
+                                        for f in crm_db.list_funnels(conn)]})
         finally:
             conn.close()
 
@@ -303,6 +335,12 @@ def register(app):
     def team_access(user_id):
         body = request.get_json(silent=True) or {}
         return jsonify({"user": set_access(user_id, str(body.get("access", "")))})
+
+    @app.post("/api/team/<int:user_id>/brands")
+    @_guarded
+    def team_set_brands(user_id):
+        body = request.get_json(silent=True) or {}
+        return jsonify({"brands": set_brand_access(user_id, body.get("brands") or {})})
 
     @app.post("/api/team/<int:user_id>/funnels")
     @_guarded

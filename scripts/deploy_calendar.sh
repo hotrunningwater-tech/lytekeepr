@@ -49,6 +49,14 @@ if ! python3 scripts/check_isolation.py > /tmp/lk-isolation.log 2>&1; then
   exit 1
 fi
 grep "PASSED" /tmp/lk-isolation.log
+# Never ship code that lets a team member see a brand they are blocked from.
+echo "Checking brand access..."
+if ! python3 scripts/check_brands.py > /tmp/lk-brands.log 2>&1; then
+  grep -E "FAILED|REFUSED|Error" /tmp/lk-brands.log | head -20
+  echo "Deploy stopped: the brand check did not pass (full output in /tmp/lk-brands.log)."
+  exit 1
+fi
+grep "PASSED" /tmp/lk-brands.log
 rsync -az --delete --filter="merge $FILTER" ./ "$HOST:$DEST"
 ssh "$HOST" 'chown -R lkcal:lkcal /opt/lytekeepr-calendar/app &&
   su -s /bin/bash lkcal -c "cd /opt/lytekeepr-calendar && venv/bin/pip install -q --disable-pip-version-check -r app/requirements.txt" &&

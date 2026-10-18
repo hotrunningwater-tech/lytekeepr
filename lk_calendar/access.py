@@ -2,6 +2,13 @@
 
 The admin, and anyone the admin gave "Everything", see the whole database. Everyone else sees the contacts in the funnels that were
 shared with them, plus the contacts they added themselves. The rule lives here, in one place; the routes only ask these functions.
+
+Brands come first once the admin chooses them for a member (Settings → Team):
+- a brand set to "all" shows its whole brand: every funnel and contact of that brand;
+- a brand set to "funnels" shows only that brand's funnels shared with them;
+- a brand not chosen is blocked: none of its funnels or contacts, even if a funnel of it was shared;
+- funnels with no brand still follow sharing; contacts of a blocked brand are hidden everywhere (also on shared opportunities).
+Until brands are chosen for a member, their shared funnels decide, exactly as before.
 """
 
 from flask import g, jsonify
@@ -33,11 +40,33 @@ def _cached(name, build):
         return build()
 
 
+def brand_scopes() -> dict | None:
+    """{brand: 'all' | 'funnels'} for this member; None = everything (full access) or brands not chosen for them yet."""
+    if is_full():
+        return None
+    return _cached("brands", lambda: users.brand_access(_current()["id"]) or None)
+
+
+def brand_allowed(key: str) -> bool:
+    scopes = brand_scopes()
+    return scopes is None or (key or "") in scopes
+
+
 def funnel_ids() -> set | None:
     """The funnels this person may see; None = all of them."""
     if is_full():
         return None
-    return _cached("funnels", lambda: users.funnels_shared_with(_current()["id"]))
+
+    def build():
+        shared, scopes = users.funnels_shared_with(_current()["id"]), brand_scopes()
+        if scopes is None:
+            return shared
+        from . import contacts
+        with contacts._crm() as conn:
+            rows = conn.execute("SELECT funnel_id, brand FROM funnels").fetchall()
+        return {r["funnel_id"] for r in rows
+                if scopes.get(r["brand"] or "") == "all" or (r["funnel_id"] in shared and (not r["brand"] or r["brand"] in scopes))}
+    return _cached("funnels", build)
 
 
 def person_ids() -> set | None:
@@ -48,12 +77,20 @@ def person_ids() -> set | None:
     def build():
         from . import contacts
         funnels, me = funnel_ids(), _current()["id"]
+        scopes = brand_scopes()
         with contacts._crm() as conn:
             marks = ",".join("?" for _ in funnels) or "NULL"
             rows = conn.execute(f"SELECT person_id FROM people WHERE owner_id = ? OR funnel_id IN ({marks})", [me, *sorted(funnels)])
             ids = {r["person_id"] for r in rows}
             from . import opportunities                     # the people on opportunities in those funnels, to work with them
-            return ids | opportunities.visible_person_ids(conn, funnels)
+            ids |= opportunities.visible_person_ids(conn, funnels)
+            if scopes is None:
+                return ids
+            whole = [b for b, s in scopes.items() if s == "all"]
+            if whole:                                       # a whole brand: every contact of it
+                ids |= {r["person_id"] for r in conn.execute(f"SELECT person_id FROM people WHERE brand IN ({','.join('?' for _ in whole)})", whole)}
+            blocked = {r["person_id"] for r in conn.execute("SELECT person_id, brand FROM people WHERE brand != ''") if r["brand"] not in scopes}
+            return ids - blocked                            # a contact of a blocked brand stays hidden, wherever it appears
     return _cached("people", build)
 
 

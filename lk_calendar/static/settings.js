@@ -771,8 +771,9 @@
     main.replaceChildren();
     var list = h('div', { class: 'lks-card' }, [h('h2', {}, 'Team'), h('p', {}, 'Loading…')]);
     main.appendChild(list);
-    Promise.all([api('GET', '/api/team'), api('GET', '/api/team/funnels')]).then(function (res) {
-      var r = res[0], funnels = res[1].funnels;
+    Promise.all([api('GET', '/api/team'), api('GET', '/api/team/funnels'), api('GET', '/api/crm/brands')]).then(function (res) {
+      var r = res[0], funnels = res[1].funnels, brandList = res[2].brands || [];
+      var brandName = {}; brandList.forEach(function (b) { brandName[b.key] = b.name; });
       var kids = [h('div', { class: 'lks-teamhead' }, [h('div', {}, [h('h2', {}, 'Team'),
         h('p', { style: 'margin-top:4px' }, 'People you add can sign in with their Google account. Everyone works in the same LyteKeepr data.')]),
         h('button', { class: 'btn btn-primary', type: 'button', onclick: addUserDialog }, '+ Add user')])];
@@ -804,15 +805,35 @@
             api('POST', '/api/team/' + u.id + '/access', { access: sel.value }).then(function () { teamView(); }).catch(function (e) { notice(e.message); }); } },
             [h('option', { value: 'funnels' }, 'Selected funnels'), h('option', { value: 'all' }, 'Everything (the whole database)')]);
           sel.value = u.access;
+          var scopes = u.brands || {}, brandsSet = Object.keys(scopes).length > 0;
+          // Brands first: each brand is blocked, the whole brand, or only its funnels ticked below
+          var brandSels = brandList.map(function (b) {
+            var s = h('select', { class: 'lks-select lks-brand-scope', 'aria-label': 'Access to ' + b.name, onchange: function () {
+              var next = {}; Object.keys(scopes).forEach(function (k) { next[k] = scopes[k]; });
+              if (s.value) next[b.key] = s.value; else delete next[b.key];
+              api('POST', '/api/team/' + u.id + '/brands', { brands: next }).then(function () { teamView(); }).catch(function (e) { notice(e.message); }); } },
+              [h('option', { value: '' }, brandsSet ? 'Blocked' : 'Not set'), h('option', { value: 'all' }, 'Whole brand'), h('option', { value: 'funnels' }, 'Ticked funnels only')]);
+            s.value = scopes[b.key] || '';
+            return h('label', { class: 'lks-brand-pick' }, [h('i', { class: 'lks-brand-dot', style: 'background:' + b.color }), b.name, s]);
+          });
           var chips = funnels.length ? funnels.map(function (f) {
             var on = u.funnel_ids.indexOf(f.funnel_id) !== -1;
-            return h('button', { class: 'lks-chipbtn' + (on ? ' on' : ''), type: 'button', title: f.people_count + ' contacts', onclick: function () {
+            var blocked = brandsSet && f.brand && !scopes[f.brand];
+            var whole = brandsSet && f.brand && scopes[f.brand] === 'all';
+            return h('button', { class: 'lks-chipbtn' + (on ? ' on' : '') + (blocked || whole ? ' lks-chip-muted' : ''), type: 'button',
+              title: f.people_count + ' contacts' + (blocked ? ' · its brand is blocked for them' : whole ? ' · already included: they see the whole brand' : ''), onclick: function () {
               var ids = on ? u.funnel_ids.filter(function (x) { return x !== f.funnel_id; }) : u.funnel_ids.concat([f.funnel_id]);
-              api('POST', '/api/team/' + u.id + '/funnels', { funnel_ids: ids }).then(function () { teamView(); }).catch(function (e) { notice(e.message); }); } }, [(on ? '✓ ' : '') + f.name]);
+              api('POST', '/api/team/' + u.id + '/funnels', { funnel_ids: ids }).then(function () { teamView(); }).catch(function (e) { notice(e.message); }); } },
+              [(on ? '✓ ' : '') + f.name + (f.brand ? ' · ' + (brandName[f.brand] || f.brand) : '')]);
           }) : [h('span', { class: 'lks-note' }, 'No funnels yet.')];
           kids.push(h('div', { class: 'lks-access' }, [h('span', { class: 'lks-note' }, 'Sees'), sel,
-            u.access === 'all' ? h('span', { class: 'lks-note' }, 'Every contact, funnel and task.') : h('div', { class: 'lks-chips' }, chips),
-            u.access === 'funnels' ? h('span', { class: 'lks-note' }, '+ the contacts they add themselves') : null]));
+            u.access === 'all' ? h('span', { class: 'lks-note' }, 'Every contact, funnel and task.') : null]));
+          if (u.access !== 'all') {
+            kids.push(h('div', { class: 'lks-access' }, [h('span', { class: 'lks-note' }, 'Brands'), h('div', { class: 'lks-chips' }, brandSels),
+              h('span', { class: 'lks-note' }, brandsSet ? 'Brands not chosen are blocked: none of their contacts, funnels or meetings.' : 'Not set yet: they see the funnels ticked below, whatever the brand.')]));
+            kids.push(h('div', { class: 'lks-access' }, [h('span', { class: 'lks-note' }, 'Funnels'), h('div', { class: 'lks-chips' }, chips),
+              h('span', { class: 'lks-note' }, '+ the contacts they add themselves')]));
+          }
         }
       });
       list.replaceChildren.apply(list, kids);

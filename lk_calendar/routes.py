@@ -327,9 +327,27 @@ def contacts_list():
     return jsonify({"contacts": rows})
 
 
+def _member_brand(data: dict, required: bool) -> None:
+    """A team member limited to some brands may only give contacts one of those brands (one allowed brand is used by itself)."""
+    scopes = access.brand_scopes()
+    if scopes is None:
+        return
+    if "brand" not in data and not required:
+        return
+    key = brands.resolve(data.get("brand")) if data.get("brand") else ""
+    if not key and len(scopes) == 1:
+        key = next(iter(scopes))
+    if key not in scopes:
+        names = brands.names()
+        raise store.ValidationError("Choose a brand you have access to: " + ", ".join(names.get(k, k) for k in scopes) + ".")
+    data["brand"] = key
+
+
 @bp.post("/api/calendar/contacts")
 def contact_create():
-    return jsonify(contacts.create_contact(_payload())), 201
+    data = _payload()
+    _member_brand(data, required=True)
+    return jsonify(contacts.create_contact(data)), 201
 
 
 @bp.get("/api/calendar/contacts/duplicate")
@@ -375,7 +393,9 @@ def contact_delete(contact_id):
 
 @bp.put("/api/calendar/contacts/<int:contact_id>")
 def contact_update(contact_id):
-    c = contacts.update_contact(contact_id, _payload())
+    data = _payload()
+    _member_brand(data, required=False)
+    c = contacts.update_contact(contact_id, data)
     return (jsonify(c), 200) if c else (jsonify({"error": "not found"}), 404)
 
 

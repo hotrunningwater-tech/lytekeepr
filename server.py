@@ -636,6 +636,11 @@ def crm_funnel_board(funnel_id):
         conn.close()
     if board is None:
         return jsonify({"error": "No such funnel."}), 404
+    from lk_calendar import access
+    allowed = access.person_ids()
+    if allowed is not None:                            # a contact of a brand they may not see stays hidden, even in a shared funnel
+        for st in board["stages"]:
+            st["people"] = [p for p in st["people"] if p["person_id"] in allowed]
     try:
         from lk_calendar import contacts as lk_contacts
         ids = [p["person_id"] for st in board["stages"] for p in st["people"]]

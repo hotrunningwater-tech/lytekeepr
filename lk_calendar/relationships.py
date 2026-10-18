@@ -379,7 +379,8 @@ def register(app):
     @app.get("/api/crm/suggestions")
     def rel_suggestions():
         if not access.is_full():          # team members: only suggestions for opportunities they can see, no new-contact ones
-            return jsonify({"suggestions": [x for x in list_suggestions(visible) if x["kind"] == "add_to_opportunity"]})
+            return jsonify({"suggestions": [x for x in list_suggestions(visible) if x["kind"] == "add_to_opportunity"
+                                            and (not x.get("contact_id") or access.can_person(x["contact_id"]))]})
         return jsonify({"suggestions": list_suggestions()})
 
     @app.post("/api/crm/suggestions/<int:sid>/accept")

@@ -116,6 +116,13 @@ def _participants(conn, opp_ids: list) -> dict:
             "contact_id": r["person_id"], "name": r["name"], "company": r["company_name"] or "", "role": r["role"],
             "primary": bool(r["is_primary"]), "active": bool(r["active"]), "introduced_by": r["introduced_by"],
             "introduced_by_name": r["introduced_by_name"] or "", "joined_at": r["joined_at"], "left_at": r["left_at"]})
+    from . import access
+    if access.person_ids() is not None:            # a team member: people they may not see (another brand) are left out entirely
+        for k in out:
+            out[k] = [p for p in out[k] if access.can_person(p["contact_id"])]
+            for p in out[k]:
+                if p["introduced_by"] and not access.can_person(p["introduced_by"]):
+                    p["introduced_by"], p["introduced_by_name"] = None, ""
     return out
 
 
