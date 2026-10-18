@@ -74,6 +74,7 @@
       } }, 'Add task')])
     ]);
 
+    var commsEl = h('div', { class: 'lko-comms' });       // everyone's messages, emails, calls and logged conversations (filled below)
     var hist = o.history || [];
     var history = h('details', { class: 'lko-history' }, [h('summary', {}, 'History (' + hist.length + ')'),
       h('ul', {}, hist.map(function (x) { return h('li', {}, [h('small', {}, when(x.at) + (x.who ? ' · ' + x.who : '')), ' ', x.text]); }))]);
@@ -94,10 +95,12 @@
       list, pastBox, suggestBox(o), addBox(o),
       h('h3', {}, 'Notes'), notes,
       h('h3', {}, 'Tasks'), tasks,
+      h('h3', {}, 'Communication history'), commsEl,
       history,
       h('div', { class: 'lks-row lko-foot' }, [del])
     ]);
     C().modal(cardEl);
+    if (window.lkRecords) window.lkRecords.oppHistory(commsEl, o.opportunity_id);
   }
 
   function row(p) {

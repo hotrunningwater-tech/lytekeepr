@@ -605,6 +605,8 @@ def delete_contact(contact_id: int) -> bool:
             conn.execute("DELETE FROM channel_accounts WHERE person_id = ?", (contact_id,))
             conn.execute("DELETE FROM people WHERE person_id = ?", (contact_id,))
     cleanup_after_delete(info)
+    from . import interactions
+    interactions.contact_deleted(contact_id)
     return True
 
 
@@ -1167,6 +1169,8 @@ def merge_contacts(keep_id: int, merge_id: int) -> None:
             else:
                 cal.execute("UPDATE leads SET person_id = ? WHERE id = ?", (keep_id, lead["id"]))
     try:
+        from . import interactions
+        interactions.merged(keep_id, merge_id)          # notes and logged conversations move over
         sync_lead_identity(keep_id)
         from assistant import email_send_flow
         email_send_flow.repoint_drafts(merge_id, keep_id)

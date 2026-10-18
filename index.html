@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=36">
+<link rel="stylesheet" href="styles.css?v=37">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=people1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -339,9 +339,11 @@
             </div>
             <!-- the details (read-only until Edit) -->
             <div class="preview-section crm-detail-card" id="crmPersonDetailEditor"></div>
+            <div class="preview-section crm-detail-card" id="crmPersonDetailNotes"></div>
             <div class="preview-section crm-detail-card">
               <div class="crm-detail-card-header">
                 <span class="block-label">Messages — all channels</span>
+                <button class="subtle-link-btn" type="button" id="crmLogConversationBtn" title="A phone call, meeting or talk that wasn't captured automatically">+ Log a call or conversation</button>
                 <button class="subtle-link-btn" type="button" id="crmPersonDetailMessagesToggle" hidden></button>
               </div>
               <div class="crm-msg-controls" id="crmMsgControls"></div>
@@ -574,7 +576,8 @@
 <script src="chat.js"></script>
 <script src="lk-calendar/calendar.js?v=brand1"></script>
 <script src="lk-calendar/settings.js?v=brand2"></script>
-<script src="lk-calendar/opportunities.js?v=lead2"></script>
+<script src="lk-calendar/opportunities.js?v=hist1"></script>
+<script src="lk-calendar/records.js?v=1"></script>
 <script src="lk-calendar/docs.js?v=1"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
@@ -2423,6 +2426,7 @@
 
     function buildCrmDetailMessageRow(m) {
       if (m.channel === 'call' && m.call) return buildCrmCallRow(m.call);
+      if (m.logged && window.lkRecords) return window.lkRecords.row(m, function () { openCrmPersonDetail(crmCurrentPersonId); }, (m.people || []).length > 1);     // a call or talk logged by hand
       var contactName = crmCurrentPersonData ? crmCurrentPersonData.name : null;
       var who = m.direction === 'outgoing' ? 'You' : (contactName || m.sender || 'Them');
       var row = document.createElement('div');
@@ -2579,6 +2583,10 @@
     }
 
     window.openCrmPersonDetail = function (id) { return openCrmPersonDetail(id); };       // opportunities.js opens contacts too
+    document.getElementById('crmLogConversationBtn').addEventListener('click', function () {
+      var id = crmCurrentPersonId;
+      if (id && window.lkRecords) window.lkRecords.logForm(id, crmCurrentPersonData && crmCurrentPersonData.name, function () { openCrmPersonDetail(id); });
+    });
     function openCrmPersonDetail(personId) {
       fetch('/api/crm/people/' + personId)
         .then(function (res) { return res.json(); })
@@ -2612,6 +2620,7 @@
           if (window.lkContacts && window.lkContacts.mountContactPage) window.lkContacts.mountContactPage(personId);
           if (window.lkContacts && window.lkContacts.renderOutreach) window.lkContacts.renderOutreach(document.getElementById('crmPersonDetailOutreach'), personId, person.funnel_id || null);
           if (window.lkOpps) window.lkOpps.renderForPerson(document.getElementById('crmPersonDetailOpportunities'), personId);
+          if (window.lkRecords) window.lkRecords.renderNotes(document.getElementById('crmPersonDetailNotes'), personId);
 
           var activeFollowUp = (person.follow_ups || []).find(function (f) {
             return f.status === 'active' || f.status === 'awaiting_approval' || f.status === 'needs_review';

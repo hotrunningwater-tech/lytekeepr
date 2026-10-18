@@ -541,6 +541,9 @@ def crm_person_detail(person_id):
     else:                                              # team members do not read the admin's messages (the shared timeline is a later step)
         detail["messages"] = []
         detail["follow_ups"] = []
+    from lk_calendar import interactions               # + calls and conversations logged by hand (everyone who sees the contact sees these)
+    detail["messages"] = interactions._sorted(detail["messages"] + [interactions.as_message(r) for r in interactions.for_person(person_id, "conversation")])
+    detail["notes_log"] = interactions.for_person(person_id, "note")
     return jsonify(detail)
 
 

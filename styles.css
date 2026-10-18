@@ -2745,6 +2745,17 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .lkd-title { margin: 6px 0 0; }
 .lkd-tabs { flex-wrap: wrap; }
 .lkd-text { white-space: pre-wrap; background: #fff; border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; max-height: 60vh; overflow-y: auto; }
+.lko-notes { display: flex; flex-direction: column; gap: 6px; }
+.lko-note-add { display: flex; gap: 8px; align-items: flex-end; } .lko-note-add textarea { flex: 1; min-height: 52px; }
+.lko-note { background: #fff; border-radius: 10px; padding: 8px 12px; }
+.lko-note-head { display: flex; justify-content: space-between; gap: 10px; } .lko-note-head small { color: var(--ink-soft); }
+.lko-note-head span { display: inline-flex; gap: 8px; }
+.lko-note-text { white-space: pre-wrap; font-size: 14px; margin-top: 4px; overflow-wrap: anywhere; }
+.crm-detail-message.is-logged { border-left: 3px solid var(--teal, #7fa8b8); }
+.crm-detail-message.is-logged .lko-link { margin-right: 10px; }
+#crmPersonDetailNotes textarea { width: 100%; box-sizing: border-box; border: none; border-radius: 10px; background: rgba(230,237,240,.9); padding: 8px 10px; font: inherit; font-size: 14px; color: var(--ink); resize: vertical; }
+.lkr-history { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.lko-comms .crm-msg-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .lko-task-list { list-style: none; padding: 0; margin: 0 0 6px; display: flex; flex-direction: column; gap: 4px; }
 .lko-task-list li { display: flex; justify-content: space-between; gap: 10px; background: #fff; border-radius: 10px; padding: 7px 10px; font-size: 13.5px; }
 .lko-task-list li.done span { text-decoration: line-through; color: var(--ink-soft); }

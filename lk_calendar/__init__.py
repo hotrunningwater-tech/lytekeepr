@@ -30,6 +30,8 @@ def register(app):
     relationships.register(app)
     from . import brands
     brands.register(app)
+    from . import interactions
+    interactions.register(app)
     from . import docs
     docs.register(app)
     from . import claude_connector

@@ -185,7 +185,7 @@ TOOLS = [
                                                       "linkedin": {"type": "string", "description": "LinkedIn profile link"}, "notes": {"type": "string"},
                                                       "brand": {"type": "string", "description": "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}}}, "read": False},
     {"name": "update_contact", "title": "Update a contact",
-     "description": "Change a contact's details, or add a note (add_note is appended with today's date; it never replaces the existing notes). Only the fields given change.",
+     "description": "Change a contact's details, or add a note (add_note is saved as a dated note, like add_contact_note). Only the fields given change.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "name": {"type": "string"}, "company": {"type": "string"},
                                                       "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
                                                       "instagram": {"type": "string", "description": "Instagram handle like @name"}, "linkedin": {"type": "string", "description": "LinkedIn profile link"},
@@ -326,6 +326,42 @@ TOOLS = [
     {"name": "folder_delete", "title": "Delete a folder", "destructive": True,
      "description": "Delete a folder. One with folders or documents inside is refused unless with_contents=true, which the user must confirm first.",
      "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "with_contents": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
+    # --- notes and the communication history (calls, meetings and conversations logged by hand next to messages, emails and recordings) ---
+    {"name": "add_contact_note", "title": "Add a note to a contact",
+     "description": ("A general note about a contact (not a conversation), dated and kept with them, e.g. 'prefers mornings', 'decides with her partner'. "
+                     "For something that was said in a call, meeting or talk, use log_conversation instead."),
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["contact_id", "text"]}, "read": False},
+    {"name": "log_conversation", "title": "Log a call or conversation",
+     "description": ("Record a phone call, meeting, in-person talk, video call or other conversation that no integration captured, in the contact's communication history "
+                     "(e.g. 'I just spoke with John: the customer hasn't approved the color, don't proceed with the order'). Write what was said in the user's words; "
+                     "when = when it happened (default now); add other_contact_ids if more people were in it, and opportunity_id when it was about one."),
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "type": {"type": "string", "enum": ["phone call", "meeting", "in person", "video call", "other"]},
+                                                      "text": {"type": "string"}, "when": {"type": "string", "description": "YYYY-MM-DD or YYYY-MM-DD HH:MM"},
+                                                      "opportunity_id": {"type": "integer"}, "other_contact_ids": {"type": "array", "items": {"type": "integer"}}},
+                     "required": ["contact_id", "text"]}, "read": False},
+    {"name": "edit_contact_record", "title": "Edit a note or logged conversation",
+     "description": "Change the text, date or type of a note or logged conversation (record_id comes from get_contact, the histories or search_contact_notes).",
+     "inputSchema": {"type": "object", "properties": {"record_id": {"type": "integer"}, "text": {"type": "string"}, "when": {"type": "string"},
+                                                      "type": {"type": "string"}, "opportunity_id": {"type": "integer"}}, "required": ["record_id"]}, "read": False},
+    {"name": "delete_contact_record", "title": "Delete a note or logged conversation", "destructive": True,
+     "description": "Delete a note or logged conversation. Only when the user asks.",
+     "inputSchema": {"type": "object", "properties": {"record_id": {"type": "integer"}}, "required": ["record_id"]}, "read": False},
+    {"name": "search_contact_notes", "title": "Search notes and logged conversations",
+     "description": "Find notes and logged conversations by words in their text, optionally for one contact or one opportunity, or only kind 'note' or 'conversation'.",
+     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "contact_id": {"type": "integer"}, "opportunity_id": {"type": "integer"},
+                                                      "kind": {"type": "string", "enum": ["note", "conversation"]}}, "required": ["query"]}, "read": True},
+    {"name": "get_contact_history", "title": "A contact's communication history",
+     "description": ("Everything that happened with one contact, oldest first: LinkedIn messages, emails (subject only), call recordings (summaries) and logged calls, "
+                     "meetings and conversations. Narrow with channels (e.g. ['linkedin','phone call']), query words, or since (YYYY-MM-DD)."),
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "channels": {"type": "array", "items": {"type": "string"}},
+                                                      "query": {"type": "string"}, "since": {"type": "string"}}, "required": ["contact_id"]}, "read": True},
+    {"name": "get_opportunity_history", "title": "An opportunity's communication history",
+     "description": ("The combined history of everyone on an opportunity, oldest first; each entry says who was in it and when. Use it to trace who said what, "
+                     "when a decision changed, and contradictions (e.g. 'what did everyone say about the color and when did it change?' → query 'color'). "
+                     "Narrow with contact_ids, channels, query or since."),
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_ids": {"type": "array", "items": {"type": "integer"}},
+                                                      "channels": {"type": "array", "items": {"type": "string"}}, "query": {"type": "string"}, "since": {"type": "string"}},
+                     "required": ["opportunity_id"]}, "read": True},
     # --- who is in touch with whom (counted from email addresses, no AI) ---
     {"name": "who_is_connected", "title": "Who is connected to a contact",
      "description": "The people a contact keeps appearing with in emails (From, To, CC), with how many separate threads they share. Facts from email headers, not guesses.",
@@ -443,10 +479,10 @@ def _run_tool(call, name: str, args: dict):
             body["brand"] = args["brand"]
         if args.get("linkedin") or args.get("profile_url"):
             body["url"] = args.get("linkedin") or args.get("profile_url")
-        if args.get("add_note"):
-            current = need(*call("GET", f"/api/calendar/contacts/{pid}"))
-            stamp = datetime.now().strftime("%Y-%m-%d")
-            body["notes"] = ((current.get("notes") or "").rstrip() + f"\n\n{stamp}: {args['add_note'].strip()}").strip()
+        if args.get("add_note"):                     # a dated note of its own (see add_contact_note)
+            need(*call("POST", f"/api/crm/people/{pid}/notes", {"text": args["add_note"]}))
+            if not body:
+                return {"id": pid, "note_added": True}
         if not body:
             raise ValueError("Nothing to change.")
         c = need(*call("PUT", f"/api/calendar/contacts/{pid}", body))
@@ -581,6 +617,50 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("PUT", f"/api/crm/docs/folders/{int(args['folder_id'])}", {k: args[k] for k in ("name", "parent_id", "brand", "funnel_id", "to_top") if args.get(k) is not None}))
     if name == "folder_delete":
         return need(*call("POST", f"/api/crm/docs/folders/{int(args['folder_id'])}/delete", {"with_contents": bool(args.get("with_contents"))}))
+    if name == "add_contact_note":
+        return need(*call("POST", f"/api/crm/people/{int(args['contact_id'])}/notes", {"text": args.get("text", "")}))
+    if name == "log_conversation":
+        return need(*call("POST", f"/api/crm/people/{int(args['contact_id'])}/conversations",
+                          {k: args[k] for k in ("type", "text", "when", "opportunity_id", "other_contact_ids") if args.get(k) is not None}))
+    if name == "edit_contact_record":
+        return need(*call("PUT", f"/api/crm/records/{int(args['record_id'])}", {k: args[k] for k in ("text", "when", "type", "opportunity_id") if args.get(k) is not None}))
+    if name == "delete_contact_record":
+        return need(*call("POST", f"/api/crm/records/{int(args['record_id'])}/delete"))
+    if name == "search_contact_notes":
+        q = {"q": args.get("query", ""), **{k: args[k] for k in ("contact_id", "opportunity_id", "kind") if args.get(k)}}
+        return need(*call("GET", "/api/crm/records/search?" + urllib.parse.urlencode(q)))["results"]
+    if name in ("get_contact_history", "get_opportunity_history"):
+        if name == "get_contact_history":
+            items, extra = need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/history"))["history"], {}
+        else:
+            h = need(*call("GET", f"/api/crm/opportunities/{int(args['opportunity_id'])}/history"))
+            items, extra = h["history"], {"opportunity": h["name"], "people": h["people"]}
+            if args.get("contact_ids"):
+                want = {int(i) for i in args["contact_ids"]}
+                items = [m for m in items if want & {c["contact_id"] for c in m.get("contacts") or []}]
+        if args.get("channels"):
+            want = {str(c).lower() for c in args["channels"]}
+            items = [m for m in items if (m.get("channel") or "").lower() in want]
+        if args.get("since"):
+            items = [m for m in items if (m.get("timestamp") or "") >= str(args["since"])]
+        out = []
+        for m in items:
+            text = m.get("message_text") or ""
+            if m.get("channel") == "email":              # email text stays in LyteKeepr: the subject only
+                text = text.split("\n\n", 1)[0] if text.startswith("Subject: ") else ""
+            row = {"when": m.get("timestamp"), "channel": m.get("channel"), "direction": m.get("direction"), "text": text}
+            if m.get("logged"):
+                row.update({"record_id": m.get("record_id"), "logged_by": m.get("sender"), "people": [p["name"] for p in m.get("people") or []],
+                            "opportunity": m.get("opportunity") or None})
+            if m.get("call"):
+                row.update({"title": m["call"].get("title"), "call_id": m["call"].get("call_id")})
+            if m.get("contacts"):
+                row["contacts"] = [c["name"] for c in m["contacts"]]
+            out.append(row)
+        if args.get("query"):
+            words = [w for w in str(args["query"]).lower().split() if w]
+            out = [r for r in out if all(w in (r.get("text") or "").lower() or w in (r.get("title") or "").lower() for w in words)]
+        return {**extra, "history": out[-200:]}
     if name == "who_is_connected":
         return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/connections"))["connections"]
     if name == "find_related_people":
