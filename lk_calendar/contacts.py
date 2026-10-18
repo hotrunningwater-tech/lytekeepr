@@ -401,6 +401,8 @@ def contact_dict(conn, pid: int) -> dict | None:
     d["url"] = next((_account_link(a) for a in accts if a["channel"] in ("linkedin", "instagram") and _account_link(a)), "")
     if True:                                         # the email address is the email channel record: the one home for it
         d["email"] = next((a["channel_identifier"] for a in accts if a["channel"] == "email" and "@" in (a["channel_identifier"] or "")), "")
+    d["instagram"] = next(("@" + a["channel_identifier"] for a in accts if a["channel"] == "instagram" and a["channel_identifier"]
+                           and not a["channel_identifier"].startswith("name:")), "")
     d["display"] = d["name"] or d["company"] or "(no name)"
     d["funnels"] = [{"channel": d["funnel_name"], "status": d["stage_name"] or "", "status_date": ""}] if d.get("funnel_id") else []
     return d
@@ -507,6 +509,8 @@ def list_companies(q: str = "") -> dict:
 
 
 def list_contacts(q: str = "", company_id=None, limit: int = 200) -> list[dict]:
+    q = (q or "").strip()
+    q = q[1:] if q.startswith("@") and len(q) > 1 and " " not in q else q        # "@handle" finds the Instagram handle too
     like = f"%{q.lower()}%"
     with _crm() as conn:
         where = """(lower(p.name) LIKE ? OR lower(IFNULL(p.notes,'')) LIKE ? OR lower(IFNULL(co.company_name,'')) LIKE ?
@@ -634,8 +638,41 @@ def save_company(company_id, data: dict) -> dict:
     return get_company(company_id)
 
 
+def instagram_handle(text) -> str:
+    """'@name', 'name' or an instagram.com link -> 'name'; '' for nothing; an error for something that is not a handle."""
+    text = str(text or "").strip()
+    if not text:
+        return ""
+    handle = leads._instagram_handle(text)
+    if not handle:
+        raise store.ValidationError("That doesn't look like an Instagram handle. Use @name (letters, numbers, dots and underscores).")
+    return handle
+
+
+def _set_instagram(conn, person_id: int, handle: str, name: str) -> None:
+    """The contact's Instagram account: added, changed, or removed when the field is emptied."""
+    acct = conn.execute("SELECT * FROM channel_accounts WHERE person_id = ? AND channel = 'instagram' ORDER BY account_id LIMIT 1", (person_id,)).fetchone()
+    if not handle:
+        if acct:
+            conn.execute("DELETE FROM channel_accounts WHERE account_id = ?", (acct["account_id"],))
+        return
+    url = f"https://www.instagram.com/{handle}/"
+    if acct:
+        conn.execute("UPDATE channel_accounts SET channel_identifier = ?, url = ? WHERE account_id = ?", (handle.lower(), url, acct["account_id"]))
+    else:
+        conn.execute("INSERT INTO channel_accounts (person_id, channel, channel_identifier, display_name, url) VALUES (?, 'instagram', ?, ?, ?)",
+                     (person_id, handle.lower(), name, url))
+
+
 def create_contact(data: dict) -> dict:
     check_formats(data)
+    handle = instagram_handle(data.get("instagram"))
+    if handle and not str(data.get("name", "")).strip() and not str(data.get("company", "")).strip():
+        data = {**data, "name": "@" + handle}                        # known only by their handle (like imported Instagram leads)
+    if handle and not str(data.get("url", "")).strip():          # Instagram is their main link: it becomes the profile link too
+        data = {**data, "url": f"https://www.instagram.com/{handle}/"}
+        if not data.get("channel"):
+            data["channel"] = "instagram"
     with _crm() as conn:
         company_name = str(data.get("company", "")).strip()
         company_id = data.get("company_id") or _company(conn, company_name, source_file="added by hand")
@@ -650,6 +687,8 @@ def create_contact(data: dict) -> dict:
         pid = _insert_person(conn, data, channel=channel, company_id=company_id, company_name=company_name, extras={},
                              source_file=data.get("source_file", "added by hand"), batch=str(data.get("batch", "")))
         _ensure_email_account(conn, pid, str(data.get("email", "")), str(data.get("name", "")) or company_name)
+        if handle:
+            _set_instagram(conn, pid, handle, str(data.get("name", "")) or "@" + handle)
         return contact_dict(conn, pid)
 
 
@@ -675,7 +714,9 @@ def update_contact(contact_id: int, data: dict) -> dict | None:
             _set_email(conn, contact_id, str(data["email"]).strip(), sets.get("name") or cur["name"])
         if "url" in data:
             url = str(data["url"]).strip()
-            acct = conn.execute("SELECT * FROM channel_accounts WHERE person_id = ? ORDER BY account_id LIMIT 1", (contact_id,)).fetchone()
+            kind = detect_channel(url)                     # a LinkedIn link updates the LinkedIn account, never the Instagram one
+            acct = (conn.execute("SELECT * FROM channel_accounts WHERE person_id = ? AND channel = ? ORDER BY account_id LIMIT 1", (contact_id, kind)).fetchone() if kind else None) \
+                or conn.execute("SELECT * FROM channel_accounts WHERE person_id = ? ORDER BY account_id LIMIT 1", (contact_id,)).fetchone()
             if acct:
                 conn.execute("UPDATE channel_accounts SET url = ? WHERE account_id = ?", (url[:500], acct["account_id"]))
                 if url and (acct["channel_identifier"] or "").startswith("name:") and acct["channel"] in ("linkedin", "instagram"):
@@ -685,6 +726,8 @@ def update_contact(contact_id: int, data: dict) -> dict | None:
                 name = sets.get("name") or cur["name"]
                 conn.execute("INSERT INTO channel_accounts (person_id, channel, channel_identifier, display_name, url) VALUES (?, ?, ?, ?, ?)",
                              (contact_id, ch or "other", _identifier(ch, url) or f"name:{name}", name, url[:500]))
+        if "instagram" in data:
+            _set_instagram(conn, contact_id, instagram_handle(data["instagram"]), sets.get("name") or cur["name"])
         problem = _missing(*_person_state(conn, contact_id))
         if before and problem:
             raise store.ValidationError(problem)            # an edit may not strip a contact below the minimum

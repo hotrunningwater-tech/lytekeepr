@@ -151,15 +151,18 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"task_id": {"type": "integer"}, "date": {"type": "string", "description": "YYYY-MM-DD of that occurrence"},
                                                       "done": {"type": "boolean", "default": True}}, "required": ["task_id", "date"]}, "read": False},
     # --- added for everyday phone use: the same actions the three LyteKeepr AI chats have ---
-    {"name": "create_contact", "title": "Add a contact", "description": "Add a new contact (someone you just met or talked to).",
-     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "company": {"type": "string"}, "job_title": {"type": "string"},
-                                                      "email": {"type": "string"}, "phone": {"type": "string"}, "profile_url": {"type": "string", "description": "LinkedIn or Instagram link"},
-                                                      "notes": {"type": "string"}}, "required": ["name"]}, "read": False},
+    {"name": "create_contact", "title": "Add a contact",
+     "description": "Add a new contact (someone you just met or talked to). An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'.",
+     "inputSchema": {"type": "object", "properties": {"name": {"type": "string", "description": "The person's name; leave empty if only a handle is known"},
+                                                      "company": {"type": "string"}, "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
+                                                      "instagram": {"type": "string", "description": "Instagram handle like @name (or the instagram.com link)"},
+                                                      "linkedin": {"type": "string", "description": "LinkedIn profile link"}, "notes": {"type": "string"}}}, "read": False},
     {"name": "update_contact", "title": "Update a contact",
      "description": "Change a contact's details, or add a note (add_note is appended with today's date; it never replaces the existing notes). Only the fields given change.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "name": {"type": "string"}, "company": {"type": "string"},
                                                       "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
-                                                      "profile_url": {"type": "string"}, "add_note": {"type": "string"}}, "required": ["contact_id"]}, "read": False},
+                                                      "instagram": {"type": "string", "description": "Instagram handle like @name"}, "linkedin": {"type": "string", "description": "LinkedIn profile link"},
+                                                      "add_note": {"type": "string"}}, "required": ["contact_id"]}, "read": False},
     {"name": "move_contact_stage", "title": "Move to a funnel stage",
      "description": "Move a contact to a stage of their funnel by the stage's name (e.g. 'In conversation'). Give funnel_id to put them into a funnel they are not in yet.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "stage": {"type": "string"}, "funnel_id": {"type": "integer"}},
@@ -274,7 +277,7 @@ def _run_tool(call, name: str, args: dict):
         people = []
         for c in contacts_found:
             st, opps = call("GET", f"/api/crm/people/{c['id']}/opportunities")
-            people.append({"kind": "contact", "contact_id": c["id"], "name": c.get("display"), "company": c.get("company"), "email": c.get("email"),
+            people.append({"kind": "contact", "contact_id": c["id"], "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "instagram": c.get("instagram") or None,
                            "funnel": c.get("funnel_name") or None, "stage": c.get("stage_name") or None,
                            "opportunities": [{"opportunity_id": o["opportunity_id"], "name": o["name"], "funnel": o["funnel"], "stage": o["stage"],
                                               "role": "primary" if o["primary"] else (o["role"] or "participant"), "involved": o["active"]}
@@ -287,7 +290,7 @@ def _run_tool(call, name: str, args: dict):
     if name == "search_contacts":
         q = urllib.parse.urlencode({"q": str(args.get("query") or ""), "limit": max(1, min(int(args.get("limit") or 15), 50))})
         rows = need(*call("GET", f"/api/calendar/contacts?{q}"))["contacts"]
-        return [{"id": c["id"], "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "channel": c.get("channel"),
+        return [{"id": c["id"], "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "instagram": c.get("instagram") or None, "channel": c.get("channel"),
                  "funnel": c.get("funnel_name") or "", "stage": c.get("stage_name") or "", "job_title": c.get("job_title")} for c in rows]
     if name == "get_contact":
         pid = int(args["contact_id"])
@@ -329,12 +332,16 @@ def _run_tool(call, name: str, args: dict):
     if name == "mark_task_done":
         return need(*call("POST", f"/api/calendar/events/{int(args['task_id'])}/done", {"date": args["date"], "done": bool(args.get("done", True))}))
     if name == "create_contact":
-        body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "profile_url", "notes") if args.get(k)}
+        body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "instagram", "notes") if args.get(k)}
+        if args.get("linkedin") or args.get("profile_url"):
+            body["url"] = args.get("linkedin") or args.get("profile_url")
         c = need(*call("POST", "/api/calendar/contacts", body))
-        return {"id": c.get("id"), "name": c.get("display"), "company": c.get("company"), "email": c.get("email")}
+        return {"id": c.get("id"), "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "instagram": c.get("instagram"), "link": c.get("url")}
     if name == "update_contact":
         pid = int(args["contact_id"])
-        body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "profile_url") if args.get(k)}
+        body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "instagram") if args.get(k)}
+        if args.get("linkedin") or args.get("profile_url"):
+            body["url"] = args.get("linkedin") or args.get("profile_url")
         if args.get("add_note"):
             current = need(*call("GET", f"/api/calendar/contacts/{pid}"))
             stamp = datetime.now().strftime("%Y-%m-%d")

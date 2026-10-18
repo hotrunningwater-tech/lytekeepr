@@ -451,7 +451,7 @@
   }
 
 
-  var FORM_FIELDS = [['name', 'Name'], ['job_title', 'Job title / vocation'], ['url', 'URL (profile link)'], ['headline', 'Headline / bio'], ['phone', 'Phone / WhatsApp'],
+  var FORM_FIELDS = [['name', 'Name'], ['job_title', 'Job title / vocation'], ['url', 'URL (profile link)'], ['instagram', 'Instagram'], ['headline', 'Headline / bio'], ['phone', 'Phone / WhatsApp'],
     ['telegram', 'Telegram'], ['email', 'Email'], ['location', 'Location'], ['industry', 'Industry / type'], ['website', 'Website'], ['notes', 'Notes']];
 
   function expander(textarea, baseRows) {            // a small link that makes a text box taller and back
@@ -463,7 +463,7 @@
     var page = mode === 'page';       // the contact page shows the form read-only; New / Edit open it in a window
     var vals = {}; var isNew = !c.id;
     var inputs = FORM_FIELDS.map(function (f) {
-      var el = f[0] === 'job_title' ? chipField(c.job_title) : ['name', 'url', 'phone', 'email'].indexOf(f[0]) >= 0 ? chipField(c[f[0]], { multi: false, check: CHECKS[f[0]] }) : f[0] === 'notes' || f[0] === 'headline' ? h('textarea', { rows: f[0] === 'notes' ? 5 : 2 }, c[f[0]] || '') : h('input', { type: 'text', value: c[f[0]] || '' });
+      var el = f[0] === 'job_title' ? chipField(c.job_title) : ['name', 'url', 'phone', 'email'].indexOf(f[0]) >= 0 ? chipField(c[f[0]], { multi: false, check: CHECKS[f[0]] }) : f[0] === 'notes' || f[0] === 'headline' ? h('textarea', { rows: f[0] === 'notes' ? 5 : 2 }, c[f[0]] || '') : h('input', { type: 'text', value: c[f[0]] || '', placeholder: f[0] === 'instagram' ? '@handle' : '' });
       vals[f[0]] = el; return h('div', { class: 'lks-opt' + (f[0] === 'notes' || f[0] === 'headline' ? ' wide' : '') }, [h('label', {}, f[0] === 'notes' ? [f[1] + ' ', copyPill(function () { return el.value; }), expander(el, 5)] : f[1]), el]);
     });
     var company = chipField(c.company || '', { multi: false, placeholder: 'Company (leave empty for none)' });
@@ -494,7 +494,8 @@
       if (isNew && body.company === '' && c.company_id && !c.company) body.company_id = c.company_id;      // only a company that never had a name; a name you cleared stays cleared
       if (!isNew) delete body.channel;
       err.hidden = true;
-      var q = '?email=' + encodeURIComponent(body.email || '') + '&url=' + encodeURIComponent(body.url || '') + '&phone=' + encodeURIComponent(body.phone || '') + (c.id ? '&exclude=' + c.id : '');
+      var ig = (body.instagram || '').trim().replace(/^@/, '');
+      var q = '?email=' + encodeURIComponent(body.email || '') + '&url=' + encodeURIComponent(body.url || (ig && !/instagram\.com/i.test(ig) ? 'https://www.instagram.com/' + ig + '/' : ig)) + '&phone=' + encodeURIComponent(body.phone || '') + (c.id ? '&exclude=' + c.id : '');
       function finish(req) { return req.then(function () { closeModal(true); changed(); if (onSaved) onSaved(); }); }
       return api('GET', '/api/calendar/contacts/duplicate' + q).then(function (r) {
         var dup = r.duplicate;
