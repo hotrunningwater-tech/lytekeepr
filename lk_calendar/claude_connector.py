@@ -114,6 +114,11 @@ def _strip_google(items: list) -> list:
 
 
 TOOLS = [
+    {"name": "find", "title": "Find a person, company or opportunity",
+     "description": ("START HERE when the user names someone or something. Searches contacts AND opportunities at once and says what each match is: "
+                     "a contact (with their own funnel and stage, if any) and every opportunity they are on (with their role), plus opportunities "
+                     "whose name or company matches. A person can be a single contact entry in a funnel, a participant in an opportunity, or both."),
+     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}, "read": True},
     {"name": "search_contacts", "title": "Search contacts",
      "description": "Find contacts in LyteKeepr by name, company, email or notes. Returns id, name, company, email, channel, funnel and stage.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Words to look for; empty lists the newest contacts."},
@@ -262,6 +267,23 @@ def _run_tool(call, name: str, args: dict):
             raise ValueError((data or {}).get("error") or f"LyteKeepr answered with an error ({status})")
         return data
 
+    if name == "find":
+        text = str(args.get("query") or "").strip()
+        q = urllib.parse.quote(text)
+        contacts_found = need(*call("GET", f"/api/calendar/contacts?limit=8&q={q}"))["contacts"]
+        people = []
+        for c in contacts_found:
+            st, opps = call("GET", f"/api/crm/people/{c['id']}/opportunities")
+            people.append({"kind": "contact", "contact_id": c["id"], "name": c.get("display"), "company": c.get("company"), "email": c.get("email"),
+                           "funnel": c.get("funnel_name") or None, "stage": c.get("stage_name") or None,
+                           "opportunities": [{"opportunity_id": o["opportunity_id"], "name": o["name"], "funnel": o["funnel"], "stage": o["stage"],
+                                              "role": "primary" if o["primary"] else (o["role"] or "participant"), "involved": o["active"]}
+                                             for o in ((opps or {}).get("opportunities", []) if st < 400 else [])]})
+        seen = {o["opportunity_id"] for p in people for o in p["opportunities"]}
+        opps = [{"kind": "opportunity", "opportunity_id": o["opportunity_id"], "name": o["name"], "participants": o["summary"]}
+                for o in need(*call("GET", f"/api/crm/opportunities?q={q}"))["opportunities"] if o["opportunity_id"] not in seen]
+        return {"contacts": people, "other_matching_opportunities": opps,
+                "note": "Nothing matched." if not people and not opps else ""}
     if name == "search_contacts":
         q = urllib.parse.urlencode({"q": str(args.get("query") or ""), "limit": max(1, min(int(args.get("limit") or 15), 50))})
         rows = need(*call("GET", f"/api/calendar/contacts?{q}"))["contacts"]
@@ -662,7 +684,7 @@ def register(app):
                        "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "LyteKeepr", "version": "1.0"},
                        "instructions": ("LyteKeepr is the user's CRM: contacts, sales funnels, tasks, reminders and recorded calls. "
                                         "Dates are YYYY-MM-DD and times HH:MM in the user's local time. Find a contact's id with search_contacts "
-                                        "before get_contact. Funnels hold two kinds of entries: contacts (one person) and opportunities (one shared "
+                                        "before get_contact; when the user names someone or something, use find first. Funnels hold two kinds of entries: contacts (one person) and opportunities (one shared "
                                         "deal or project with several participants). Never turn one into the other, and never assume everyone at a "
                                         "company is part of an opportunity. Ask the user before creating or changing anything.")})
         if method == "ping":

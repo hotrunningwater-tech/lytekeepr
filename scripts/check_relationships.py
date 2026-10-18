@@ -120,6 +120,11 @@ def main():
     def tool(name, args):
         r = a.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}}, headers={"Authorization": "Bearer " + tok}).get_json()["result"]
         return r["isError"], json.loads(r["content"][0]["text"]) if not r["isError"] else r["content"][0]["text"]
+    err, f = tool("find", {"query": "Sarah"})
+    check(not err and f["contacts"] and f["contacts"][0]["opportunities"] and f["contacts"][0]["opportunities"][0]["name"] == "Alpha pilot",
+          "find shows a person as a contact AND the opportunities they are on")
+    err, f2 = tool("find", {"query": "Alpha pilot"})
+    check(not err and any(o["name"] == "Alpha pilot" for o in f2["other_matching_opportunities"]), "find also matches opportunities by name")
     err, rel = tool("find_related_people", {"opportunity_id": oid})
     check(not err and rel["maybe"] and rel["maybe"][0]["email"] == "michael@beta.test" and "why" in rel["maybe"][0], "Claude finds Michael as related to the opportunity, with the reason")
     check(not err and any(m["email"] == "dave@delta.test" for m in rel["maybe"]), "Claude's search also shows weaker links (one thread) for the user to judge")
