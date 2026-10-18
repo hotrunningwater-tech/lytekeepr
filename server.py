@@ -1132,8 +1132,9 @@ def run_gmail_scan(since_date=None) -> dict:
 
     result["auto_saved_known_contact_ids"] = known_contact_ids
     result["candidates"] = get_pending_candidates(account_id)
-    from lk_calendar import promises
-    promises.review_quietly()          # new mail: replies switch leads to "replied"; a promised time ("next week") sets the follow-up
+    from lk_calendar import promises, relationships
+    promises.review_quietly()
+    relationships.update_quietly()     # who is in touch with whom (addresses only): suggestions for opportunities          # new mail: replies switch leads to "replied"; a promised time ("next week") sets the follow-up
     return result
 
 
@@ -1207,8 +1208,9 @@ def gmail_save_candidates():
     finally:
         crm_conn.close()
 
-    from lk_calendar import promises
-    promises.review_quietly()          # emails just saved: replies and promised times update the follow-ups
+    from lk_calendar import promises, relationships
+    promises.review_quietly()
+    relationships.update_quietly()     # who is in touch with whom (addresses only): suggestions for opportunities          # emails just saved: replies and promised times update the follow-ups
     return jsonify(result)
 
 
@@ -1366,8 +1368,9 @@ def gmail_save_message():
     payload = {"saved": saved, "state": sync_state}
     if failed_ids:
         payload["failed_ids"] = failed_ids
-    from lk_calendar import promises
-    promises.review_quietly()          # emails just saved: replies and promised times update the follow-ups
+    from lk_calendar import promises, relationships
+    promises.review_quietly()
+    relationships.update_quietly()     # who is in touch with whom (addresses only): suggestions for opportunities          # emails just saved: replies and promised times update the follow-ups
     return jsonify(payload)
 
 

@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=30">
+<link rel="stylesheet" href="styles.css?v=31">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=people1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -98,6 +98,7 @@
         </div>
 
         <div class="attention-list" id="callsAttentionList"></div>
+        <div class="attention-list" id="suggestionsAttentionList"></div>
         <div class="attention-list" id="attentionList"></div>
 
         <div class="block">
@@ -580,7 +581,7 @@
 <script src="chat.js"></script>
 <script src="lk-calendar/calendar.js?v=people2"></script>
 <script src="lk-calendar/settings.js?v=opps1"></script>
-<script src="lk-calendar/opportunities.js?v=opps1"></script>
+<script src="lk-calendar/opportunities.js?v=rel1"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
 <script>
@@ -1802,7 +1803,7 @@
 
     // Calls (Fathom): a recorded call waiting to be summarized, or a call meeting that passed with no recording (no-show?).
     var callsAttentionList = document.getElementById('callsAttentionList');
-    var homeCallsCount = 0;
+    var homeCallsCount = 0, homeSuggestCount = 0;
     function callRow(flagText, copyText, buttons, quiet) {
       var card = document.createElement('div');
       card.className = 'attention' + (quiet ? ' attention-quiet' : '');
@@ -1828,7 +1829,7 @@
       fetch('/api/calls/attention').then(function (res) { return res.ok ? res.json() : null; }).then(function (data) {
         callsAttentionList.innerHTML = '';
         homeCallsCount = data ? data.ready.length + data.missing.length : 0;
-        var clear = attentionList.querySelector('.attention-clear'); if (clear) clear.hidden = homeCallsCount > 0;
+        var clear = attentionList.querySelector('.attention-clear'); if (clear) clear.hidden = homeCallsCount + homeSuggestCount > 0;
         if (!data) return;
         data.ready.forEach(function (c) {
           var who = (c.contacts || []).map(function (p) { return p.name; }).join(', ');
@@ -1860,6 +1861,32 @@
     loadCallsAttention();
     setInterval(loadCallsAttention, 60000);
 
+    // People LyteKeepr noticed in your emails (who keeps appearing with whom): Accept or Dismiss, nothing is added on its own.
+    var suggestionsAttentionList = document.getElementById('suggestionsAttentionList');
+    function loadSuggestions() {
+      if (!suggestionsAttentionList) return;
+      fetch('/api/crm/suggestions').then(function (res) { return res.ok ? res.json() : null; }).then(function (data) {
+        suggestionsAttentionList.innerHTML = '';
+        var list = (data && data.suggestions) || [];
+        homeSuggestCount = list.length;
+        var clear = attentionList.querySelector('.attention-clear'); if (clear) clear.hidden = homeCallsCount + homeSuggestCount > 0;
+        list.forEach(function (sg) {
+          var title = sg.kind === 'add_to_opportunity' ? 'Add ' + sg.name + ' to “' + sg.opportunity + '”?' : 'New contact: ' + sg.name + '?';
+          var buttons = [
+            [sg.kind === 'add_to_opportunity' ? 'Add to opportunity' : 'Create contact', 'btn btn-primary btn-small', function (el) {
+              el.disabled = true;
+              callPost('/api/crm/suggestions/' + sg.suggestion_id + '/accept', {}, el, 'Adding…').then(function () { loadSuggestions(); if (window.lkOpps && sg.opportunity_id) window.lkOpps.open(sg.opportunity_id); });
+            }],
+            ['Dismiss', 'subtle-link-btn', function (el) { callPost('/api/crm/suggestions/' + sg.suggestion_id + '/dismiss', {}, el, '…').then(loadSuggestions); }]
+          ];
+          if (sg.kind === 'add_to_opportunity' && window.lkOpps) buttons.splice(1, 0, ['Open opportunity', 'btn btn-secondary btn-small', function () { window.lkOpps.open(sg.opportunity_id, loadSuggestions); }]);
+          suggestionsAttentionList.appendChild(callRow('Suggested · ' + title, sg.reason + (sg.mentions ? ' Also mentioned by name in ' + sg.mentions + ' email' + (sg.mentions === 1 ? '' : 's') + '.' : ''), buttons, true));
+        });
+      }).catch(function () {});
+    }
+    loadSuggestions();
+    setInterval(loadSuggestions, 120000);
+
     function renderFollowupCards(followUps, pendingDraft) {
       attentionList.innerHTML = '';
       upcomingList.querySelectorAll('.followup-live-card').forEach(function (el) { el.remove(); });
@@ -1870,7 +1897,7 @@
       if (!actionable.length) {
         var allClear = document.createElement('div');
         allClear.className = 'attention attention-clear';
-        allClear.hidden = homeCallsCount > 0;           // calls waiting below the heading count as attention too
+        allClear.hidden = homeCallsCount + homeSuggestCount > 0;           // calls and suggestions waiting below the heading count as attention too
         var clearFlag = document.createElement('span');
         clearFlag.className = 'attention-flag';
         clearFlag.textContent = 'All caught up';

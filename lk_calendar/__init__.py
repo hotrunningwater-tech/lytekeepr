@@ -26,6 +26,8 @@ def register(app):
     member_google.register(app)
     from . import opportunities
     opportunities.register(app)
+    from . import relationships
+    relationships.register(app)
     from . import claude_connector
     claude_connector.register(app)
     from pathlib import Path

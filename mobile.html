@@ -353,7 +353,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
     return { replies: due.filter(function (e) { return !e.group && kindOf(e) === 'reply'; }), follow: due.filter(function (e) { return e.group || kindOf(e) !== 'reply'; }),
              calls: state.calls.ready || [], missing: state.calls.missing || [] };
   }
-  function attentionCount() { var x = attentionItems(); return x.replies.length + x.follow.length + x.calls.length + x.missing.length; }
+  function attentionCount() { var x = attentionItems(); return x.replies.length + x.follow.length + x.calls.length + x.missing.length + (state.suggestions || []).length; }
   function renderAttention() {
     var box = $('attBody'); box.replaceChildren();
     var x = attentionItems(), total = attentionCount();
@@ -391,6 +391,14 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
       var c = card('☎', k.title, (who ? who + ' · ' : '') + (k.duration_min ? k.duration_min + ' min' : 'Recorded'), when(k.started_at), 'Transcript ready. Ask Claude for a summary.');
       if (k.contacts && k.contacts[0]) button(c, 'Open', 'ink', function (b) { b.disabled = false; openContact(k.contacts[0].person_id); });
       button(c, 'Mark done', 'soft', function () { api('POST', '/api/calls/' + k.call_id + '/status', { status: 'done' }).then(function () { vanish(c, 'Call marked done'); }).catch(fail); });
+      return c;
+    }));
+    section('Suggested from your emails', (state.suggestions || []).map(function (sg) {
+      var c = card(initials(sg.name), sg.kind === 'add_to_opportunity' ? 'Add ' + sg.name + '?' : 'New contact: ' + sg.name, sg.kind === 'add_to_opportunity' ? 'To “' + sg.opportunity + '”' : sg.email,
+                   sg.threads + ' threads', sg.reason);
+      button(c, sg.kind === 'add_to_opportunity' ? 'Add' : 'Create contact', 'ink', function () { api('POST', '/api/crm/suggestions/' + sg.suggestion_id + '/accept', {}).then(function () { vanish(c, 'Added'); }).catch(fail); });
+      if (sg.opportunity_id) button(c, 'Open', 'soft', function (b) { b.disabled = false; openOpportunity(sg.opportunity_id); });
+      button(c, 'Dismiss', 'soft', function () { api('POST', '/api/crm/suggestions/' + sg.suggestion_id + '/dismiss', {}).then(function () { vanish(c, 'Dismissed'); }).catch(fail); });
       return c;
     }));
     section('Possible no-shows', x.missing.map(function (m) {
@@ -524,6 +532,11 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
             facts.appendChild(el('div', 'fact', '<span>' + f[0] + '</span><span class="val">' + esc(f[1]) + '</span>'));
           });
           b.appendChild(facts);
+          api('GET', '/api/crm/people/' + pid + '/connections').then(function (r) {
+            var cs = (r.connections || []).slice(0, 5);
+            if (!cs.length) return;
+            facts.appendChild(el('div', 'fact', '<span>Often with</span><span class="val">' + esc(cs.map(function (x) { return x.name + ' (' + x.threads + ')'; }).join(', ')) + '</span>'));
+          }).catch(function () {});
           api('GET', '/api/crm/people/' + pid + '/opportunities').then(function (r) {
             var list = r.opportunities || [];
             if (!list.length) return;
@@ -759,9 +772,10 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
   /* ---------- data ---------- */
   function refresh() {
     state.eventsCache = {};
-    return Promise.all([api('GET', '/api/calendar/agenda'), api('GET', '/api/calls/attention').catch(function () { return { ready: [], missing: [] }; })])
+    return Promise.all([api('GET', '/api/calendar/agenda'), api('GET', '/api/calls/attention').catch(function () { return { ready: [], missing: [] }; }),
+                        api('GET', '/api/crm/suggestions').catch(function () { return { suggestions: [] }; })])
       .then(function (r) {
-        state.agenda = r[0]; state.calls = r[1] || { ready: [], missing: [] };
+        state.agenda = r[0]; state.calls = r[1] || { ready: [], missing: [] }; state.suggestions = (r[2] && r[2].suggestions) || [];
         state.now = r[0].now; state.today = r[0].now.slice(0, 10);
         if (!state.cal.anchor) { state.cal.anchor = state.today; state.cal.sel = state.today; }
         renderToday(); renderAttention(); renderCal();

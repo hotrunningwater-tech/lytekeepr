@@ -92,7 +92,7 @@
       nameInput,
       h('div', { class: 'lks-row lko-meta' }, [h('label', {}, ['Stage ', stageSel]), company]),
       h('h3', {}, 'People' + (active.length ? ' (' + active.length + ')' : '')),
-      list, pastBox, addBox(o),
+      list, pastBox, suggestBox(o), addBox(o),
       h('h3', {}, 'Notes'), notes,
       h('h3', {}, 'Tasks'), tasks,
       history,
@@ -126,6 +126,22 @@
         h('small', {}, [p.company || 'No company', p.active ? '' : ' · left ' + when(p.left_at), p.introduced_by_name ? ' · introduced by ' + p.introduced_by_name : ''].join(''))]),
       h('div', { class: 'lko-controls' }, [roleSel, star, introSel, toggle, remove])
     ]);
+  }
+
+  // People LyteKeepr noticed in emails with this opportunity's people (plain counting of who emails with whom)
+  function suggestBox(o) {
+    var box = h('div', { class: 'lko-suggested' });
+    api('GET', '/api/crm/suggestions').then(function (r) {
+      var mine = (r.suggestions || []).filter(function (x) { return x.kind === 'add_to_opportunity' && x.opportunity_id === o.opportunity_id; });
+      if (!mine.length) return;
+      box.appendChild(h('p', { class: 'lks-note' }, 'Suggested from your emails:'));
+      mine.forEach(function (x) {
+        box.appendChild(h('div', { class: 'lko-sugg' }, [h('div', {}, [h('b', {}, x.name), h('small', {}, x.reason)]),
+          h('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: function () { refreshWith(api('POST', '/api/crm/suggestions/' + x.suggestion_id + '/accept').then(function () { return api('GET', '/api/crm/opportunities/' + o.opportunity_id); })); } }, 'Add'),
+          h('button', { class: 'lko-link', type: 'button', style: 'color:var(--ink-soft)', onclick: function () { refreshWith(api('POST', '/api/crm/suggestions/' + x.suggestion_id + '/dismiss').then(function () { return api('GET', '/api/crm/opportunities/' + o.opportunity_id); })); } }, 'Dismiss')]));
+      });
+    }).catch(function () {});
+    return box;
   }
 
   function addBox(o) {
@@ -186,6 +202,18 @@
   function renderForPerson(box, personId) {
     if (!box) return;
     box.replaceChildren();
+    api('GET', '/api/crm/people/' + personId + '/connections').then(function (r) {
+      var cs = (r.connections || []).slice(0, 6);
+      if (!cs.length) return;
+      var line = h('p', { class: 'crm-detail-field lko-conn' }, ['Often in emails with: ']);
+      cs.forEach(function (c, i) {
+        if (i) line.appendChild(document.createTextNode(', '));
+        line.appendChild(c.contact_id ? h('button', { type: 'button', class: 'lko-name', style: 'font-weight:500;font-size:inherit', onclick: function () { openContact(c.contact_id); } }, c.name)
+                                      : h('span', { title: c.email }, c.name));
+        line.appendChild(h('small', {}, ' (' + c.threads + ')'));
+      });
+      box.appendChild(line);
+    }).catch(function () {});
     api('GET', '/api/crm/people/' + personId + '/opportunities').then(function (r) {
       var list = r.opportunities || [];
       if (!list.length) return;

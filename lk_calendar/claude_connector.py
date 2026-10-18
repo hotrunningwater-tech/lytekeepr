@@ -230,6 +230,21 @@ TOOLS = [
     {"name": "add_opportunity_task", "title": "Task for an opportunity", "description": "Add a next-step task linked to an opportunity (shows in the LyteKeepr calendar). Today or later.",
      "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
                                                       "time": {"type": "string", "description": "HH:MM"}}, "required": ["opportunity_id", "title", "date"]}, "read": False},
+    # --- who is in touch with whom (counted from email addresses, no AI) ---
+    {"name": "who_is_connected", "title": "Who is connected to a contact",
+     "description": "The people a contact keeps appearing with in emails (From, To, CC), with how many separate threads they share. Facts from email headers, not guesses.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
+    {"name": "find_related_people", "title": "People who may belong to an opportunity",
+     "description": ("People who appear in emails with an opportunity's active participants but are not on it yet, strongest first (threads shared), "
+                     "with who brought them in when known. Show them to the user; add only the ones the user confirms (add_participant)."),
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}}, "required": ["opportunity_id"]}, "read": True},
+    {"name": "list_suggestions", "title": "Suggested people",
+     "description": "LyteKeepr's own suggestions from repeated email patterns: someone to add to an opportunity, or someone to save as a contact. Optionally for one opportunity.",
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}}}, "read": True},
+    {"name": "accept_suggestion", "title": "Accept a suggestion", "description": "Do what a suggestion proposes (create the contact if needed, add them with who introduced them). Only when the user says so.",
+     "inputSchema": {"type": "object", "properties": {"suggestion_id": {"type": "integer"}}, "required": ["suggestion_id"]}, "read": False},
+    {"name": "dismiss_suggestion", "title": "Dismiss a suggestion", "description": "Dismiss a suggestion; it will not come back.",
+     "inputSchema": {"type": "object", "properties": {"suggestion_id": {"type": "integer"}}, "required": ["suggestion_id"]}, "read": False},
     {"name": "draft_email", "title": "Draft an email",
      "description": "Write an email to one contact and leave it in LyteKeepr for the user to send. NOTHING is sent: the user opens LyteKeepr (Home) within 30 minutes and presses Send now.",
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name of the contact"}, "subject": {"type": "string"}, "body": {"type": "string"}},
@@ -399,6 +414,39 @@ def _run_tool(call, name: str, args: dict):
     if name == "add_opportunity_task":
         o = need(*call("POST", f"/api/crm/opportunities/{int(args['opportunity_id'])}/tasks", {"title": args["title"], "date": args["date"], "time": args.get("time")}))
         return {"tasks": o["tasks"]}
+    if name == "who_is_connected":
+        return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/connections"))["connections"]
+    if name == "find_related_people":
+        o = need(*call("GET", f"/api/crm/opportunities/{int(args['opportunity_id'])}"))
+        on = {p["contact_id"] for p in o["participants"]}
+        found = {}
+        for p in o["participants"]:
+            if not p["active"]:
+                continue
+            st, r = call("GET", f"/api/crm/people/{p['contact_id']}/connections")
+            for c in (r or {}).get("connections", []) if st < 400 else []:
+                if c.get("contact_id") in on:
+                    continue
+                key = c["email"]
+                cur = found.get(key)
+                if not cur or c["threads"] > cur["threads"]:
+                    found[key] = {**c, "with": p["name"]}
+        st, sg = call("GET", "/api/crm/suggestions")
+        intro = {x["email"]: x["reason"] for x in (sg or {}).get("suggestions", []) if x.get("opportunity_id") == o["opportunity_id"]} if st < 400 else {}
+        out = sorted(found.values(), key=lambda c: -c["threads"])
+        for c in out:
+            if c["email"] in intro:
+                c["why"] = intro[c["email"]]
+        return {"opportunity": o["name"], "already_on_it": [p["name"] for p in o["participants"]], "maybe": out[:20]}
+    if name == "list_suggestions":
+        items = need(*call("GET", "/api/crm/suggestions"))["suggestions"]
+        if args.get("opportunity_id"):
+            items = [x for x in items if x.get("opportunity_id") == int(args["opportunity_id"])]
+        return items
+    if name == "accept_suggestion":
+        return need(*call("POST", f"/api/crm/suggestions/{int(args['suggestion_id'])}/accept", {}))
+    if name == "dismiss_suggestion":
+        return need(*call("POST", f"/api/crm/suggestions/{int(args['suggestion_id'])}/dismiss", {}))
     if name == "check_reply":
         out = need(*call("POST", "/api/claude/home/check_reply", {"query": args.get("contact", ""), "channel": args.get("channel", "")}))
         for k in ("their_last_message", "your_last_message"):          # email text stays in LyteKeepr: only when and where

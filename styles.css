@@ -2744,3 +2744,7 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .lko-window .lko-meta input[type=text] { flex: 1; min-width: 180px; }
 .lko-add .lks-row select { flex: none; width: 170px; }
 .lko-tasks .lks-row { gap: 8px; align-items: center; }
+.lko-suggested { display: flex; flex-direction: column; gap: 6px; }
+.lko-sugg { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; background: rgba(58,156,188,.08); border: 1px dashed rgba(58,156,188,.45); border-radius: 12px; padding: 8px 10px; }
+.lko-sugg small { display: block; color: var(--ink-soft); font-size: 12px; }
+.lko-conn small { color: var(--ink-soft); }
