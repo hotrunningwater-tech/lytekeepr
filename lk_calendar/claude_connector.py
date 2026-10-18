@@ -109,6 +109,39 @@ def disconnect(user_id: int, profile_id: str, client_id: str) -> None:
 
 
 # ------------------------------------------------------------------ tools (each one is a call to the app's own API, as the person)
+def _close_matches(call, need, text: str, kinds=("contact", "opportunity", "funnel")) -> list:
+    """Speech-to-text gets names wrong ("Mario Loretti", "NXY pilot"): the closest names by spelling, best first (at most 3)."""
+    from difflib import SequenceMatcher
+    t = " ".join(str(text or "").lower().split())
+    if not t:
+        return []
+    def score(name):
+        n = " ".join(str(name or "").lower().split())
+        if not n:
+            return 0.0
+        whole = SequenceMatcher(None, t, n).ratio()
+        words = [max((SequenceMatcher(None, w, x).ratio() for x in n.split()), default=0) for w in t.split()]
+        return max(whole, sum(words) / len(words) if words else 0)
+    pool = []
+    if "contact" in kinds:
+        pool += [{"kind": "contact", "contact_id": c["id"], "name": c.get("display"), "company": c.get("company") or None}
+                 for c in need(*call("GET", "/api/calendar/contacts?limit=500"))["contacts"]]
+    if "opportunity" in kinds:
+        pool += [{"kind": "opportunity", "opportunity_id": o["opportunity_id"], "name": o["name"]}
+                 for o in need(*call("GET", "/api/crm/opportunities?limit=500"))["opportunities"]]
+    if "funnel" in kinds:
+        pool += [{"kind": "funnel", "funnel_id": f["funnel_id"], "name": f["name"]} for f in need(*call("GET", "/api/crm/funnels"))["funnels"]]
+    ranked = sorted(((score(x["name"]), x) for x in pool), key=lambda p: -p[0])
+    return [x for sc, x in ranked if sc >= 0.6][:3]
+
+
+def _did_you_mean(matches: list) -> dict:
+    if not matches:
+        return {"did_you_mean": [], "say": "Nothing similar either. Say so in one short line."}
+    return {"did_you_mean": matches,
+            "say": "No exact match. Ask in ONE short line: 'Did you mean " + " or ".join(m["name"] for m in matches) + "?' Nothing else."}
+
+
 def _brand_key(call, need, text):
     """A brand name or key → its key; None when no brand was asked for; '' for 'none'. Unknown brands are an error listing the real ones."""
     t = str(text or "").strip()
@@ -131,7 +164,9 @@ TOOLS = [
     {"name": "find", "title": "Find a person, company or opportunity",
      "description": ("START HERE when the user names someone or something. Searches contacts AND opportunities at once and says what each match is: "
                      "a contact (with their own funnel and stage, if any) and every opportunity they are on (with their role), plus opportunities "
-                     "whose name or company matches. A person can be a single contact entry in a funnel, a participant in an opportunity, or both."),
+                     "whose name or company matches, and funnels whose name matches. A person can be a single contact entry in a funnel, a participant in an opportunity, or both. "
+                     "Names often arrive misspelled by speech-to-text: when nothing matches exactly, the result has did_you_mean with the closest names; "
+                     "then just ask 'Did you mean …?' in one line."),
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}, "read": True},
     {"name": "list_brands", "title": "List brands",
      "description": ("The brands (businesses) this account runs, e.g. LyteKeepr, Aspan, Nexy. Contacts, funnels and calendar items each belong to one brand; "
@@ -409,8 +444,11 @@ def _run_tool(call, name: str, args: dict):
         seen = {o["opportunity_id"] for p in people for o in p["opportunities"]}
         opps = [{"kind": "opportunity", "opportunity_id": o["opportunity_id"], "name": o["name"], "participants": o["summary"]}
                 for o in need(*call("GET", f"/api/crm/opportunities?q={q}"))["opportunities"] if o["opportunity_id"] not in seen]
-        return {"contacts": people, "other_matching_opportunities": opps,
-                "note": "Nothing matched." if not people and not opps else ""}
+        funnels = [{"kind": "funnel", "funnel_id": f["funnel_id"], "name": f["name"]} for f in need(*call("GET", "/api/crm/funnels"))["funnels"]
+                   if text.lower() and text.lower() in (f["name"] or "").lower()]
+        if not people and not opps and not funnels:
+            return _did_you_mean(_close_matches(call, need, text))
+        return {"contacts": people, "other_matching_opportunities": opps, "funnels": funnels}
     if name == "list_brands":
         return need(*call("GET", "/api/crm/brands"))["brands"]
     if name == "create_brand":
@@ -424,6 +462,8 @@ def _run_tool(call, name: str, args: dict):
         rows = need(*call("GET", f"/api/calendar/contacts?{q}"))["contacts"]
         if wanted is not None:
             rows = [c for c in rows if (c.get("brand") or "") == wanted][:limit]
+        if not rows and str(args.get("query") or "").strip():
+            return _did_you_mean(_close_matches(call, need, args["query"], ("contact",)))
         return [{"id": c["id"], "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "instagram": c.get("instagram") or None, "channel": c.get("channel"),
                  "brand": c.get("brand") or "", "funnel": c.get("funnel_name") or "", "stage": c.get("stage_name") or "", "job_title": c.get("job_title")} for c in rows]
     if name == "get_contact":
@@ -531,7 +571,10 @@ def _run_tool(call, name: str, args: dict):
     if name == "cancel_meeting":
         return need(*call("DELETE", f"/api/calendar/meetings/{int(args['item_id'])}"))
     if name == "find_opportunities":
-        return need(*call("GET", "/api/crm/opportunities?q=" + urllib.parse.quote(str(args.get("query") or ""))))["opportunities"]
+        found = need(*call("GET", "/api/crm/opportunities?q=" + urllib.parse.quote(str(args.get("query") or ""))))["opportunities"]
+        if not found and str(args.get("query") or "").strip():
+            return _did_you_mean(_close_matches(call, need, args["query"], ("opportunity", "funnel")))
+        return found
     if name == "get_opportunity":
         o = need(*call("GET", f"/api/crm/opportunities/{int(args['opportunity_id'])}"))
         o.pop("stages", None)
