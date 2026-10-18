@@ -123,7 +123,7 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
     {"name": "list_funnels", "title": "List funnels", "description": "The sales funnels with their stages and how many people are in each.",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
-    {"name": "get_funnel", "title": "Funnel board", "description": "One funnel: every stage and the people in it, with their status.",
+    {"name": "get_funnel", "title": "Funnel board", "description": "One funnel: every stage with its contact entries (people, with their status) and its opportunity entries (shared deals with several people).",
      "inputSchema": {"type": "object", "properties": {"funnel_id": {"type": "integer"}}, "required": ["funnel_id"]}, "read": True},
     {"name": "get_agenda", "title": "Agenda", "description": "Tasks and reminders that are overdue, due today and coming up in the next 7 days.",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
@@ -190,9 +190,46 @@ TOOLS = [
                                                       "duration_min": {"type": "integer", "default": 30}, "invite": {"type": "array", "items": {"type": "string"}, "description": "Contact names or email addresses"},
                                                       "google_meet": {"type": "boolean", "default": True}, "record_with_fathom": {"type": "boolean", "default": True},
                                                       "notes": {"type": "string"}}, "required": ["title", "date", "time"]}, "read": False},
-    {"name": "cancel_meeting", "title": "Cancel a meeting",
+    {"name": "cancel_meeting", "title": "Cancel a meeting", "destructive": True,
      "description": "Delete a meeting from the user's own Google Calendar; Google emails a cancellation to the people invited. Confirm with the user first. The id comes from get_agenda or list_calendar.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}}, "required": ["item_id"]}, "read": False},
+    # --- opportunities: a second kind of funnel entry (one shared deal/project with several people); contacts stay contacts ---
+    {"name": "find_opportunities", "title": "Find opportunities", "description": "Find opportunities (shared deals, projects, partnerships) by name, company or a participant's name. These are NOT contacts.",
+     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}, "read": True},
+    {"name": "get_opportunity", "title": "Opportunity details",
+     "description": ("Everything about one opportunity: funnel and stage, primary contact (if any), every participant with company, role, active or not, "
+                     "who introduced them, the history of changes, notes, tasks, and each active participant's latest messages and calls. "
+                     "Only the listed participants are involved; other people at the same companies are not."),
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}}, "required": ["opportunity_id"]}, "read": True},
+    {"name": "create_opportunity", "title": "Create an opportunity",
+     "description": ("Create a NEW opportunity in a funnel only when the user asks for one (never convert a contact entry into an opportunity). "
+                     "Participants are optional; no primary contact is set unless the user names one."),
+     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "funnel_id": {"type": "integer"}, "stage": {"type": "string", "description": "Stage name; default the first stage"},
+                                                      "company": {"type": "string", "description": "Main company, optional"}, "notes": {"type": "string"},
+                                                      "participants": {"type": "array", "items": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "role": {"type": "string"}, "primary": {"type": "boolean"}}, "required": ["contact_id"]}}},
+                     "required": ["name", "funnel_id"]}, "read": False},
+    {"name": "add_participant", "title": "Add a person to an opportunity",
+     "description": "Add an existing contact to an opportunity, optionally with a role (decision-maker, influencer, advisor, introducer, other), as primary, and who introduced them.",
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_id": {"type": "integer"}, "role": {"type": "string"},
+                                                      "primary": {"type": "boolean"}, "introduced_by_contact_id": {"type": "integer"}}, "required": ["opportunity_id", "contact_id"]}, "read": False},
+    {"name": "update_participant", "title": "Change a participant",
+     "description": ("Change a participant's role, make them the primary contact (the previous primary stops being primary), set involved=false when they are "
+                     "no longer involved (kept in the history), involved=true when they are back, or set who introduced them."),
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_id": {"type": "integer"}, "role": {"type": "string"},
+                                                      "primary": {"type": "boolean"}, "involved": {"type": "boolean"}, "introduced_by_contact_id": {"type": "integer"}},
+                     "required": ["opportunity_id", "contact_id"]}, "read": False},
+    {"name": "clear_primary_contact", "title": "No primary contact", "description": "Make all participants equal: the opportunity has no primary contact.",
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}}, "required": ["opportunity_id"]}, "read": False},
+    {"name": "remove_participant", "title": "Remove a participant (added by mistake)",
+     "description": ("Delete the link between a contact and an opportunity ONLY when it was added by mistake. If the person simply stopped being involved, "
+                     "use update_participant with involved=false instead. The contact itself is never deleted."),
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_id": {"type": "integer"}}, "required": ["opportunity_id", "contact_id"]},
+     "read": False, "destructive": True},
+    {"name": "move_opportunity_stage", "title": "Move an opportunity", "description": "Move an opportunity to another stage of its funnel, by the stage's name. Only when the user asks.",
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "stage": {"type": "string"}}, "required": ["opportunity_id", "stage"]}, "read": False},
+    {"name": "add_opportunity_task", "title": "Task for an opportunity", "description": "Add a next-step task linked to an opportunity (shows in the LyteKeepr calendar). Today or later.",
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
+                                                      "time": {"type": "string", "description": "HH:MM"}}, "required": ["opportunity_id", "title", "date"]}, "read": False},
     {"name": "draft_email", "title": "Draft an email",
      "description": "Write an email to one contact and leave it in LyteKeepr for the user to send. NOTHING is sent: the user opens LyteKeepr (Home) within 30 minutes and presses Send now.",
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name of the contact"}, "subject": {"type": "string"}, "body": {"type": "string"}},
@@ -225,6 +262,9 @@ def _run_tool(call, name: str, args: dict):
         status, outreach = call("GET", f"/api/calendar/people/{pid}/outreach")
         if status < 400:
             detail["outreach"] = outreach
+        status, opps = call("GET", f"/api/crm/people/{pid}/opportunities")
+        if status < 400:
+            detail["opportunities"] = opps.get("opportunities", [])
         status, calls = call("GET", f"/api/calls/person/{pid}")
         detail["calls"] = [{"call_id": c.get("call_id"), "title": c.get("title"), "date": c.get("started_at"), "status": c.get("status"),
                             "summary": c.get("summary"), "has_transcript": c.get("has_transcript")} for c in (calls or {}).get("calls", [])] if status < 400 else []
@@ -309,6 +349,56 @@ def _run_tool(call, name: str, args: dict):
                 "google_meet": m.get("join_url") or None, "invited": [a.get("email") for a in m.get("attendees") or []]}
     if name == "cancel_meeting":
         return need(*call("DELETE", f"/api/calendar/meetings/{int(args['item_id'])}"))
+    if name == "find_opportunities":
+        return need(*call("GET", "/api/crm/opportunities?q=" + urllib.parse.quote(str(args.get("query") or ""))))["opportunities"]
+    if name == "get_opportunity":
+        o = need(*call("GET", f"/api/crm/opportunities/{int(args['opportunity_id'])}"))
+        o.pop("stages", None)
+        for p in o.get("participants") or []:
+            if not p.get("active"):
+                continue
+            st, d = call("GET", f"/api/crm/people/{p['contact_id']}")
+            msgs = sorted((d or {}).get("messages") or [], key=lambda m: m.get("timestamp") or "")[-3:] if st < 400 else []
+            p["latest_messages"] = [{"channel": m.get("channel"), "direction": m.get("direction"), "when": m.get("timestamp"),
+                                     **({} if m.get("channel") == "email" else {"text": (m.get("message_text") or "")[:400]})} for m in msgs]   # email text stays in LyteKeepr
+            st, c = call("GET", f"/api/calls/person/{p['contact_id']}")
+            p["calls"] = [{"title": x.get("title"), "date": x.get("started_at"), "summary": x.get("summary")} for x in (c or {}).get("calls", []) if x.get("call_id")][:3] if st < 400 else []
+        return o
+    if name == "create_opportunity":
+        board = need(*call("GET", f"/api/crm/funnels/{int(args['funnel_id'])}/board"))
+        stage_id = None
+        if args.get("stage"):
+            want = str(args["stage"]).strip().lower()
+            m = [s for s in board.get("stages") or [] if (s.get("name") or "").lower() == want] or [s for s in board.get("stages") or [] if want in (s.get("name") or "").lower()]
+            if len(m) != 1:
+                raise ValueError("Stage not found. The stages are: " + ", ".join(s.get("name", "") for s in board.get("stages") or []))
+            stage_id = m[0]["stage_id"]
+        o = need(*call("POST", "/api/crm/opportunities", {"name": args["name"], "funnel_id": int(args["funnel_id"]), "stage_id": stage_id, "company": args.get("company") or "",
+                                                        "notes": args.get("notes") or "", "participants": args.get("participants") or []}))
+        return {"opportunity_id": o["opportunity_id"], "name": o["name"], "stage": o["stage"], "participants": o["summary"]}
+    if name == "add_participant":
+        o = need(*call("POST", f"/api/crm/opportunities/{int(args['opportunity_id'])}/participants", {"contact_id": int(args["contact_id"]), "role": args.get("role") or "",
+                                                                                                    "primary": bool(args.get("primary")), "introduced_by": args.get("introduced_by_contact_id")}))
+        return {"participants": o["summary"]}
+    if name == "update_participant":
+        body = {k: v for k, v in (("role", args.get("role")), ("primary", args.get("primary")), ("active", args.get("involved")),
+                                  ("introduced_by", args.get("introduced_by_contact_id"))) if v is not None}
+        o = need(*call("PUT", f"/api/crm/opportunities/{int(args['opportunity_id'])}/participants/{int(args['contact_id'])}", body))
+        return {"participants": o["participants"], "summary": o["summary"]}
+    if name == "clear_primary_contact":
+        return {"summary": need(*call("POST", f"/api/crm/opportunities/{int(args['opportunity_id'])}/clear-primary"))["summary"]}
+    if name == "remove_participant":
+        return {"summary": need(*call("POST", f"/api/crm/opportunities/{int(args['opportunity_id'])}/participants/{int(args['contact_id'])}/remove"))["summary"]}
+    if name == "move_opportunity_stage":
+        o = need(*call("GET", f"/api/crm/opportunities/{int(args['opportunity_id'])}"))
+        want = str(args["stage"]).strip().lower()
+        m = [s for s in o["stages"] if s["name"].lower() == want] or [s for s in o["stages"] if want in s["name"].lower()]
+        if len(m) != 1:
+            raise ValueError("Stage not found. The stages are: " + ", ".join(s["name"] for s in o["stages"]))
+        return {"stage": need(*call("POST", f"/api/crm/opportunities/{o['opportunity_id']}/move", {"stage_id": m[0]["stage_id"]}))["stage"]}
+    if name == "add_opportunity_task":
+        o = need(*call("POST", f"/api/crm/opportunities/{int(args['opportunity_id'])}/tasks", {"title": args["title"], "date": args["date"], "time": args.get("time")}))
+        return {"tasks": o["tasks"]}
     if name == "check_reply":
         out = need(*call("POST", "/api/claude/home/check_reply", {"query": args.get("contact", ""), "channel": args.get("channel", "")}))
         for k in ("their_last_message", "your_last_message"):          # email text stays in LyteKeepr: only when and where
@@ -524,12 +614,14 @@ def register(app):
                        "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "LyteKeepr", "version": "1.0"},
                        "instructions": ("LyteKeepr is the user's CRM: contacts, sales funnels, tasks, reminders and recorded calls. "
                                         "Dates are YYYY-MM-DD and times HH:MM in the user's local time. Find a contact's id with search_contacts "
-                                        "before get_contact. Ask the user before creating or changing anything.")})
+                                        "before get_contact. Funnels hold two kinds of entries: contacts (one person) and opportunities (one shared "
+                                        "deal or project with several participants). Never turn one into the other, and never assume everyone at a "
+                                        "company is part of an opportunity. Ask the user before creating or changing anything.")})
         if method == "ping":
             return ok({})
         if method == "tools/list":
             return ok({"tools": [{"name": t["name"], "title": t["title"], "description": t["description"], "inputSchema": t["inputSchema"],
-                                  "annotations": {"title": t["title"], "readOnlyHint": t["read"], "destructiveHint": False, "openWorldHint": False}}
+                                  "annotations": {"title": t["title"], "readOnlyHint": t["read"], "destructiveHint": bool(t.get("destructive")), "openWorldHint": False}}
                                  for t in TOOLS]})
         if method == "tools/call":
             name, args = params.get("name", ""), params.get("arguments") or {}
@@ -610,7 +702,7 @@ ul{font-size:14px;line-height:1.6;margin:0 0 16px;padding-left:18px}b{color:#294
 </style></head><body><div class="card">
 <h1>Allow Claude to use your LyteKeepr?</h1>
 <p>Signed in as <b>{{WHO}}</b> {{EMAIL}}</p>
-<ul><li>See your contacts, funnels, tasks, reminders, recorded calls and LinkedIn/Instagram messages</li><li>Add and update contacts, stages, outreach statuses, tasks and reminders</li><li>Book or cancel meetings in your Google Calendar (invites go out from Google)</li><li>Write email and LinkedIn drafts that you send yourself from LyteKeepr</li></ul>
+<ul><li>See your contacts, funnels, tasks, reminders, recorded calls and LinkedIn/Instagram messages</li><li>Add and update contacts, stages, outreach statuses, tasks and reminders</li><li>Book or cancel meetings in your Google Calendar (invites go out from Google)</li><li>Create opportunities and manage who is on them</li><li>Write email and LinkedIn drafts that you send yourself from LyteKeepr</li></ul>
 <p>Claude sees only what you can see in LyteKeepr, and asks you before it changes anything. Disconnect any time in LyteKeepr Settings → Claude.</p>
 <form method="post" action="{{ACTION}}"><input type="hidden" name="grant" value="{{GRANT}}">
 <div class="row"><button class="no" name="choice" value="deny" type="submit">Cancel</button><button class="allow" name="choice" value="allow" type="submit">Allow</button></div></form>

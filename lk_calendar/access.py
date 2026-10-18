@@ -51,13 +51,24 @@ def person_ids() -> set | None:
         with contacts._crm() as conn:
             marks = ",".join("?" for _ in funnels) or "NULL"
             rows = conn.execute(f"SELECT person_id FROM people WHERE owner_id = ? OR funnel_id IN ({marks})", [me, *sorted(funnels)])
-            return {r["person_id"] for r in rows}
+            ids = {r["person_id"] for r in rows}
+            from . import opportunities                     # the people on opportunities in those funnels, to work with them
+            return ids | opportunities.visible_person_ids(conn, funnels)
     return _cached("people", build)
 
 
 def can_person(person_id) -> bool:
     ids = person_ids()
     return ids is None or int(person_id or 0) in ids
+
+
+def can_opportunity(opp: dict | None) -> bool:
+    """An opportunity is visible with its funnel (or to whoever created it)."""
+    if not opp:
+        return False
+    if is_full():
+        return True
+    return can_funnel(opp.get("funnel_id")) or (opp.get("owner_id") is not None and opp.get("owner_id") == (_current() or {}).get("id"))
 
 
 def can_funnel(funnel_id) -> bool:

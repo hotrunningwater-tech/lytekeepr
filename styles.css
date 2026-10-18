@@ -2688,3 +2688,59 @@ body.no-linkedin #linkedinTab { display: none !important; }
 
 .crm-call-toggleline { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
 .crm-call-toggleline .crm-call-toggle { padding: 0; }
+
+/* Opportunities: a second kind of funnel card, and the opportunity window (lk_calendar/static/opportunities.js) */
+.lko-card { border-color: rgba(58,156,188,.45); box-shadow: inset 3px 0 0 #3a9cbc; }
+.lko-kind { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #3a9cbc; margin-bottom: 2px; }
+.lko-icon { font-size: 9px; color: #3a9cbc; }
+.lko-people { color: var(--ink); font-size: 11.5px; margin-top: 2px; }
+.lko-window { display: flex; flex-direction: column; gap: 10px; }
+.lko-window h3 { margin: 8px 0 0; font-family: var(--font-heading); font-size: 12px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft); }
+.lko-head { display: flex; align-items: center; gap: 10px; }
+.lko-head h2 { margin: 0; }
+.lko-x { margin-left: auto; border: none; background: rgba(230,237,240,.9); width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; color: var(--ink); }
+.lko-title { font-family: var(--font-heading); font-size: 20px; font-weight: 700; border: none; background: transparent; padding: 4px 0; color: var(--ink); width: 100%; }
+.lko-title:focus { background: rgba(230,237,240,.8); border-radius: 8px; padding: 4px 8px; }
+.lko-meta { align-items: center; gap: 10px; flex-wrap: wrap; }
+.lko-meta label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); }
+.lko-people-list { display: flex; flex-direction: column; gap: 6px; }
+.lko-person { display: grid; grid-template-columns: 34px minmax(140px, 1fr); gap: 4px 10px; align-items: center; background: #fff; border-radius: 12px; padding: 8px 10px; }
+.lko-person.off { opacity: .65; }
+.lko-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--ink); color: var(--surface); display: grid; place-items: center; font-family: var(--font-heading); font-weight: 700; font-size: 12px; grid-row: span 2; }
+.lko-who { min-width: 0; display: flex; flex-direction: column; }
+.lko-who small { color: var(--ink-soft); font-size: 12px; }
+.lko-name { border: none; background: none; padding: 0; text-align: left; font-weight: 600; font-size: 14px; color: var(--ink); cursor: pointer; }
+.lko-name:hover { text-decoration: underline; }
+.lko-controls { grid-column: 2; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lko-controls select { padding: 5px 8px; font-size: 12px; }
+.lko-star { border: 1px solid rgba(41,67,78,.2); background: none; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+.lko-star.on { background: #3a9cbc; border-color: #3a9cbc; color: #fff; }
+.lko-link { border: none; background: none; color: #a3412b; font-size: 12px; text-decoration: underline; cursor: pointer; padding: 2px; }
+.lko-past summary, .lko-history summary { cursor: pointer; font-size: 12.5px; color: var(--ink-soft); padding: 4px 0; }
+.lko-history ul { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.lko-history small, .lko-task-list small { color: var(--ink-soft); }
+.lko-add .lks-row { gap: 8px; } .lko-add input { flex: 1; }
+.lko-suggest { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.lko-suggest button { display: flex; flex-direction: column; align-items: flex-start; border: none; background: #fff; border-radius: 10px; padding: 7px 10px; cursor: pointer; text-align: left; }
+.lko-suggest button:disabled { opacity: .5; cursor: default; }
+.lko-suggest button span { font-size: 12px; color: var(--ink-soft); }
+.lko-suggest .lko-new b { color: #3a9cbc; }
+.lko-task-list { list-style: none; padding: 0; margin: 0 0 6px; display: flex; flex-direction: column; gap: 4px; }
+.lko-task-list li { display: flex; justify-content: space-between; gap: 10px; background: #fff; border-radius: 10px; padding: 7px 10px; font-size: 13.5px; }
+.lko-task-list li.done span { text-decoration: line-through; color: var(--ink-soft); }
+.lko-tasks input[type=text] { flex: 1; }
+.lko-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.lko-foot { justify-content: flex-end; }
+.lko-mine { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+.lko-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(58,156,188,.4); background: #fff; border-radius: 999px; padding: 5px 11px; font-size: 13px; cursor: pointer; color: var(--ink); }
+.lko-chip.off { opacity: .6; }
+.lko-chip small { color: var(--ink-soft); }
+.lko-window input[type=text], .lko-window input[type=date], .lko-window textarea, .lko-window select {
+  border: none; background: rgba(230,237,240,.85); border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 13.5px; color: var(--ink); box-sizing: border-box; }
+.lko-window textarea { width: 100%; min-height: 70px; resize: vertical; }
+.lko-window .lko-title { background: transparent; padding: 4px 0; font-size: 20px; }
+.lko-window .lko-title:focus { background: rgba(230,237,240,.85); padding: 4px 8px; }
+.lko-window .lko-controls select { padding: 6px 10px; font-size: 12.5px; }
+.lko-window .lko-meta input[type=text] { flex: 1; min-width: 180px; }
+.lko-add .lks-row select { flex: none; width: 170px; }
+.lko-tasks .lks-row { gap: 8px; align-items: center; }

@@ -342,6 +342,7 @@
     document.body.appendChild(modalEl);
   }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modalEl) closeModal(); });
+  window.lkContacts.modal = modal; window.lkContacts.closeModal = closeModal; window.lkContacts.askConfirm = askConfirm;    // shared with opportunities.js
   function closeModal(force) {
     if (!modalEl) return;
     var guard = modalEl.firstChild && modalEl.firstChild.lksGuard;

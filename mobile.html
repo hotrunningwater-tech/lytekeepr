@@ -216,7 +216,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
   <section class="search" id="search" aria-label="Search">
     <div class="sbar">
       <label class="sfield"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="q" type="search" placeholder="Name, company or meeting" autocomplete="off" enterkeyhint="search"></label>
+        <input id="q" type="search" placeholder="Name, company, meeting or opportunity" autocomplete="off" enterkeyhint="search"></label>
       <button class="cancel" id="searchCancel">Cancel</button>
     </div>
     <div class="sres" id="sres"></div>
@@ -524,6 +524,19 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
             facts.appendChild(el('div', 'fact', '<span>' + f[0] + '</span><span class="val">' + esc(f[1]) + '</span>'));
           });
           b.appendChild(facts);
+          api('GET', '/api/crm/people/' + pid + '/opportunities').then(function (r) {
+            var list = r.opportunities || [];
+            if (!list.length) return;
+            var at = b.querySelector('.hint');
+            var lbl = el('div', 'lbl', 'Opportunities'); b.insertBefore(lbl, at);
+            list.forEach(function (o) {
+              var row = el('button', 'person', '<span class="avatar" style="background:var(--accent)">◆</span><span class="meta"><b>' + esc(o.name) + '</b><small>'
+                + esc([o.primary ? 'Primary' : (o.role || 'Participant'), o.stage, o.active ? '' : 'no longer involved'].filter(Boolean).join(' · ')) + '</small></span><span class="go">›</span>');
+              if (!o.active) row.style.opacity = '.6';
+              row.addEventListener('click', function () { openOpportunity(o.opportunity_id, true); });
+              b.insertBefore(row, at);
+            });
+          }).catch(function () {});
           var upcoming = upcomingMeetingWith(c.email);
           if (upcoming) {
             b.appendChild(el('div', 'lbl', 'Next meeting'));
@@ -570,6 +583,43 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
       }
       b.appendChild(acts);
     } });
+  }
+
+  // An opportunity: one shared deal with several people. Read it, move its stage, tap a person for their card.
+  function openOpportunity(id, keep) {
+    var view = { label: 'Opportunity', render: function (b) {
+      b.appendChild(el('p', 'loading', 'Loading…'));
+      api('GET', '/api/crm/opportunities/' + id).then(function (o) {
+        b.replaceChildren();
+        b.appendChild(el('span', 'pill', '<i class="dot" style="background:var(--accent)"></i>' + esc('Opportunity · ' + o.funnel)));
+        var h2 = el('h2', '', esc(o.name)); h2.style.cssText = 'font-size:22px;font-weight:700;line-height:1.2;overflow-wrap:anywhere'; b.appendChild(h2);
+        if (o.company) { var co = el('p', '', esc(o.company)); co.style.cssText = 'margin:-6px 0 0;color:var(--ink-soft)'; b.appendChild(co); }
+        b.appendChild(el('div', 'lbl', 'Stage'));
+        var sel = el('select', ''); sel.style.cssText = 'width:100%;border:none;border-radius:14px;background:var(--card);padding:12px;font:inherit;color:var(--ink)';
+        o.stages.forEach(function (s) { var op = el('option', '', esc(s.name)); op.value = s.stage_id; if (s.stage_id === o.stage_id) op.selected = true; sel.appendChild(op); });
+        sel.addEventListener('change', function () { api('POST', '/api/crm/opportunities/' + id + '/move', { stage_id: +sel.value }).then(function (r) { toast('Moved to ' + r.stage); }).catch(fail); });
+        b.appendChild(sel);
+        var active = o.participants.filter(function (p) { return p.active; }), past = o.participants.filter(function (p) { return !p.active; });
+        b.appendChild(el('div', 'lbl', 'People' + (active.length ? ' <span class="count num">' + active.length + '</span>' : '')));
+        if (!active.length) b.appendChild(el('p', 'empty', 'No one is on this opportunity yet.'));
+        active.concat(past).forEach(function (p) {
+          var sub = [p.primary ? 'Primary' : p.role, p.company, p.active ? '' : 'no longer involved', p.introduced_by_name ? 'introduced by ' + p.introduced_by_name : ''].filter(Boolean).join(' · ');
+          var row = el('button', 'person', '<span class="avatar">' + esc(initials(p.name)) + '</span><span class="meta"><b>' + esc(p.name) + (p.primary ? ' ★' : '') + '</b><small>' + esc(sub) + '</small></span><span class="go">›</span>');
+          if (!p.active) row.style.opacity = '.6';
+          row.addEventListener('click', function () { openContact(p.contact_id, true); });
+          b.appendChild(row);
+        });
+        if (o.tasks.length) {
+          b.appendChild(el('div', 'lbl', 'Tasks'));
+          var tl = el('div', 'facts');
+          o.tasks.forEach(function (t) { tl.appendChild(el('div', 'fact', '<span>' + esc(dateLabel(t.start_date)) + '</span><span class="val">' + esc(t.title + (t.done ? ' (done)' : '')) + '</span>')); });
+          b.appendChild(tl);
+        }
+        if (o.notes) { b.appendChild(el('div', 'lbl', 'Notes')); b.appendChild(el('div', 'facts', '<div class="fact" style="grid-template-columns:1fr"><span class="val">' + esc(o.notes) + '</span></div>')); }
+        b.appendChild(el('div', 'hint', 'To add people, change roles or mark someone no longer involved, ask Claude, or use the desktop.'));
+      }).catch(function (e) { b.replaceChildren(el('p', 'empty', esc(e.message))); });
+    } };
+    push(view, keep);
   }
 
   function upcomingMeetingWith(email) {
@@ -664,13 +714,18 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
   function renderResults() {
     var q = $('q').value.trim(), box = $('sres');
     if (q.length < 2) { box.replaceChildren(el('p', 'empty', 'Type a name, company or meeting.')); return; }
-    api('GET', '/api/calendar/contacts?limit=8&q=' + encodeURIComponent(q)).then(function (r) {
+    Promise.all([api('GET', '/api/calendar/contacts?limit=8&q=' + encodeURIComponent(q)), api('GET', '/api/crm/opportunities?limit=6&q=' + encodeURIComponent(q)).catch(function () { return { opportunities: [] }; })]).then(function (both) {
+      var r = both[0], opps = both[1].opportunities || [];
       if ($('q').value.trim() !== q) return;
       box.replaceChildren();
       function group(title, rows) { if (!rows.length) return; var g = el('div', 'sgroup'); g.appendChild(el('div', 'lbl', title)); rows.forEach(function (x) { g.appendChild(x); }); box.appendChild(g); }
       group('Contacts', (r.contacts || []).map(function (c) {
         var row = el('button', 'person', '<span class="avatar">' + esc(initials(c.display)) + '</span><span class="meta"><b>' + esc(c.display) + '</b><small>' + esc([c.job_title, c.company, c.stage_name].filter(Boolean).join(' · ') || c.email || '') + '</small></span><span class="go">›</span>');
         row.addEventListener('click', function () { closeSearch(); openContact(c.id); }); return row;
+      }));
+      group('Opportunities', opps.map(function (o) {
+        var row = el('button', 'person', '<span class="avatar" style="background:var(--accent)">◆</span><span class="meta"><b>' + esc(o.name) + '</b><small>' + esc(o.summary) + '</small></span><span class="go">›</span>');
+        row.addEventListener('click', function () { closeSearch(); openOpportunity(o.opportunity_id); }); return row;
       }));
       var ql = q.toLowerCase();
       group('Meetings', (recentEvents || []).filter(function (e) { return isMeeting(e) && e.title.toLowerCase().indexOf(ql) >= 0; }).slice(0, 8).map(function (e) {

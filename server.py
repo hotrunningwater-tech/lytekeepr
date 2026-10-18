@@ -581,6 +581,10 @@ def crm_create_funnel():
 def crm_delete_funnel(funnel_id):
     conn = crm_db.get_connection()
     try:
+        from lk_calendar import opportunities
+        n = opportunities.blockers_for_funnel(conn, funnel_id)
+        if n:                                          # opportunities have no life outside a funnel: move or delete them first
+            return jsonify({"error": f"This funnel has {n} opportunit{'y' if n == 1 else 'ies'}. Move or delete {'it' if n == 1 else 'them'} first."}), 400
         crm_db.delete_funnel(conn, funnel_id)
         conn.commit()
     finally:
@@ -633,6 +637,10 @@ def crm_funnel_board(funnel_id):
                 p["statuses"] = statuses.get(p["person_id"], [])
     except Exception:
         app.logger.exception("could not add statuses to the funnel board")
+    from lk_calendar import opportunities              # opportunity cards sit next to the contact cards, in their own list
+    cards = opportunities.cards_for_funnel(funnel_id)
+    for st in board["stages"]:
+        st["opportunities"] = cards.get(st["stage_id"], [])
     return jsonify(board)
 
 
@@ -673,7 +681,13 @@ def crm_move_stage_position(stage_id):
 
 @app.post("/api/crm/funnels/stages/<int:stage_id>/delete")
 def crm_delete_stage(stage_id):
-    return _stage_edit(lambda conn: crm_db.delete_stage(conn, stage_id))
+    def run(conn):
+        from lk_calendar import opportunities
+        n = opportunities.blockers_for_stage(conn, stage_id)
+        if n:
+            raise ValueError(f"{n} opportunit{'y is' if n == 1 else 'ies are'} in this stage. Move {'it' if n == 1 else 'them'} first.")
+        crm_db.delete_stage(conn, stage_id)
+    return _stage_edit(run)
 
 
 @app.post("/api/crm/funnels/stages/move")

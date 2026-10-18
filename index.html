@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=28">
+<link rel="stylesheet" href="styles.css?v=30">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=people1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -302,6 +302,7 @@
             <select class="demo-reset-input" id="crmFunnelBoardSelect" hidden></select>
             <button class="btn btn-secondary btn-small" type="button" id="crmEditStagesBtn" hidden>Edit stages</button>
             <button class="btn btn-remove btn-small" type="button" id="crmDeleteFunnelBtn" hidden>Delete</button>
+            <button class="btn btn-secondary btn-small" type="button" id="crmNewOpportunityBtn" hidden>New opportunity</button>
             <button class="btn btn-secondary btn-small" type="button" id="crmCreateFunnelBtn">Create new</button>
           </div>
           <div id="crmFunnelBoardWrap" class="crm-full-list"></div>
@@ -328,6 +329,7 @@
             <div class="preview-section crm-detail-card lks-standing">
               <p class="crm-detail-field" id="crmPersonDetailFunnelLine"></p>
               <div id="crmPersonDetailOutreach"></div>
+              <div id="crmPersonDetailOpportunities"></div>
               <p class="crm-detail-field lks-note" id="crmPersonDetailFollowup"></p>
             </div>
             <!-- the details (read-only until Edit) -->
@@ -577,7 +579,8 @@
 
 <script src="chat.js"></script>
 <script src="lk-calendar/calendar.js?v=people2"></script>
-<script src="lk-calendar/settings.js?v=claude1"></script>
+<script src="lk-calendar/settings.js?v=opps1"></script>
+<script src="lk-calendar/opportunities.js?v=opps1"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
 <script>
@@ -1330,6 +1333,7 @@
       crmFunnelBoardTitle.textContent = selectedFunnel ? selectedFunnel.name : 'No funnels yet';
       crmDeleteFunnelBtn.hidden = !selectedFunnel;
       document.getElementById('crmEditStagesBtn').hidden = !selectedFunnel;
+      document.getElementById('crmNewOpportunityBtn').hidden = !selectedFunnel;
     }
 
     function loadCrmFunnels() {
@@ -1500,7 +1504,7 @@
             col.className = 'crm-funnel-stage';
             var head = document.createElement('div');
             head.className = 'crm-funnel-stage-head';
-            head.textContent = stage.name + ' (' + stage.people.length + ')';
+            head.textContent = stage.name + ' (' + (stage.people.length + (stage.opportunities || []).length) + ')';
             col.appendChild(head);
 
             // Native HTML5 drag-and-drop — drop target is the whole column,
@@ -1516,7 +1520,12 @@
             col.addEventListener('drop', function (e) {
               e.preventDefault();
               col.classList.remove('crm-funnel-stage-dragover');
-              var personId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+              var dropped = e.dataTransfer.getData('text/plain') || '';
+              if (dropped.indexOf('opp:') === 0) {             // an opportunity: just move it (no statuses or tasks change)
+                window.lkOpps.move(parseInt(dropped.slice(4), 10), stage.stage_id).then(function () { renderCrmFunnelBoard(); }).catch(function (err) { alert(err.message); });
+                return;
+              }
+              var personId = parseInt(dropped, 10);
               if (personId) askStageMove(personId, stage);
             });
 
@@ -1560,6 +1569,9 @@
               });
               col.appendChild(card);
             });
+            (stage.opportunities || []).forEach(function (opp) {
+              if (window.lkOpps) col.appendChild(window.lkOpps.card(opp, function (id) { window.lkOpps.open(id, renderCrmFunnelBoard); }));
+            });
             wrap.appendChild(col);
           });
           crmFunnelBoardWrap.replaceChildren(wrap);
@@ -1572,6 +1584,16 @@
         crmSelectedFunnelId = parseInt(crmFunnelBoardSelect.value, 10);
         updateCrmFunnelBoardTitle();
         renderCrmFunnelBoard();
+      });
+    }
+
+    var crmNewOpportunityBtn = document.getElementById('crmNewOpportunityBtn');
+    if (crmNewOpportunityBtn) {
+      crmNewOpportunityBtn.addEventListener('click', function () {
+        if (crmSelectedFunnelId == null || !window.lkOpps) return;
+        fetch('/api/crm/funnels/' + crmSelectedFunnelId + '/board').then(function (r) { return r.json(); }).then(function (b) {
+          window.lkOpps.create(crmSelectedFunnelId, (b.stages || []).map(function (s) { return { stage_id: s.stage_id, name: s.name }; }), renderCrmFunnelBoard);
+        });
       });
     }
 
@@ -2438,6 +2460,7 @@
       });
     }
 
+    window.openCrmPersonDetail = function (id) { return openCrmPersonDetail(id); };       // opportunities.js opens contacts too
     function openCrmPersonDetail(personId) {
       fetch('/api/crm/people/' + personId)
         .then(function (res) { return res.json(); })
@@ -2470,6 +2493,7 @@
             : 'Not in a funnel.';
           if (window.lkContacts && window.lkContacts.mountContactPage) window.lkContacts.mountContactPage(personId);
           if (window.lkContacts && window.lkContacts.renderOutreach) window.lkContacts.renderOutreach(document.getElementById('crmPersonDetailOutreach'), personId, person.funnel_id || null);
+          if (window.lkOpps) window.lkOpps.renderForPerson(document.getElementById('crmPersonDetailOpportunities'), personId);
 
           var activeFollowUp = (person.follow_ups || []).find(function (f) {
             return f.status === 'active' || f.status === 'awaiting_approval' || f.status === 'needs_review';
