@@ -699,17 +699,10 @@ def crm_move_to_stage():
         return jsonify({"error": "person_id and stage_id are required."}), 400
     conn = crm_db.get_connection()
     try:
-        crm_db.move_person_to_stage(conn, person_id, stage_id)
+        crm_db.move_person_to_stage(conn, person_id, stage_id)      # the stage only: statuses and follow-ups stay as they are
         conn.commit()
-        row = conn.execute("SELECT name FROM funnel_stages WHERE stage_id = ?", (stage_id,)).fetchone()
     finally:
         conn.close()
-    if row:
-        try:
-            from lk_calendar import contacts as lk_contacts
-            lk_contacts.apply_stage(int(person_id), row["name"])      # moving by hand changes the status to match
-        except Exception:
-            app.logger.exception("status update after stage move failed")
     return jsonify({"ok": True})
 
 

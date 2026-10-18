@@ -509,18 +509,6 @@
   </div>
 </div>
 
-<div class="confirm-backdrop" id="crmStageMoveBackdrop" hidden>
-  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="crmStageMoveTitle">
-    <h2 id="crmStageMoveTitle">Confirm stage change</h2>
-    <p id="crmStageMoveText"></p>
-    <p id="crmStageMoveEffect" ></p>
-    <div class="card-actions">
-      <button class="btn" type="button" id="crmStageMoveOkBtn">Yes, move</button>
-      <button class="btn btn-secondary" type="button" id="crmStageMoveCancelBtn">Cancel</button>
-    </div>
-  </div>
-</div>
-
 <div class="confirm-backdrop" id="crmMergeConfirmBackdrop" hidden>
   <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="crmMergeConfirmTitle">
     <h2 id="crmMergeConfirmTitle">Merge these two people?</h2>
@@ -1496,42 +1484,6 @@
             });
           }
 
-          // Moving a card changes statuses and tasks, so ask what the move means first.
-          function askStageMove(personId, stage) {
-            var who = null, from = null;
-            board.stages.forEach(function (st) {
-              st.people.forEach(function (p) { if (p.person_id === personId) { who = p; from = st; } });
-            });
-            if (!who || from.stage_id === stage.stage_id) return;
-            var key = (stage.name || '').toLowerCase();
-            var q, effect;
-            if (key === 'new lead') {
-              q = 'Move ' + (who.name || 'this contact') + ' back to New lead? Confirm that you have not contacted them yet.';
-              effect = 'Their status is set back to new.';
-            } else if (key === 'contacted') {
-              q = 'Confirm: have you already contacted ' + (who.name || 'this contact') + '?';
-              effect = 'Their status becomes "sent" and a follow-up task is created for 3 days from now.';
-            } else if (key === 'in conversation') {
-              q = 'Confirm: are you already in conversation with ' + (who.name || 'this contact') + '?';
-              effect = 'Their status becomes "replied" and a "Reply to ..." task is created.';
-            } else if (key === 'lost') {
-              q = 'Confirm: is ' + (who.name || 'this contact') + ' no longer a prospect?';
-              effect = 'Their status is set to a closed one ("done" / "non customer"), so no more follow-ups are planned.';
-            } else {
-              q = 'Confirm: does ' + (who.name || 'this contact') + ' belong in "' + stage.name + '"?';
-              effect = 'Their status is set to "' + stage.name.toLowerCase() + '" in each channel.';
-            }
-            var bd = document.getElementById('crmStageMoveBackdrop');
-            document.getElementById('crmStageMoveText').textContent = q;
-            document.getElementById('crmStageMoveEffect').textContent = effect;
-            var ok = document.getElementById('crmStageMoveOkBtn');
-            var cancel = document.getElementById('crmStageMoveCancelBtn');
-            ok.onclick = function () { bd.hidden = true; moveCardToStage(personId, stage.stage_id); };
-            cancel.onclick = function () { bd.hidden = true; };
-            bd.hidden = false;
-            ok.focus();
-          }
-
           board.stages.forEach(function (stage) {
             var col = document.createElement('div');
             col.className = 'crm-funnel-stage';
@@ -1560,7 +1512,9 @@
                 return;
               }
               var personId = parseInt(dropped, 10);
-              if (personId) askStageMove(personId, stage);
+              if (!personId) return;
+              var from = board.stages.find(function (st) { return st.people.some(function (p) { return p.person_id === personId; }); });
+              if (from && from.stage_id !== stage.stage_id) moveCardToStage(personId, stage.stage_id);   // the stage only; statuses and follow-ups stay
             });
 
             stage.people.forEach(function (person) {

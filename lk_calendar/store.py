@@ -59,13 +59,6 @@ LATER_STATUSES = {
     "onboarding": ("Onboarding", "none", ""),
     "completed": ("Completed", "closed", ""),
 }
-# Moving a person to a stage by hand sets each channel's status to that stage's default status.
-DEFAULT_STAGE_STATUS = {
-    ("linkedin", "new lead"): "new", ("linkedin", "contacted"): "sent", ("linkedin", "in conversation"): "replied", ("linkedin", "lost"): "non customer",
-    ("instagram", "new lead"): "new", ("instagram", "contacted"): "sent", ("instagram", "in conversation"): "replied", ("instagram", "lost"): "done",
-    ("email", "new lead"): "new", ("email", "contacted"): "sent", ("email", "in conversation"): "replied", ("email", "lost"): "done",
-    **{(ch, st): st for ch in ("linkedin", "instagram", "email") for st in ("confirmed", "onboarding", "completed")},
-}
 PROJECTS = ("lytekeepr", "aspan", "nexy", "google")   # "google" = read-only events synced from Google Calendar
 MEETING_STATUSES = {"scheduled": "", "completed": "completed", "no_show": "no_show", "cancelled": "cancelled"}   # stored value; "" = scheduled
 MEETING_ALIASES = {"scheduled": "scheduled", "upcoming": "scheduled", "": "scheduled", "completed": "completed", "complete": "completed",

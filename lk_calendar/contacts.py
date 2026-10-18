@@ -798,19 +798,22 @@ def link_leads() -> int:
 
 
 def sync_stage(conn, person_id: int) -> None:
-    """If the person is in a funnel, put them in the furthest stage reached by any of their statuses."""
+    """Stage and status are separate fields; the one automation between them: if the person is in a funnel, a status
+    moves the card forward to the furthest stage reached by any of their statuses. Never backward, so a card placed by hand stays."""
     rows = conn.execute("""SELECT s.stage_name FROM leads l JOIN status_stages s ON s.channel = l.channel AND s.status_key = l.status
                            WHERE l.person_id = ?""", (person_id,)).fetchall()
     names = {r["stage_name"].lower() for r in rows}
     if not names:
         return
     with _crm() as c:
-        p = c.execute("SELECT funnel_id FROM people WHERE person_id = ?", (person_id,)).fetchone()
+        p = c.execute("SELECT funnel_id, funnel_stage_id FROM people WHERE person_id = ?", (person_id,)).fetchone()
         if not p or not p["funnel_id"]:
             return
         stages = c.execute("SELECT stage_id, name, position FROM funnel_stages WHERE funnel_id = ? ORDER BY position", (p["funnel_id"],)).fetchall()
+        order = [r["stage_id"] for r in stages]
+        now = order.index(p["funnel_stage_id"]) if p["funnel_stage_id"] in order else -1
         hits = [r for r in stages if r["name"].lower() in names]
-        if hits:
+        if hits and order.index(hits[-1]["stage_id"]) > now:
             c.execute("UPDATE people SET funnel_stage_id = ? WHERE person_id = ?", (hits[-1]["stage_id"], person_id))
 
 
@@ -889,18 +892,6 @@ def ensure_leads(person_ids: list) -> None:
                     _ensure_lead(int(pid), ch)
                 except store.ValidationError:
                     pass                              # e.g. an Instagram account with no link yet
-
-
-def apply_stage(person_id: int, stage_name: str) -> None:
-    """A person moved to a stage by hand: each channel status that isn't in that stage becomes the stage's default status."""
-    ensure_leads([person_id])
-    with store._conn() as conn:
-        rows = [dict(r) for r in conn.execute("""SELECT l.id, l.channel, s.stage_name FROM leads l
-                                                 LEFT JOIN status_stages s ON s.channel = l.channel AND s.status_key = l.status WHERE l.person_id = ?""", (person_id,))]
-    for r in rows:
-        key = store.DEFAULT_STAGE_STATUS.get((r["channel"], stage_name.lower()))
-        if key and (r["stage_name"] or "").lower() != stage_name.lower():
-            leads.set_status(r["id"], key)
 
 
 def statuses_for(person_ids: list) -> dict:
