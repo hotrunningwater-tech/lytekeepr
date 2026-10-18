@@ -591,6 +591,9 @@ def crm_delete_funnel(funnel_id):
         n = opportunities.blockers_for_funnel(conn, funnel_id)
         if n:                                          # opportunities have no life outside a funnel: move or delete them first
             return jsonify({"error": f"This funnel has {n} opportunit{'y' if n == 1 else 'ies'}. Move or delete {'it' if n == 1 else 'them'} first."}), 400
+        from lk_calendar import docs
+        if docs.count_for_funnel(funnel_id):         # nor do its documents: move or delete them first
+            return jsonify({"error": "This funnel has documents or folders. Move or delete them first (ask Claude)."}), 400
         crm_db.delete_funnel(conn, funnel_id)
         conn.commit()
     finally:

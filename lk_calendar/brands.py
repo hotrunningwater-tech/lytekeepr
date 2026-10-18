@@ -160,6 +160,9 @@ def assign_many(person_ids: list, brand) -> dict:
 def set_funnel_brand(funnel_id: int, brand) -> str:
     """Give a funnel a brand; everyone in it takes that brand. Clearing it leaves the people's brands as they are."""
     key = resolve(brand)
+    from . import docs
+    if not key and docs.count_for_funnel(funnel_id):
+        raise store.ValidationError("This funnel has documents, which need a brand. Pick another brand instead of none.")
     with _crm() as c:
         if not c.execute("SELECT 1 FROM funnels WHERE funnel_id = ?", (int(funnel_id),)).fetchone():
             raise store.ValidationError("No such funnel.")
@@ -169,6 +172,7 @@ def set_funnel_brand(funnel_id: int, brand) -> str:
             c.execute("UPDATE people SET brand = ? WHERE funnel_id = ?", (key, int(funnel_id)))
     if key:
         file_calendar(ids)
+        docs.funnel_brand_changed(funnel_id, key)
     return key
 
 

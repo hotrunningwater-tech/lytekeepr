@@ -268,6 +268,64 @@ TOOLS = [
     {"name": "add_opportunity_task", "title": "Task for an opportunity", "description": "Add a next-step task linked to an opportunity (shows in the LyteKeepr calendar). Today or later.",
      "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
                                                       "time": {"type": "string", "description": "HH:MM"}}, "required": ["opportunity_id", "title", "date"]}, "read": False},
+    # --- documents: folders, documents and tabs kept in LyteKeepr (like Google Drive/Docs, but in LyteKeepr) ---
+    {"name": "docs_places", "title": "Where documents are",
+     "description": ("Every brand and funnel that has documents, with how many and when last updated. Documents are organised Brand → Funnel → Folders → Documents → Tabs. "
+                     "To find something: work out the brand or funnel first (list_brands, list_funnels), then docs_list there, then docs_search, and only then read the documents."),
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "docs_list", "title": "List folders and documents",
+     "description": "Folders (nested), documents and their tab names in one brand (its own documents, not its funnels') or one funnel. Give brand or funnel_id.",
+     "inputSchema": {"type": "object", "properties": {"brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}}}, "read": True},
+    {"name": "docs_search", "title": "Search documents",
+     "description": ("Find folders, documents and tabs by name, and passages in their text. Narrow it with brand or funnel_id when known. "
+                     "Name matches come first; text matches show a snippet. Then use doc_read."),
+     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"},
+                                                      "names_only": {"type": "boolean", "description": "true = don't search the text"}}, "required": ["query"]}, "read": True},
+    {"name": "doc_read", "title": "Read a document",
+     "description": "A document's text and all its tabs; or just one tab (tab = name or id); or one section (a # heading, by its words or number) of the text or of a tab.",
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "tab": {"type": "string"}, "section": {"type": "string"}}, "required": ["doc_id"]}, "read": True},
+    {"name": "doc_create", "title": "Create a document",
+     "description": ("Create a document at the top of a brand or funnel, or in a folder (folder_id), optionally with text and named tabs. "
+                     "A funnel must have a brand first. If it's unclear where it belongs, ask."),
+     "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "folder_id": {"type": "integer"}, "content": {"type": "string"},
+                                                      "tabs": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "content": {"type": "string"}}, "required": ["name"]}}},
+                     "required": ["title"]}, "read": False},
+    {"name": "doc_write", "title": "Write in a document",
+     "description": ("Change the text of a document or of one of its tabs (tab = name or id), touching nothing else. mode: "
+                     "'append' adds at the end (the default, e.g. saving what was just discussed); 'replace_section' replaces one # heading's part (section = its words or number); "
+                     "'find_replace' replaces one exact passage (find must appear exactly once); 'replace' replaces the whole text. "
+                     "Before 'replace', 'replace_section' or 'find_replace', the old text is kept as a previous version. Read first, then change only what was asked."),
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "text": {"type": "string"}, "tab": {"type": "string"},
+                                                      "mode": {"type": "string", "enum": ["append", "replace_section", "find_replace", "replace"]},
+                                                      "section": {"type": "string"}, "find": {"type": "string"}}, "required": ["doc_id", "text"]}, "read": False},
+    {"name": "doc_update", "title": "Rename or move a document",
+     "description": "Rename a document, or move it into a folder (folder_id), or to the top of a brand or funnel (brand/funnel_id, or to_top=true for the top of where it is). Its text and tabs stay.",
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "title": {"type": "string"}, "folder_id": {"type": "integer"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"},
+                                                      "to_top": {"type": "boolean"}}, "required": ["doc_id"]}, "read": False},
+    {"name": "doc_delete", "title": "Delete a document", "destructive": True,
+     "description": "Delete a document with its tabs. Only when the user asks; if it has a lot of text, confirm with the user first.",
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}}, "required": ["doc_id"]}, "read": False},
+    {"name": "tab_create", "title": "Add a tab to a document",
+     "description": "Add a named tab to a document, optionally with text (e.g. 'Save what we discussed into a new tab called Partnerships'). position 1 = first.",
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "name": {"type": "string"}, "content": {"type": "string"}, "position": {"type": "integer"}},
+                     "required": ["doc_id", "name"]}, "read": False},
+    {"name": "tab_update", "title": "Rename or reorder a tab",
+     "description": "Rename a tab and/or move it (position 1 = first). To change its text use doc_write with tab.",
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "tab": {"type": "string", "description": "Tab name or id"}, "name": {"type": "string"},
+                                                      "position": {"type": "integer"}}, "required": ["doc_id", "tab"]}, "read": False},
+    {"name": "tab_delete", "title": "Delete a tab", "destructive": True,
+     "description": "Delete one tab of a document. Only when the user asks; if it has a lot of text, confirm with the user first.",
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "tab": {"type": "string", "description": "Tab name or id"}}, "required": ["doc_id", "tab"]}, "read": False},
+    {"name": "folder_create", "title": "Create a folder",
+     "description": "Create a folder at the top of a brand or funnel, or inside another folder (parent_id).",
+     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "parent_id": {"type": "integer"}}, "required": ["name"]}, "read": False},
+    {"name": "folder_update", "title": "Rename or move a folder",
+     "description": "Rename a folder, or move it into another folder (parent_id) or to the top of a brand or funnel. Everything inside moves with it.",
+     "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "name": {"type": "string"}, "parent_id": {"type": "integer"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"},
+                                                      "to_top": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
+    {"name": "folder_delete", "title": "Delete a folder", "destructive": True,
+     "description": "Delete a folder. One with folders or documents inside is refused unless with_contents=true, which the user must confirm first.",
+     "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "with_contents": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
     # --- who is in touch with whom (counted from email addresses, no AI) ---
     {"name": "who_is_connected", "title": "Who is connected to a contact",
      "description": "The people a contact keeps appearing with in emails (From, To, CC), with how many separate threads they share. Facts from email headers, not guesses.",
@@ -486,6 +544,43 @@ def _run_tool(call, name: str, args: dict):
     if name == "add_opportunity_task":
         o = need(*call("POST", f"/api/crm/opportunities/{int(args['opportunity_id'])}/tasks", {"title": args["title"], "date": args["date"], "time": args.get("time")}))
         return {"tasks": o["tasks"]}
+    if name == "docs_places":
+        return need(*call("GET", "/api/crm/docs"))["places"]
+    if name in ("docs_list", "docs_search"):
+        q = {k: args[k] for k in ("brand", "funnel_id") if args.get(k)}
+        if name == "docs_list":
+            return need(*call("GET", "/api/crm/docs/tree?" + urllib.parse.urlencode(q)))
+        q.update({"q": args.get("query", ""), "content": "0" if args.get("names_only") else "1"})
+        return need(*call("GET", "/api/crm/docs/search?" + urllib.parse.urlencode(q)))["results"]
+    if name == "doc_read":
+        q = {k: args[k] for k in ("tab", "section") if args.get(k)}
+        return need(*call("GET", f"/api/crm/docs/{int(args['doc_id'])}" + ("?" + urllib.parse.urlencode(q) if q else "")))
+    if name == "doc_create":
+        return need(*call("POST", "/api/crm/docs", {k: args[k] for k in ("title", "brand", "funnel_id", "folder_id", "content", "tabs") if args.get(k) is not None}))
+    if name == "doc_write":
+        return need(*call("POST", f"/api/crm/docs/{int(args['doc_id'])}/write", {k: args[k] for k in ("text", "tab", "mode", "section", "find") if args.get(k) is not None}))
+    if name == "doc_update":
+        return need(*call("PUT", f"/api/crm/docs/{int(args['doc_id'])}", {k: args[k] for k in ("title", "folder_id", "brand", "funnel_id", "to_top") if args.get(k) is not None}))
+    if name == "doc_delete":
+        return need(*call("POST", f"/api/crm/docs/{int(args['doc_id'])}/delete"))
+    if name in ("tab_update", "tab_delete"):
+        doc = need(*call("GET", f"/api/crm/docs/{int(args['doc_id'])}"))
+        tab = str(args.get("tab") or "").strip()
+        match = next((t for t in doc.get("tabs") or [] if str(t["tab_id"]) == tab or t["name"].lower() == tab.lower()), None)
+        if not match:
+            raise ValueError(f"This document has no tab '{tab}'. Tabs: {', '.join(t['name'] for t in doc.get('tabs') or []) or 'none'}.")
+        path = f"/api/crm/docs/{int(args['doc_id'])}/tabs/{match['tab_id']}"
+        if name == "tab_delete":
+            return need(*call("POST", path + "/delete"))
+        return need(*call("PUT", path, {k: args[k] for k in ("name", "position") if args.get(k) is not None}))
+    if name == "tab_create":
+        return need(*call("POST", f"/api/crm/docs/{int(args['doc_id'])}/tabs", {k: args[k] for k in ("name", "content", "position") if args.get(k) is not None}))
+    if name == "folder_create":
+        return need(*call("POST", "/api/crm/docs/folders", {k: args[k] for k in ("name", "brand", "funnel_id", "parent_id") if args.get(k) is not None}))
+    if name == "folder_update":
+        return need(*call("PUT", f"/api/crm/docs/folders/{int(args['folder_id'])}", {k: args[k] for k in ("name", "parent_id", "brand", "funnel_id", "to_top") if args.get(k) is not None}))
+    if name == "folder_delete":
+        return need(*call("POST", f"/api/crm/docs/folders/{int(args['folder_id'])}/delete", {"with_contents": bool(args.get("with_contents"))}))
     if name == "who_is_connected":
         return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/connections"))["connections"]
     if name == "find_related_people":

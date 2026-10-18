@@ -91,8 +91,17 @@ def main():
     v = seen()
     check(v["contacts"] == {"n1", "a1", "u1"} and v["funnels"] == {"NexyF"}, f"no brands chosen: the old funnel access is kept ({v['contacts']}, {v['funnels']})")
 
+    aspan_doc = a.post("/api/crm/docs", json={"title": "Aspan secret plan", "brand": "aspan", "content": "secret"}).get_json()["doc_id"]
+    aspan_funnel_doc = a.post("/api/crm/docs", json={"title": "AspanF notes", "funnel_id": AF, "content": "secret"}).get_json()["doc_id"]
+    nexy_doc = a.post("/api/crm/docs", json={"title": "Nexy plan", "brand": "nexy", "content": "ok"}).get_json()["doc_id"]
     a.post(f"/api/team/{uid}/brands", json={"brands": {"nexy": "all"}})
     v = seen()
+    check(m.get(f"/api/crm/docs/{aspan_doc}").status_code == 400 and m.get(f"/api/crm/docs/{aspan_funnel_doc}").status_code == 400,
+          "documents of a blocked brand (and its funnels) can't be read")
+    check(m.get(f"/api/crm/docs/{nexy_doc}").status_code == 200, "documents of an allowed brand can be read")
+    check("secret" not in str(m.get("/api/crm/docs/search?q=secret").get_json()) and "Aspan" not in str(m.get("/api/crm/docs").get_json()),
+          "search and the documents overview never show a blocked brand's documents")
+    check(m.post("/api/crm/docs", json={"title": "x", "brand": "aspan"}).status_code == 400, "a member can't create documents in a blocked brand")
     check(v["contacts"] == {"n1", "u1", "x1"} and v["search"] <= {"n1", "u1", "x1"}, f"whole Nexy: Nexy contacts only ({v['contacts']}, search {v['search']})")
     check(v["opp"] == {"n1", "u1"} and "Aspan One" not in v["opp_text"], "an Aspan person on a Nexy opportunity is hidden, also on the board card")
     check("a1@" not in v["tasks"] and "n1@" in v["tasks"], "tasks of an Aspan contact are hidden")

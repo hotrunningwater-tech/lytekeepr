@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=35">
+<link rel="stylesheet" href="styles.css?v=36">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=people1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -304,6 +304,7 @@
             <select class="demo-reset-input" id="crmFunnelBoardSelect" hidden></select>
             <select class="demo-reset-input crm-funnel-brand" id="crmFunnelBrandSelect" title="The brand this funnel belongs to; its contacts take it" aria-label="Funnel brand" hidden></select>
             <div class="lks-search-pill crm-funnel-search" id="crmFunnelSearchPill" hidden><input type="search" id="crmFunnelSearchInput" placeholder="Search this funnel" autocomplete="off" aria-label="Search this funnel"></div>
+            <button class="btn btn-secondary btn-small" type="button" id="crmFunnelDocsBtn" title="Documents Claude keeps for this funnel and its brand" hidden>Documents</button>
             <button class="btn btn-secondary btn-small" type="button" id="crmEditStagesBtn" hidden>Edit stages</button>
             <button class="btn btn-remove btn-small" type="button" id="crmDeleteFunnelBtn" hidden>Delete</button>
             <button class="btn btn-secondary btn-small" type="button" id="crmNewOpportunityBtn" hidden>New opportunity</button>
@@ -574,6 +575,7 @@
 <script src="lk-calendar/calendar.js?v=brand1"></script>
 <script src="lk-calendar/settings.js?v=brand2"></script>
 <script src="lk-calendar/opportunities.js?v=lead2"></script>
+<script src="lk-calendar/docs.js?v=1"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
 <script>
@@ -1336,9 +1338,15 @@
       crmDeleteFunnelBtn.hidden = !selectedFunnel;
       document.getElementById('crmEditStagesBtn').hidden = !selectedFunnel;
       document.getElementById('crmNewOpportunityBtn').hidden = !selectedFunnel;
+      document.getElementById('crmFunnelDocsBtn').hidden = !selectedFunnel;
       document.getElementById('crmFunnelSearchPill').hidden = !selectedFunnel;
       fillCrmFunnelBrand(selectedFunnel);
     }
+    // Documents Claude keeps for the funnel (and its brand): a simple read-only view
+    document.getElementById('crmFunnelDocsBtn').addEventListener('click', function () {
+      var f = crmFunnelsData.find(function (x) { return x.funnel_id === crmSelectedFunnelId; });
+      if (f && window.lkDocs) window.lkDocs.open(f.funnel_id, f.brand || '');
+    });
     // The funnel's brand (admin only): everyone in the funnel takes it, and their follow-ups are filed under it.
     var crmBrandList = null;
     function fillCrmFunnelBrand(funnel) {

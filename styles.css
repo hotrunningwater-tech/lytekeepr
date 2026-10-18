@@ -2737,6 +2737,14 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .lko-suggest button:disabled { opacity: .5; cursor: default; }
 .lko-suggest button span { font-size: 12px; color: var(--ink-soft); }
 .lko-suggest .lko-new b { color: #3a9cbc; }
+.lkd-window { min-width: min(720px, 92vw); }
+.lkd-item { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; border: none; background: #fff; border-radius: 10px; padding: 9px 12px; margin-top: 6px; font: inherit; color: var(--ink); cursor: pointer; }
+.lkd-item small { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
+.lkd-folder { margin-top: 10px; } .lkd-folder-name { font-weight: 600; color: var(--ink); display: flex; gap: 6px; }
+.lkd-ico { color: var(--ink-soft); }
+.lkd-title { margin: 6px 0 0; }
+.lkd-tabs { flex-wrap: wrap; }
+.lkd-text { white-space: pre-wrap; background: #fff; border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; max-height: 60vh; overflow-y: auto; }
 .lko-task-list { list-style: none; padding: 0; margin: 0 0 6px; display: flex; flex-direction: column; gap: 4px; }
 .lko-task-list li { display: flex; justify-content: space-between; gap: 10px; background: #fff; border-radius: 10px; padding: 7px 10px; font-size: 13.5px; }
 .lko-task-list li.done span { text-decoration: line-through; color: var(--ink-soft); }
