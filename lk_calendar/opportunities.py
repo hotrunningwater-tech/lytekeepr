@@ -126,7 +126,7 @@ def summary_line(people: list) -> str:
         return "No active participants"
     first = [p for p in active if p["primary"]] or []
     rest = [p for p in active if not p["primary"]]
-    parts = [first[0]["name"] + " (primary)"] if first else []
+    parts = [first[0]["name"] + " (lead)"] if first else []
     shown = rest[: (2 if first else 3)]
     tail = ", ".join(p["name"] for p in shown) + (f" +{len(rest) - len(shown)}" if len(rest) > len(shown) else "")
     return " · ".join(x for x in (parts[0] if parts else "", tail) if x)
@@ -141,7 +141,8 @@ def _card(row, people: list) -> dict:
     return {"opportunity_id": row["opportunity_id"], "kind": "opportunity", "name": row["name"], "funnel_id": row["funnel_id"],
             "stage_id": row["stage_id"], "company": row["company_name"] if "company_name" in row.keys() else "",
             "participants": len(active), "summary": summary_line(people), "companies": companies,
-            "single_name": active[0]["name"] if len(active) == 1 else ""}
+            "single_name": active[0]["name"] if len(active) == 1 else "",
+            "people_text": " ".join(p["name"] or "" for p in people)}       # every participant, for the funnel search
 
 
 def cards_for_funnel(funnel_id: int) -> dict:

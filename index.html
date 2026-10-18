@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=31">
+<link rel="stylesheet" href="styles.css?v=32">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=people1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -301,6 +301,7 @@
           <div class="crm-funnel-board-header">
             <h2 id="crmFunnelBoardTitle">Funnel</h2>
             <select class="demo-reset-input" id="crmFunnelBoardSelect" hidden></select>
+            <div class="lks-search-pill crm-funnel-search" id="crmFunnelSearchPill" hidden><input type="search" id="crmFunnelSearchInput" placeholder="Search this funnel" autocomplete="off" aria-label="Search this funnel"></div>
             <button class="btn btn-secondary btn-small" type="button" id="crmEditStagesBtn" hidden>Edit stages</button>
             <button class="btn btn-remove btn-small" type="button" id="crmDeleteFunnelBtn" hidden>Delete</button>
             <button class="btn btn-secondary btn-small" type="button" id="crmNewOpportunityBtn" hidden>New opportunity</button>
@@ -581,7 +582,7 @@
 <script src="chat.js"></script>
 <script src="lk-calendar/calendar.js?v=people2"></script>
 <script src="lk-calendar/settings.js?v=ig1"></script>
-<script src="lk-calendar/opportunities.js?v=rel1"></script>
+<script src="lk-calendar/opportunities.js?v=lead1"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
 <script>
@@ -1335,7 +1336,15 @@
       crmDeleteFunnelBtn.hidden = !selectedFunnel;
       document.getElementById('crmEditStagesBtn').hidden = !selectedFunnel;
       document.getElementById('crmNewOpportunityBtn').hidden = !selectedFunnel;
+      document.getElementById('crmFunnelSearchPill').hidden = !selectedFunnel;
     }
+    document.getElementById('crmFunnelSearchInput').addEventListener('input', function () {
+      crmFunnelQuery = this.value.trim().replace(/^@/, '').toLowerCase();
+      applyCrmFunnelSearch();
+    });
+    document.getElementById('crmFunnelSearchInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && this.value) { this.value = ''; crmFunnelQuery = ''; applyCrmFunnelSearch(); }
+    });
 
     function loadCrmFunnels() {
       fetch('/api/crm/funnels')
@@ -1436,6 +1445,29 @@
     })();
 
     var crmBoardRequest = 0;
+    // Funnel search: hides the cards that don't match (every word must appear) and shows "matching of all" per stage.
+    var crmFunnelQuery = '';
+    var crmPeopleById = {};
+    function applyCrmFunnelSearch() {
+      var words = crmFunnelQuery.split(/\s+/).filter(Boolean);
+      var shownAll = 0;
+      crmFunnelBoardWrap.querySelectorAll('.crm-funnel-stage').forEach(function (col) {
+        var cards = col.querySelectorAll('.crm-funnel-person-card');
+        var shown = 0;
+        cards.forEach(function (c) {
+          var hay = c.dataset.search || '';
+          var ok = words.every(function (w) { return hay.indexOf(w) !== -1; });
+          c.hidden = !ok;
+          if (ok) shown++;
+        });
+        shownAll += shown;
+        var head = col.querySelector('.crm-funnel-stage-head');
+        head.textContent = head.dataset.stageName + ' (' + (words.length ? shown + ' of ' + cards.length : cards.length) + ')';
+        col.classList.toggle('crm-funnel-stage-nomatch', !!words.length && !shown);
+      });
+      var none = crmFunnelBoardWrap.querySelector('.crm-funnel-none');
+      if (none) none.hidden = !words.length || shownAll > 0;
+    }
     function renderCrmFunnelBoard() {
       var myRequest = ++crmBoardRequest;       // two renders can overlap (a move triggers two); only the newest may draw
       if (crmSelectedFunnelId == null) {
@@ -1505,6 +1537,7 @@
             col.className = 'crm-funnel-stage';
             var head = document.createElement('div');
             head.className = 'crm-funnel-stage-head';
+            head.dataset.stageName = stage.name;
             head.textContent = stage.name + ' (' + (stage.people.length + (stage.opportunities || []).length) + ')';
             col.appendChild(head);
 
@@ -1543,6 +1576,8 @@
                 card.classList.remove('crm-funnel-person-card-dragging');
               });
 
+              var more = crmPeopleById[person.person_id] || {};      // email, phone and handles come from the contacts list
+              card.dataset.search = [person.name, person.company_name, more.email, more.phone, more.handles].join(' ').toLowerCase();
               var name = document.createElement('div');
               name.className = 'crm-funnel-person-name';
               name.textContent = person.name || 'No name';
@@ -1571,11 +1606,19 @@
               col.appendChild(card);
             });
             (stage.opportunities || []).forEach(function (opp) {
-              if (window.lkOpps) col.appendChild(window.lkOpps.card(opp, function (id) { window.lkOpps.open(id, renderCrmFunnelBoard); }));
+              if (!window.lkOpps) return;
+              var oc = window.lkOpps.card(opp, function (id) { window.lkOpps.open(id, renderCrmFunnelBoard); });
+              oc.dataset.search = [opp.name, opp.people_text, (opp.companies || []).join(' ')].join(' ').toLowerCase();
+              col.appendChild(oc);
             });
             wrap.appendChild(col);
           });
-          crmFunnelBoardWrap.replaceChildren(wrap);
+          var none = document.createElement('p');
+          none.className = 'crm-empty crm-funnel-none';
+          none.textContent = 'Nothing in this funnel matches.';
+          none.hidden = true;
+          crmFunnelBoardWrap.replaceChildren(none, wrap);
+          applyCrmFunnelSearch();
         })
         .catch(function () {});
     }
@@ -2061,6 +2104,8 @@
         .then(function (res) { return res.json(); })
         .then(function (data) {
           crmOverviewData = data;
+          crmPeopleById = {};
+          (data.people || []).forEach(function (p) { crmPeopleById[p.person_id] = p; });
           if (window.lkContacts && window.lkContacts.checkDuplicates) window.lkContacts.checkDuplicates();
           updateCrmMergeButton();
           renderCrmCompanies(crmCompanyList);

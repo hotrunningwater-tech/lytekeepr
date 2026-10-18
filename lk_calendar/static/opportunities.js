@@ -3,7 +3,6 @@
    Contact cards on the board are untouched; this only adds the second kind of entry. */
 (function () {
   'use strict';
-  var ROLES = [['', 'No role'], ['decision-maker', 'Decision-maker'], ['influencer', 'Influencer'], ['advisor', 'Advisor'], ['introducer', 'Introducer'], ['other', 'Other']];
 
   function h(tag, attrs, kids) {
     var el = document.createElement(tag);
@@ -103,15 +102,13 @@
 
   function row(p) {
     var o = current;
-    var roleSel = h('select', { class: 'demo-reset-input', 'aria-label': 'Role of ' + p.name }, ROLES.map(function (r) { return h('option', { value: r[0], selected: (p.role || '') === r[0] }, r[1]); }));
-    roleSel.addEventListener('change', function () { refreshWith(api('PUT', '/api/crm/opportunities/' + o.opportunity_id + '/participants/' + p.contact_id, { role: roleSel.value })); });
     var others = o.participants.filter(function (x) { return x.contact_id !== p.contact_id; });
     var introSel = h('select', { class: 'demo-reset-input', 'aria-label': 'Introduced by' }, [h('option', { value: '' }, 'Introduced by: —')].concat(others.map(function (x) {
       return h('option', { value: x.contact_id, selected: p.introduced_by === x.contact_id }, 'Introduced by ' + x.name); })));
     introSel.addEventListener('change', function () { refreshWith(api('PUT', '/api/crm/opportunities/' + o.opportunity_id + '/participants/' + p.contact_id, { introduced_by: introSel.value ? +introSel.value : 0 })); });
-    var star = h('button', { class: 'lko-star' + (p.primary ? ' on' : ''), type: 'button', title: p.primary ? 'Primary contact (click to clear)' : 'Make primary contact', disabled: !p.active, onclick: function () {
+    var star = h('button', { class: 'lko-star' + (p.primary ? ' on' : ''), type: 'button', title: p.primary ? 'Lead (click to clear)' : 'Make this person the lead', disabled: !p.active, onclick: function () {
       refreshWith(api('PUT', '/api/crm/opportunities/' + o.opportunity_id + '/participants/' + p.contact_id, { primary: !p.primary }));
-    } }, p.primary ? '★ Primary' : '☆ Primary');
+    } }, p.primary ? '★ Lead' : '☆ Lead');
     var toggle = h('button', { class: 'btn btn-secondary btn-small', type: 'button', onclick: function () {
       refreshWith(api('PUT', '/api/crm/opportunities/' + o.opportunity_id + '/participants/' + p.contact_id, { active: !p.active }));
     } }, p.active ? 'No longer involved' : 'Involved again');
@@ -124,7 +121,7 @@
       h('span', { class: 'lko-avatar' }, initials(p.name)),
       h('div', { class: 'lko-who' }, [h('button', { class: 'lko-name', type: 'button', onclick: function () { C().closeModal(true); openContact(p.contact_id); } }, p.name),
         h('small', {}, [p.company || 'No company', p.active ? '' : ' · left ' + when(p.left_at), p.introduced_by_name ? ' · introduced by ' + p.introduced_by_name : ''].join(''))]),
-      h('div', { class: 'lko-controls' }, [roleSel, star, introSel, toggle, remove])
+      h('div', { class: 'lko-controls' }, [star, introSel, toggle, remove])
     ]);
   }
 
@@ -146,10 +143,9 @@
 
   function addBox(o) {
     var q = h('input', { type: 'text', placeholder: 'Add a person: type a name, company or email', autocomplete: 'off' });
-    var role = h('select', { class: 'demo-reset-input', 'aria-label': 'Role' }, ROLES.map(function (r) { return h('option', { value: r[0] }, r[1]); }));
     var res = h('div', { class: 'lko-suggest' });
     var t = null;
-    function add(id) { refreshWith(api('POST', '/api/crm/opportunities/' + o.opportunity_id + '/participants', { contact_id: id, role: role.value })); }
+    function add(id) { refreshWith(api('POST', '/api/crm/opportunities/' + o.opportunity_id + '/participants', { contact_id: id })); }
     q.addEventListener('input', function () {
       clearTimeout(t); t = setTimeout(function () {
         var text = q.value.trim(); res.replaceChildren();
@@ -173,7 +169,7 @@
         }).catch(fail);
       }, 200);
     });
-    return h('div', { class: 'lko-add' }, [h('div', { class: 'lks-row' }, [q, role]), res]);
+    return h('div', { class: 'lko-add' }, [q, res]);
   }
 
   /* ---------- "New opportunity" ---------- */
@@ -220,7 +216,7 @@
       box.appendChild(h('p', { class: 'crm-detail-field' }, 'Opportunities:'));
       box.appendChild(h('div', { class: 'lko-mine' }, list.map(function (x) {
         return h('button', { type: 'button', class: 'lko-chip' + (x.active ? '' : ' off'), onclick: function () { open(x.opportunity_id, function () { renderForPerson(box, personId); }); } },
-          [h('span', { class: 'lko-icon' }, '◆'), x.name, h('small', {}, ' · ' + [x.primary ? 'primary' : x.role, x.stage, x.active ? '' : 'no longer involved'].filter(Boolean).join(' · '))]);
+          [h('span', { class: 'lko-icon' }, '◆'), x.name, h('small', {}, ' · ' + [x.primary ? 'lead' : '', x.stage, x.active ? '' : 'no longer involved'].filter(Boolean).join(' · '))]);
       })));
     }).catch(function () {});
   }

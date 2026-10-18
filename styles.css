@@ -845,6 +845,10 @@ h1 {
 }
 .crm-funnel-board-header select { flex: none; width: auto; }
 .crm-funnel-board-header .btn { margin-left: auto; }
+.crm-funnel-board-header .crm-funnel-search { margin: 0; width: min(260px, 100%); }
+.crm-funnel-board-header .crm-funnel-search input { padding: 8px 16px; }
+.crm-funnel-stage-nomatch { opacity: .55; }
+.crm-funnel-none { margin: 0 0 10px; }
 
 .crm-funnel-board {
   display: flex;

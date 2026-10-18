@@ -205,28 +205,28 @@ TOOLS = [
     {"name": "find_opportunities", "title": "Find opportunities", "description": "Find opportunities (shared deals, projects, partnerships) by name, company or a participant's name. These are NOT contacts.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}, "read": True},
     {"name": "get_opportunity", "title": "Opportunity details",
-     "description": ("Everything about one opportunity: funnel and stage, primary contact (if any), every participant with company, role, active or not, "
+     "description": ("Everything about one opportunity: funnel and stage, the lead (primary=true, if any), every participant with company, active or not, "
                      "who introduced them, the history of changes, notes, tasks, and each active participant's latest messages and calls. "
                      "Only the listed participants are involved; other people at the same companies are not."),
      "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}}, "required": ["opportunity_id"]}, "read": True},
     {"name": "create_opportunity", "title": "Create an opportunity",
      "description": ("Create a NEW opportunity in a funnel only when the user asks for one (never convert a contact entry into an opportunity). "
-                     "Participants are optional; no primary contact is set unless the user names one."),
+                     "Participants are optional; no lead (primary) is set unless the user names one."),
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "funnel_id": {"type": "integer"}, "stage": {"type": "string", "description": "Stage name; default the first stage"},
                                                       "company": {"type": "string", "description": "Main company, optional"}, "notes": {"type": "string"},
-                                                      "participants": {"type": "array", "items": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "role": {"type": "string"}, "primary": {"type": "boolean"}}, "required": ["contact_id"]}}},
+                                                      "participants": {"type": "array", "items": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "primary": {"type": "boolean", "description": "true = the lead"}}, "required": ["contact_id"]}}},
                      "required": ["name", "funnel_id"]}, "read": False},
     {"name": "add_participant", "title": "Add a person to an opportunity",
-     "description": "Add an existing contact to an opportunity, optionally with a role (decision-maker, influencer, advisor, introducer, other), as primary, and who introduced them.",
-     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_id": {"type": "integer"}, "role": {"type": "string"},
+     "description": "Add an existing contact to an opportunity, optionally as the lead (primary=true) and who introduced them. There are only two kinds of participant: the lead or a regular participant.",
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_id": {"type": "integer"},
                                                       "primary": {"type": "boolean"}, "introduced_by_contact_id": {"type": "integer"}}, "required": ["opportunity_id", "contact_id"]}, "read": False},
     {"name": "update_participant", "title": "Change a participant",
-     "description": ("Change a participant's role, make them the primary contact (the previous primary stops being primary), set involved=false when they are "
+     "description": ("Make a participant the lead (primary=true; the previous lead stops being the lead), set involved=false when they are "
                      "no longer involved (kept in the history), involved=true when they are back, or set who introduced them."),
-     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_id": {"type": "integer"}, "role": {"type": "string"},
+     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_id": {"type": "integer"},
                                                       "primary": {"type": "boolean"}, "involved": {"type": "boolean"}, "introduced_by_contact_id": {"type": "integer"}},
                      "required": ["opportunity_id", "contact_id"]}, "read": False},
-    {"name": "clear_primary_contact", "title": "No primary contact", "description": "Make all participants equal: the opportunity has no primary contact.",
+    {"name": "clear_primary_contact", "title": "No lead", "description": "Make all participants equal: the opportunity has no lead.",
      "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}}, "required": ["opportunity_id"]}, "read": False},
     {"name": "remove_participant", "title": "Remove a participant (added by mistake)",
      "description": ("Delete the link between a contact and an opportunity ONLY when it was added by mistake. If the person simply stopped being involved, "
@@ -280,7 +280,7 @@ def _run_tool(call, name: str, args: dict):
             people.append({"kind": "contact", "contact_id": c["id"], "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "instagram": c.get("instagram") or None,
                            "funnel": c.get("funnel_name") or None, "stage": c.get("stage_name") or None,
                            "opportunities": [{"opportunity_id": o["opportunity_id"], "name": o["name"], "funnel": o["funnel"], "stage": o["stage"],
-                                              "role": "primary" if o["primary"] else (o["role"] or "participant"), "involved": o["active"]}
+                                              "role": "lead" if o["primary"] else "participant", "involved": o["active"]}
                                              for o in ((opps or {}).get("opportunities", []) if st < 400 else [])]})
         seen = {o["opportunity_id"] for p in people for o in p["opportunities"]}
         opps = [{"kind": "opportunity", "opportunity_id": o["opportunity_id"], "name": o["name"], "participants": o["summary"]}

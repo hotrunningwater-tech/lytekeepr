@@ -544,7 +544,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
             var lbl = el('div', 'lbl', 'Opportunities'); b.insertBefore(lbl, at);
             list.forEach(function (o) {
               var row = el('button', 'person', '<span class="avatar" style="background:var(--accent)">◆</span><span class="meta"><b>' + esc(o.name) + '</b><small>'
-                + esc([o.primary ? 'Primary' : (o.role || 'Participant'), o.stage, o.active ? '' : 'no longer involved'].filter(Boolean).join(' · ')) + '</small></span><span class="go">›</span>');
+                + esc([o.primary ? 'Lead' : 'Participant', o.stage, o.active ? '' : 'no longer involved'].filter(Boolean).join(' · ')) + '</small></span><span class="go">›</span>');
               if (!o.active) row.style.opacity = '.6';
               row.addEventListener('click', function () { openOpportunity(o.opportunity_id, true); });
               b.insertBefore(row, at);
@@ -616,7 +616,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
         b.appendChild(el('div', 'lbl', 'People' + (active.length ? ' <span class="count num">' + active.length + '</span>' : '')));
         if (!active.length) b.appendChild(el('p', 'empty', 'No one is on this opportunity yet.'));
         active.concat(past).forEach(function (p) {
-          var sub = [p.primary ? 'Primary' : p.role, p.company, p.active ? '' : 'no longer involved', p.introduced_by_name ? 'introduced by ' + p.introduced_by_name : ''].filter(Boolean).join(' · ');
+          var sub = [p.primary ? 'Lead' : '', p.company, p.active ? '' : 'no longer involved', p.introduced_by_name ? 'introduced by ' + p.introduced_by_name : ''].filter(Boolean).join(' · ');
           var row = el('button', 'person', '<span class="avatar">' + esc(initials(p.name)) + '</span><span class="meta"><b>' + esc(p.name) + (p.primary ? ' ★' : '') + '</b><small>' + esc(sub) + '</small></span><span class="go">›</span>');
           if (!p.active) row.style.opacity = '.6';
           row.addEventListener('click', function () { openContact(p.contact_id, true); });
