@@ -412,8 +412,10 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"suggestion_id": {"type": "integer"}}, "required": ["suggestion_id"]}, "read": False},
     {"name": "dismiss_suggestion", "title": "Dismiss a suggestion", "description": "Dismiss a suggestion; it will not come back.",
      "inputSchema": {"type": "object", "properties": {"suggestion_id": {"type": "integer"}}, "required": ["suggestion_id"]}, "read": False},
-    {"name": "draft_email", "title": "Draft an email",
-     "description": "Write an email to one contact and leave it in LyteKeepr for the user to send. NOTHING is sent: the user opens LyteKeepr (Home) within 30 minutes and presses Send now.",
+    {"name": "send_email", "title": "Send an email", "destructive": True,
+     "description": ("Send a real email from the user's Gmail to one contact (to their saved email address). FIRST show the user the full email in the chat "
+                     "(to, subject, body) and ask; call this only after they clearly say to send it, with exactly that text. Never send without that yes. "
+                     "It is saved on the contact and their status becomes 'email sent' with the usual follow-up."),
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name of the contact"}, "subject": {"type": "string"}, "body": {"type": "string"}},
                      "required": ["contact", "subject", "body"]}, "read": False},
     {"name": "draft_linkedin_message", "title": "Draft a LinkedIn message",
@@ -749,11 +751,11 @@ def _run_tool(call, name: str, args: dict):
         out["results"] = [m for m in out.get("results") or [] if (m.get("channel") or "").lower() != "email"]      # emails are not shared with Claude yet
         out["count"] = len(out["results"])
         return out
-    if name == "draft_email":
+    if name == "send_email":                       # the user approved it in the chat and in the Claude app's Allow prompt
         out = need(*call("POST", "/api/claude/home/draft_email_message", {"person_name": args["contact"], "subject": args["subject"], "body": args["body"]}))
-        if out.get("status") == "pending_confirmation":
-            out["next_step"] = "Nothing was sent. Open LyteKeepr (Home) within 30 minutes and press Send now."
-        return out
+        if out.get("status") != "pending_confirmation":
+            return out                              # e.g. no such contact, or no email address: nothing was sent
+        return need(*call("POST", "/api/email/send-pending/confirm"))
     if name == "draft_linkedin_message":
         out = need(*call("POST", "/api/claude/home/draft_linkedin_message", {"person_name": args["contact"], "message_text": args["text"]}))
         if out.get("status") == "pending_confirmation":
