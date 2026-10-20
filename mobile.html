@@ -149,6 +149,9 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; }
 .status button { border: none; background: var(--card); border-radius: 999px; padding: 9px 4px; font-family: var(--font-display); font-weight: 600; font-size: 13px; box-shadow: 0 1px 3px rgba(41,67,78,.06); }
 .status button.on { background: var(--ink); color: var(--on-ink); }
 .person { display: flex; align-items: center; gap: 10px; border: none; background: var(--card); border-radius: 16px; padding: 10px 12px; text-align: left; width: 100%; box-shadow: 0 1px 3px rgba(41,67,78,.06); }
+.person.mail .go { font-size: 12px; color: var(--ink-soft); align-self: flex-start; }
+.person.mail small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .person.mail small.subj { color: var(--ink); font-weight: 600; }
+.mailtext { background: var(--card); border-radius: 16px; padding: 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; line-height: 1.5; }
 .person .meta { min-width: 0; flex: 1; } .person b { display: block; font-size: 14.5px; overflow-wrap: anywhere; } .person small { color: var(--ink-soft); font-size: 12.5px; }
 textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; background: var(--card); padding: 11px 12px; font: inherit; color: var(--ink); resize: vertical; }
 .saved { font-size: 12px; color: var(--ok); min-height: 1em; }
@@ -183,6 +186,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
       <button class="tab" data-page="0">Calendar</button>
       <button class="tab on" data-page="1">Today</button>
       <button class="tab" data-page="2">Attention <span class="count num" id="attCount" hidden>0</span></button>
+      <button class="tab" data-page="3" id="mailTab" hidden>Email</button>
     </nav>
   </header>
 
@@ -202,6 +206,10 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
     <section class="page" id="pAtt" aria-label="Needs attention">
       <div class="pullhint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12l7 7 7-7"/></svg>Pull down to search</div>
       <div id="attBody" style="display:flex;flex-direction:column;gap:14px"><p class="loading">Loading…</p></div>
+    </section>
+    <section class="page" id="pMail" aria-label="Email" hidden>
+      <div class="pullhint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12l7 7 7-7"/></svg>Pull down to search</div>
+      <div id="mailBody" style="display:flex;flex-direction:column;gap:8px"><p class="loading">Loading…</p></div>
     </section>
   </main>
 
@@ -506,6 +514,67 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
     var a = el('a', '', icon + esc(label)); a.href = href; if (/^https?:/.test(href)) { a.target = '_blank'; a.rel = 'noopener'; } return a;
   }
 
+  /* ---------- Email: the LyteKeepr tab's emails (saved by you, or from your contacts), read-only; the admin's mailbox only ---------- */
+  function mailRow(m) {
+    var row = el('button', 'person mail', '<span class="avatar">' + esc(initials(m.senderName)) + '</span><span class="meta"><b>' + esc(m.senderName) + '</b><small class="subj">'
+      + esc(m.subject) + '</small><small>' + esc((m.preview || '').slice(0, 110)) + '</small></span><span class="go num">' + esc(when(m.receivedAt)) + '</span>');
+    row.addEventListener('click', function () { openEmail(m.id); });
+    return row;
+  }
+  function renderMail() {
+    var box = $('mailBody'); box.replaceChildren();
+    var list = (state.mail || []).slice().sort(function (a, b) { return new Date(b.receivedAt) - new Date(a.receivedAt); });
+    if (!list.length) { box.appendChild(el('p', 'empty', 'No emails in LyteKeepr yet. File them into the LyteKeepr tab on the desktop, or they arrive from your contacts.')); return; }
+    list.slice(0, 200).forEach(function (m) { box.appendChild(mailRow(m)); });
+  }
+  function openEmail(id, keep, fallback) {
+    var view = { label: 'Email', render: function (b) {
+      b.appendChild(el('p', 'loading', 'Loading…'));
+      api('GET', '/api/gmail/messages/' + encodeURIComponent(id)).then(function (m) {
+        b.replaceChildren();
+        var h2 = el('h2', '', esc(m.subject)); h2.style.cssText = 'font-size:20px;font-weight:700;line-height:1.25;overflow-wrap:anywhere'; b.appendChild(h2);
+        var facts = el('div', 'facts');
+        [['From', m.senderName + (m.senderEmail && m.senderEmail !== m.senderName ? ' <' + m.senderEmail + '>' : '')], ['To', (m.recipients || []).join(', ') || '—'],
+         ['When', m.receivedAt ? new Date(m.receivedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—']].forEach(function (f) {
+          facts.appendChild(el('div', 'fact', '<span>' + f[0] + '</span><span class="val">' + esc(f[1]) + '</span>'));
+        });
+        b.appendChild(facts);
+        var who = el('div'); b.appendChild(who);
+        if (m.senderEmail) api('GET', '/api/calendar/contacts?limit=3&q=' + encodeURIComponent(m.senderEmail)).then(function (r) {
+          var c = (r.contacts || []).filter(function (x) { return (x.email || '').toLowerCase() === m.senderEmail.toLowerCase(); })[0];
+          if (!c) return;
+          var row = el('button', 'person', '<span class="avatar">' + esc(initials(c.display)) + '</span><span class="meta"><b>' + esc(c.display) + '</b><small>Open contact</small></span><span class="go">›</span>');
+          row.addEventListener('click', function () { openContact(c.id, true); });
+          who.appendChild(row);
+        }).catch(function () {});
+        var body = el('div', 'mailtext'); body.textContent = m.body || m.preview || ''; b.appendChild(body);
+        if ((m.attachments || []).length) b.appendChild(el('p', 'hint', esc(m.attachments.length + ' attachment' + (m.attachments.length > 1 ? 's' : '') + ' — open them on the desktop.')));
+      }).catch(function (e) {
+        b.replaceChildren();
+        if (fallback) { var t = el('div', 'mailtext'); t.textContent = fallback; b.appendChild(t); } else b.appendChild(el('p', 'empty', esc(e.message)));
+      });
+    } };
+    push(view, keep);
+  }
+  function contactEmails(b, detail, before) {         // the contact's emails, newest first, tap to read
+    var mails = (detail.messages || []).filter(function (x) { return x.channel === 'email'; })
+      .sort(function (x, y) { return new Date(y.timestamp) - new Date(x.timestamp); });
+    if (!mails.length) return;
+    b.insertBefore(el('div', 'lbl', 'Emails <span class="count num">' + mails.length + '</span>'), before);
+    mails.slice(0, 30).forEach(function (x) {
+      var text = x.message_text || '', subj = text.indexOf('Subject: ') === 0 ? text.split('\n\n')[0].slice(9) : '(no subject)';
+      var bodyText = text.indexOf('Subject: ') === 0 ? text.split('\n\n').slice(1).join('\n\n') : text;
+      var row = el('button', 'person mail', '<span class="avatar" style="background:var(--deep)">' + ICON.mail + '</span><span class="meta"><b>' + esc(subj) + '</b><small>'
+        + esc((x.direction === 'outgoing' ? 'You wrote · ' : 'They wrote · ') + bodyText.slice(0, 90)) + '</small></span><span class="go num">' + esc(when(x.timestamp)) + '</span>');
+      row.addEventListener('click', function () {
+        var gid = String(x.message_id || '').indexOf('saved-email:') === 0 ? String(x.message_id).slice(12) : (x.external_message_id || '');
+        if (gid) openEmail(gid, true, text);
+        else push({ label: 'Email', render: function (bb) { var t = el('div', 'mailtext'); t.textContent = text; bb.appendChild(t); } }, true);
+      });
+      b.insertBefore(row, before);
+    });
+  }
+
   function openContact(pid, keep) {
     var view = { label: 'Contact', render: function (b) {
       b.appendChild(el('p', 'loading', 'Loading…'));
@@ -558,6 +627,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
             mb.addEventListener('click', function () { openMeeting(upcoming, true); }); b.appendChild(mb);
           }
           b.appendChild(el('div', 'hint', 'Want their last messages or a call summary? Tap Speak to Claude and ask: “What did ' + esc((c.display || '').split(' ')[0]) + ' say last time?”'));
+          contactEmails(b, detail, b.querySelector('.hint'));
         }).catch(function (e) { b.replaceChildren(el('p', 'empty', esc(e.message))); });
     } };
     push(view, keep);
@@ -784,7 +854,14 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
         renderToday(); renderAttention(); renderCal();
       }).catch(fail);
   }
-  api('GET', '/api/me').then(function (me) { state.me = me; $('meBtn').textContent = initials(me.name || me.email); }).catch(function () {});
+  api('GET', '/api/me').then(function (me) {
+    state.me = me; $('meBtn').textContent = initials(me.name || me.email);
+    if (me.role === 'admin') {                       // the emails are the admin's mailbox
+      $('mailTab').hidden = false; $('pMail').hidden = false;
+      api('GET', '/api/gmail/messages').then(function (r) { state.mail = r.messages || []; renderMail(); })
+        .catch(function () { $('mailBody').replaceChildren(el('p', 'empty', 'Emails could not be loaded. Is Gmail connected on the desktop?')); });
+    }
+  }).catch(function () {});
   refresh();
   requestAnimationFrame(function () { goTo(1); });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });      // back from Claude: show what changed
