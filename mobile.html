@@ -515,27 +515,29 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
   }
 
   /* ---------- Email: the LyteKeepr tab's emails (saved by you, or from your contacts), read-only; the admin's mailbox only ---------- */
-  function mailRow(m) {
-    var row = el('button', 'person mail', '<span class="avatar">' + esc(initials(m.senderName)) + '</span><span class="meta"><b>' + esc(m.senderName) + '</b><small class="subj">'
-      + esc(m.subject) + '</small><small>' + esc((m.preview || '').slice(0, 110)) + '</small></span><span class="go num">' + esc(when(m.receivedAt)) + '</span>');
-    row.addEventListener('click', function () { openEmail(m.id); });
+  function mailRow(m, keep) {
+    var who = m.direction === 'from you' ? 'You → ' + (m.to || []).join(', ') : m.from;
+    var row = el('button', 'person mail', '<span class="avatar">' + esc(initials(m.direction === 'from you' ? 'You' : m.from)) + '</span><span class="meta"><b>' + esc(who) + '</b><small class="subj">'
+      + esc(m.subject) + '</small><small>' + esc((m.preview || '').slice(0, 110)) + '</small></span><span class="go num">' + esc(when(m.when)) + '</span>');
+    row.addEventListener('click', function () { openEmail(m.email_id, keep); });
     return row;
   }
   function renderMail() {
     var box = $('mailBody'); box.replaceChildren();
-    var list = (state.mail || []).slice().sort(function (a, b) { return new Date(b.receivedAt) - new Date(a.receivedAt); });
+    var list = state.mail || [];
     if (!list.length) { box.appendChild(el('p', 'empty', 'No emails in LyteKeepr yet. File them into the LyteKeepr tab on the desktop, or they arrive from your contacts.')); return; }
     list.slice(0, 200).forEach(function (m) { box.appendChild(mailRow(m)); });
   }
   function openEmail(id, keep, fallback) {
     var view = { label: 'Email', render: function (b) {
       b.appendChild(el('p', 'loading', 'Loading…'));
-      api('GET', '/api/gmail/messages/' + encodeURIComponent(id)).then(function (m) {
+      api('GET', '/api/crm/email/message?email_id=' + encodeURIComponent(id)).then(function (m) {
         b.replaceChildren();
+        m.senderEmail = m.from_email;
         var h2 = el('h2', '', esc(m.subject)); h2.style.cssText = 'font-size:20px;font-weight:700;line-height:1.25;overflow-wrap:anywhere'; b.appendChild(h2);
         var facts = el('div', 'facts');
-        [['From', m.senderName + (m.senderEmail && m.senderEmail !== m.senderName ? ' <' + m.senderEmail + '>' : '')], ['To', (m.recipients || []).join(', ') || '—'],
-         ['When', m.receivedAt ? new Date(m.receivedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—']].forEach(function (f) {
+        [['From', m.from + (m.from_email && m.from_email !== m.from ? ' <' + m.from_email + '>' : '')], ['To', (m.to || []).join(', ') || '—'],
+         ['When', m.when ? new Date(m.when).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—']].forEach(function (f) {
           facts.appendChild(el('div', 'fact', '<span>' + f[0] + '</span><span class="val">' + esc(f[1]) + '</span>'));
         });
         b.appendChild(facts);
@@ -547,8 +549,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
           row.addEventListener('click', function () { openContact(c.id, true); });
           who.appendChild(row);
         }).catch(function () {});
-        var body = el('div', 'mailtext'); body.textContent = m.body || m.preview || ''; b.appendChild(body);
-        if ((m.attachments || []).length) b.appendChild(el('p', 'hint', esc(m.attachments.length + ' attachment' + (m.attachments.length > 1 ? 's' : '') + ' — open them on the desktop.')));
+        var body = el('div', 'mailtext'); body.textContent = m.text || m.preview || ''; b.appendChild(body);
       }).catch(function (e) {
         b.replaceChildren();
         if (fallback) { var t = el('div', 'mailtext'); t.textContent = fallback; b.appendChild(t); } else b.appendChild(el('p', 'empty', esc(e.message)));
@@ -556,23 +557,13 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
     } };
     push(view, keep);
   }
-  function contactEmails(b, detail, before) {         // the contact's emails, newest first, tap to read
-    var mails = (detail.messages || []).filter(function (x) { return x.channel === 'email'; })
-      .sort(function (x, y) { return new Date(y.timestamp) - new Date(x.timestamp); });
-    if (!mails.length) return;
-    b.insertBefore(el('div', 'lbl', 'Emails <span class="count num">' + mails.length + '</span>'), before);
-    mails.slice(0, 30).forEach(function (x) {
-      var text = x.message_text || '', subj = text.indexOf('Subject: ') === 0 ? text.split('\n\n')[0].slice(9) : '(no subject)';
-      var bodyText = text.indexOf('Subject: ') === 0 ? text.split('\n\n').slice(1).join('\n\n') : text;
-      var row = el('button', 'person mail', '<span class="avatar" style="background:var(--deep)">' + ICON.mail + '</span><span class="meta"><b>' + esc(subj) + '</b><small>'
-        + esc((x.direction === 'outgoing' ? 'You wrote · ' : 'They wrote · ') + bodyText.slice(0, 90)) + '</small></span><span class="go num">' + esc(when(x.timestamp)) + '</span>');
-      row.addEventListener('click', function () {
-        var gid = String(x.message_id || '').indexOf('saved-email:') === 0 ? String(x.message_id).slice(12) : (x.external_message_id || '');
-        if (gid) openEmail(gid, true, text);
-        else push({ label: 'Email', render: function (bb) { var t = el('div', 'mailtext'); t.textContent = text; bb.appendChild(t); } }, true);
-      });
-      b.insertBefore(row, before);
-    });
+  function contactEmails(b, pid, before) {           // the contact's saved emails, newest first, tap to read (only what this person may see)
+    api('GET', '/api/crm/email/lookup?limit=30&contact=' + pid).then(function (r) {
+      var mails = r.emails || [];
+      if (!mails.length || !before.parentNode) return;
+      b.insertBefore(el('div', 'lbl', 'Emails <span class="count num">' + r.count + '</span>'), before);
+      mails.forEach(function (m) { b.insertBefore(mailRow(m, true), before); });
+    }).catch(function () {});
   }
 
   function openContact(pid, keep) {
@@ -627,7 +618,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
             mb.addEventListener('click', function () { openMeeting(upcoming, true); }); b.appendChild(mb);
           }
           b.appendChild(el('div', 'hint', 'Want their last messages or a call summary? Tap Speak to Claude and ask: “What did ' + esc((c.display || '').split(' ')[0]) + ' say last time?”'));
-          contactEmails(b, detail, b.querySelector('.hint'));
+          contactEmails(b, pid, b.querySelector('.hint'));
         }).catch(function (e) { b.replaceChildren(el('p', 'empty', esc(e.message))); });
     } };
     push(view, keep);
@@ -856,10 +847,10 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
   }
   api('GET', '/api/me').then(function (me) {
     state.me = me; $('meBtn').textContent = initials(me.name || me.email);
-    if (me.role === 'admin') {                       // the emails are the admin's mailbox
+    if (me.role === 'admin' || me.share_emails) {   // the admin's mailbox: the admin, and team members they shared it with (only their contacts' emails)
       $('mailTab').hidden = false; $('pMail').hidden = false;
-      api('GET', '/api/gmail/messages').then(function (r) { state.mail = r.messages || []; renderMail(); })
-        .catch(function () { $('mailBody').replaceChildren(el('p', 'empty', 'Emails could not be loaded. Is Gmail connected on the desktop?')); });
+      api('GET', '/api/crm/email/lookup?limit=200').then(function (r) { state.mail = r.emails || []; renderMail(); })
+        .catch(function (e) { $('mailBody').replaceChildren(el('p', 'empty', esc(e.message))); });
     }
   }).catch(function () {});
   refresh();

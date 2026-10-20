@@ -288,6 +288,7 @@ def register(app):
     def me():
         user = getattr(g, "user", None) or {**ADMIN_PSEUDO, "email": admin_email()}
         out = {k: user.get(k) for k in ("id", "email", "name", "role")}
+        out["share_emails"] = bool(user.get("share_emails"))          # may see the admin's saved emails (their own contacts' only)
         if user.get("role") == "admin":              # the admin's name is the one saved in Settings > Profile
             out["name"] = store.get_setting("sender_name").strip() or out["name"]
         from profiles.store import get_active_profile_id, home_profile_id

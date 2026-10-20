@@ -1,4 +1,6 @@
-"""Email lookups for Claude, on the emails saved in the LyteKeepr tab only (filed by you, or from contacts automatically). Admin only.
+"""Email lookups (Claude and the phone), on the emails saved in the LyteKeepr tab only (filed by the admin, or from contacts automatically).
+Who sees what (the same rules as everywhere): the admin sees all of them; a team member only if the admin switched on "Sees my emails"
+for them (Settings → Team), and then only emails with contacts they may see (their brands and funnels).
 
 1. lookup: quick, from the saved index (who, when, subject, preview); word search inside the full text only when asked.
 2. latest: one contact's last email from them and last email from you, in full.
@@ -57,10 +59,33 @@ def contact_addresses(contact) -> tuple:
     return p["display"], addrs
 
 
+def allowed_addresses():
+    """None = every saved email (the admin); else the email addresses of the contacts this team member may see. Refused without "Sees my emails"."""
+    from flask import g
+    from . import access, users, contacts
+    if users.is_admin():
+        return None
+    if not (getattr(g, "user", None) or {}).get("share_emails"):
+        raise PermissionError("The admin hasn't shared their emails with you (Settings → Team → Sees my emails).")
+    ids = access.person_ids()
+    if ids is None:
+        return None if (getattr(g, "user", None) or {}).get("access") == "all" and not access.brand_scopes() else _addresses_of(contacts, None)
+    return _addresses_of(contacts, ids)
+
+
+def _addresses_of(contacts, ids):
+    with contacts._crm() as conn:
+        rows = conn.execute("SELECT person_id, channel_identifier FROM channel_accounts WHERE channel = 'email' AND channel_identifier LIKE '%@%'").fetchall()
+    return {r[1].strip().lower() for r in rows if ids is None or r[0] in ids}
+
+
 def _entries():
     from gmail import storage
+    allowed = allowed_addresses()
     for account in _accounts():
         for mid, e in storage.load_index(account).items():
+            if allowed is not None and _addr(e.get("from")) not in allowed and not ({_addr(t) for t in (e.get("to") or [])} & allowed):
+                continue                                  # an email with nobody this person may see
             yield account, mid, e
 
 
@@ -94,7 +119,7 @@ def lookup(contact=None, query=None, since=None, in_body: bool = False, limit: i
                     continue
         out.append(_row(account, mid, e, me))
     out.sort(key=lambda r: r["when"] or "", reverse=True)
-    return {"contact": name, "count": len(out), "emails": out[: max(1, min(int(limit or 20), 100))]}
+    return {"contact": name, "count": len(out), "emails": out[: max(1, min(int(limit or 20), 300))]}
 
 
 def latest(contact) -> dict:
@@ -134,27 +159,40 @@ def thread(email_id=None, thread_id=None) -> dict:
     return {"thread_id": tid, "subject": rows[0]["subject"] if rows else "", "count": len(rows), "emails": rows}
 
 
+def message(email_id) -> dict:
+    """One saved email in full (if this person may see it)."""
+    from gmail import storage
+    me = _me()
+    for a, mid, e in _entries():
+        if mid == email_id:
+            return {**_row(a, mid, e, me), "text": _body(storage.load_message(a, mid) or {})}
+    raise ValueError("No such email among the ones you can see.")
+
+
 def register(app):
     from flask import jsonify, request
-    from . import users
 
     def run(fn, *a):
-        if not users.is_admin():
-            return jsonify({"error": "Emails are the admin's mailbox; not available to team members."}), 403
         try:
             return jsonify(fn(*a))
+        except PermissionError as exc:
+            return jsonify({"error": str(exc)}), 403
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 
-    @app.get("/api/email/lookup")
+    @app.get("/api/crm/email/message")
+    def email_message_route():
+        return run(message, request.args.get("email_id"))
+
+    @app.get("/api/crm/email/lookup")
     def email_lookup_route():
         a = request.args
         return run(lookup, a.get("contact"), a.get("q"), a.get("since"), a.get("in_body") == "1", a.get("limit") or 20)
 
-    @app.get("/api/email/latest")
+    @app.get("/api/crm/email/latest")
     def email_latest_route():
         return run(latest, request.args.get("contact"))
 
-    @app.get("/api/email/thread")
+    @app.get("/api/crm/email/thread")
     def email_thread_route():
         return run(thread, request.args.get("email_id"), request.args.get("thread_id"))

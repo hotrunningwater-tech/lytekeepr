@@ -397,7 +397,7 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_ids": {"type": "array", "items": {"type": "integer"}},
                                                       "channels": {"type": "array", "items": {"type": "string"}}, "query": {"type": "string"}, "since": {"type": "string"}},
                      "required": ["opportunity_id"]}, "read": True},
-    # --- emails saved in LyteKeepr (the LyteKeepr tab: filed by the user, or from contacts automatically); the admin's only ---
+    # --- emails saved in LyteKeepr (the LyteKeepr tab); the admin sees all, team members only with "Sees my emails" and only their contacts' ---
     {"name": "email_lookup", "title": "Look up emails",
      "description": ("Quick: find saved emails by contact (name, id or address), words in subject/preview/sender, and since (YYYY-MM-DD). Returns who, when, subject, "
                      "a short preview and whether it was from the user or to them, newest first. Enough for 'did he reply?'. in_body=true also searches "
@@ -722,11 +722,11 @@ def _run_tool(call, name: str, args: dict):
     if name == "email_lookup":
         q = {"contact": args.get("contact") or "", "q": args.get("query") or "", "since": args.get("since") or "",
              "in_body": "1" if args.get("in_body") else "0", "limit": args.get("limit") or 20}
-        return need(*call("GET", "/api/email/lookup?" + urllib.parse.urlencode({k: v for k, v in q.items() if v not in ("", None)})))
+        return need(*call("GET", "/api/crm/email/lookup?" + urllib.parse.urlencode({k: v for k, v in q.items() if v not in ("", None)})))
     if name == "email_latest":
-        return need(*call("GET", "/api/email/latest?" + urllib.parse.urlencode({"contact": args.get("contact", "")})))
+        return need(*call("GET", "/api/crm/email/latest?" + urllib.parse.urlencode({"contact": args.get("contact", "")})))
     if name == "email_thread":
-        return need(*call("GET", "/api/email/thread?" + urllib.parse.urlencode({k: args[k] for k in ("email_id", "thread_id") if args.get(k)})))
+        return need(*call("GET", "/api/crm/email/thread?" + urllib.parse.urlencode({k: args[k] for k in ("email_id", "thread_id") if args.get(k)})))
     if name == "who_is_connected":
         return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/connections"))["connections"]
     if name == "find_related_people":
