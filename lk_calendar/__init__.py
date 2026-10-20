@@ -32,6 +32,8 @@ def register(app):
     brands.register(app)
     from . import interactions
     interactions.register(app)
+    from . import email_lookup
+    email_lookup.register(app)
     from . import docs
     docs.register(app)
     from . import claude_connector

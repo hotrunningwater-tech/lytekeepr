@@ -397,6 +397,19 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}, "contact_ids": {"type": "array", "items": {"type": "integer"}},
                                                       "channels": {"type": "array", "items": {"type": "string"}}, "query": {"type": "string"}, "since": {"type": "string"}},
                      "required": ["opportunity_id"]}, "read": True},
+    # --- emails saved in LyteKeepr (the LyteKeepr tab: filed by the user, or from contacts automatically); the admin's only ---
+    {"name": "email_lookup", "title": "Look up emails",
+     "description": ("Quick: find saved emails by contact (name, id or address), words in subject/preview/sender, and since (YYYY-MM-DD). Returns who, when, subject, "
+                     "a short preview and whether it was from the user or to them, newest first. Enough for 'did he reply?'. in_body=true also searches "
+                     "inside the full text (slower). Only emails saved in LyteKeepr, not the whole inbox."),
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "query": {"type": "string"}, "since": {"type": "string"},
+                                                      "in_body": {"type": "boolean"}, "limit": {"type": "integer"}}}, "read": True},
+    {"name": "email_latest", "title": "Latest emails with a contact",
+     "description": "The last email from a contact and the user's last email to them, in full, and whether they replied after it. The everyday 'what did he say back?'.",
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name, contact id or email address"}}, "required": ["contact"]}, "read": True},
+    {"name": "email_thread", "title": "A whole email thread",
+     "description": "Every saved email of one conversation, oldest first, in full (email_id or thread_id from email_lookup). For deep reading or summaries only.",
+     "inputSchema": {"type": "object", "properties": {"email_id": {"type": "string"}, "thread_id": {"type": "string"}}}, "read": True},
     # --- who is in touch with whom (counted from email addresses, no AI) ---
     {"name": "who_is_connected", "title": "Who is connected to a contact",
      "description": "The people a contact keeps appearing with in emails (From, To, CC), with how many separate threads they share. Facts from email headers, not guesses.",
@@ -706,6 +719,14 @@ def _run_tool(call, name: str, args: dict):
             words = [w for w in str(args["query"]).lower().split() if w]
             out = [r for r in out if all(w in (r.get("text") or "").lower() or w in (r.get("title") or "").lower() for w in words)]
         return {**extra, "history": out[-200:]}
+    if name == "email_lookup":
+        q = {"contact": args.get("contact") or "", "q": args.get("query") or "", "since": args.get("since") or "",
+             "in_body": "1" if args.get("in_body") else "0", "limit": args.get("limit") or 20}
+        return need(*call("GET", "/api/email/lookup?" + urllib.parse.urlencode({k: v for k, v in q.items() if v not in ("", None)})))
+    if name == "email_latest":
+        return need(*call("GET", "/api/email/latest?" + urllib.parse.urlencode({"contact": args.get("contact", "")})))
+    if name == "email_thread":
+        return need(*call("GET", "/api/email/thread?" + urllib.parse.urlencode({k: args[k] for k in ("email_id", "thread_id") if args.get(k)})))
     if name == "who_is_connected":
         return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/connections"))["connections"]
     if name == "find_related_people":
