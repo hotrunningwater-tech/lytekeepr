@@ -305,9 +305,11 @@ def _sync_locked() -> dict:
                 continue
             has_followup = conn.execute("SELECT 1 FROM events WHERE lead_ref = ? AND source = 'auto'", (f"meeting:{ev['id']}",)).fetchone()
             in_unchosen = (ev["google_calendar"] or "primary") not in chosen        # its calendar was switched off, not cancelled in Google
-            if in_unchosen and (ev["my_notes"] or ev["meeting_status"] or has_followup):
+            from . import meeting_notes
+            noted = ev["my_notes"] or meeting_notes.has_any(conn, ev)          # someone's private notes on it
+            if in_unchosen and (noted or ev["meeting_status"] or has_followup):
                 continue                                                      # keep what you wrote on it, as it is
-            if ev["my_notes"] or ev["meeting_status"] or has_followup:
+            if noted or ev["meeting_status"] or has_followup:
                 if not ev["meeting_status"]:
                     conn.execute("UPDATE events SET meeting_status = 'cancelled' WHERE id = ?", (ev["id"],))
                     result["kept_as_cancelled"] += 1

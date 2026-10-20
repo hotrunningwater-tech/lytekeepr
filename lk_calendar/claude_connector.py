@@ -264,6 +264,14 @@ TOOLS = [
                                                       "duration_min": {"type": "integer", "default": 30}, "invite": {"type": "array", "items": {"type": "string"}, "description": "Contact names or email addresses"},
                                                       "google_meet": {"type": "boolean", "default": True}, "record_with_fathom": {"type": "boolean", "default": True, "description": "Leave out (on). false only when the user says not to record."},
                                                       "notes": {"type": "string"}}, "required": ["title", "date", "time"]}, "read": False},
+    {"name": "get_meeting_notes", "title": "A meeting's private notes",
+     "description": "The user's own private notes on a meeting (prep, and notes during or after the call). item_id from get_agenda or list_calendar. Only the user sees these.",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}}, "required": ["item_id"]}, "read": True},
+    {"name": "write_meeting_notes", "title": "Write private meeting notes",
+     "description": ("Add to the user's private notes on a meeting (prep plan, what was said, follow-ups). mode 'append' (the default) adds at the end and keeps "
+                     "everything already written; use 'replace' only when the user asks to rewrite the whole note. Never sent to Google or the guests."),
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]}},
+                     "required": ["item_id", "text"]}, "read": False},
     {"name": "set_meeting_recording", "title": "Record a meeting with Fathom (on/off)",
      "description": "Switch Fathom recording on or off for a meeting already in the calendar (item_id from get_agenda or list_calendar). Only when the user asks.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "record": {"type": "boolean"}}, "required": ["item_id", "record"]}, "read": False},
@@ -576,10 +584,9 @@ def _run_tool(call, name: str, args: dict):
     if name == "move_overdue":
         return need(*call("POST", "/api/calendar/overdue/move", {"to": args.get("to", "today")}))
     if name == "set_meeting_status":
-        body = {"meeting_status": args["status"]}
-        if args.get("notes"):
-            body["my_notes"] = args["notes"]
-        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/meeting", body))
+        if args.get("notes"):                          # added to the private notes, never replacing them
+            need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/private-notes", {"text": args["notes"], "mode": "append"}))
+        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/meeting", {"meeting_status": args["status"]}))
     if name == "book_meeting":
         body = {"title": args["title"], "start_date": args["date"], "start_time": args["time"], "duration_min": int(args.get("duration_min") or 30),
                 "invite": ", ".join(str(x) for x in (args.get("invite") or [])), "meet": args.get("google_meet", True) is not False,
@@ -587,6 +594,10 @@ def _run_tool(call, name: str, args: dict):
         m = need(*call("POST", "/api/calendar/meetings", body))
         return {"booked": True, "item_id": m.get("id"), "title": m.get("title"), "date": m.get("start_date"), "time": m.get("start_time"),
                 "google_meet": m.get("join_url") or None, "invited": [a.get("email") for a in m.get("attendees") or []]}
+    if name == "get_meeting_notes":
+        return need(*call("GET", f"/api/calendar/events/{int(args['item_id'])}/private-notes"))
+    if name == "write_meeting_notes":
+        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/private-notes", {"text": args.get("text", ""), "mode": args.get("mode") or "append"}))
     if name == "set_meeting_recording":
         ev = need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/meeting", {"expect_recording": bool(args.get("record"))}))
         return {"item_id": ev.get("id"), "title": ev.get("title"), "record_with_fathom": bool(ev.get("expect_recording"))}

@@ -412,10 +412,10 @@
 
   function meetingBlock(e) {
     // My own notes + meeting status: stored separately from anything Google sends, so a sync never overwrites them.
-    var notes = h('textarea', { id: 'lkcMyNotes', placeholder: 'Your notes (kept in LyteKeepr, never overwritten by Google)' }, e.my_notes || '');
+    var notes = h('textarea', { id: 'lkcMyNotes', placeholder: 'Private notes: prep, and anything during or after the call. Only you see them; never sent to Google or guests.' }, e.private_notes || '');
     var save = h('button', { class: 'btn', type: 'button', onclick: function () {
       save.textContent = 'Saving…';
-      api('PUT', '/api/calendar/events/' + e.id + '/meeting', { my_notes: document.getElementById('lkcMyNotes').value })
+      api('PUT', '/api/calendar/events/' + e.id + '/private-notes', { text: document.getElementById('lkcMyNotes').value, mode: 'replace' })
         .then(load).catch(function (err) { save.textContent = 'Save notes'; showError(err.message); });
     } }, 'Save notes');
     var statuses = h('div', { class: 'lkc-actions' }, Object.keys(MEETING_STATUS_LABELS).map(function (k) {

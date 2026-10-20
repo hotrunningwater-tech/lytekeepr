@@ -731,12 +731,12 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
       b.appendChild(st);
       var rec = el('div', 'hint', e.expect_recording || e.has_call ? 'The Fathom recording shows up here after the call.' : 'No recording expected for this meeting.');
       b.appendChild(el('div', 'lbl', 'Recording')); b.appendChild(rec);
-      b.appendChild(el('div', 'lbl', 'My notes'));
-      var ta = el('textarea'); ta.id = 'notes-' + e.id; ta.placeholder = 'Quick notes for this meeting'; ta.value = e.my_notes || ''; b.appendChild(ta);
+      b.appendChild(el('div', 'lbl', 'Private notes'));
+      var ta = el('textarea'); ta.id = 'notes-' + e.id; ta.placeholder = 'Prep and call notes. Only you see them; never sent to Google or guests.'; ta.value = e.private_notes || ''; b.appendChild(ta);
       var saved = el('span', 'saved'); b.appendChild(saved);
       ta.addEventListener('blur', function () {
-        if (ta.value === (e.my_notes || '')) return;
-        api('PUT', '/api/calendar/events/' + e.id + '/meeting', { my_notes: ta.value }).then(function () { e.my_notes = ta.value; saved.textContent = 'Saved'; }).catch(fail);
+        if (ta.value === (e.private_notes || '')) return;
+        api('PUT', '/api/calendar/events/' + e.id + '/private-notes', { text: ta.value, mode: 'replace' }).then(function () { e.private_notes = ta.value; saved.textContent = 'Saved'; }).catch(fail);
       });
       api('GET', '/api/calls/event/' + e.id).then(function (r) {
         var att = r.attendees || [];

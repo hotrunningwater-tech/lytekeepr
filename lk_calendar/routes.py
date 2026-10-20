@@ -2,7 +2,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_from_directory
 
-from . import access, brands, users, chat, contact_ai, contacts, google_sync, leads, profile, store
+from . import access, brands, meeting_notes, users, chat, contact_ai, contacts, google_sync, leads, profile, store
 
 bp = Blueprint("lk_calendar", __name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -53,6 +53,7 @@ def list_events():
         return jsonify({"error": "start and end are required"}), 400
     events = _one_per_meeting([e for e in store.occurrences(start, end) if access.can_event(e)])      # "Everything" sees the admin's Google meetings too
     brands.meeting_brands(events)
+    meeting_notes.add_to(events)                       # each viewer's own private meeting notes, nobody else's
     return jsonify({"now": store.now_local().strftime("%Y-%m-%dT%H:%M"), "events": _with_people(events), "me": users.current_id()})
 
 
@@ -67,6 +68,7 @@ def agenda():
     for key in ("overdue", "today", "upcoming"):
         data[key] = _with_people(_one_per_meeting([e for e in data[key] if access.can_event(e)]))
         brands.meeting_brands(data[key])
+        meeting_notes.add_to(data[key])
     data["badge"] = len(data["overdue"]) + sum(1 for o in data["today"] if not o["done"])
     return jsonify(data)
 
@@ -263,8 +265,12 @@ def google_status():
 @bp.put("/api/calendar/events/<int:event_id>/meeting")
 def update_meeting(event_id):
     data = _payload()
-    event = store.set_meeting(event_id, data.get("meeting_status"), data.get("my_notes"),
+    if data.get("my_notes") is not None:                # notes on a meeting are private now (each person's own)
+        meeting_notes.write(event_id, str(data["my_notes"]), "replace")
+    event = store.set_meeting(event_id, data.get("meeting_status"), None,
                               bool(data["expect_recording"]) if "expect_recording" in data else None)
+    if event:
+        meeting_notes.add_to([event])
     return (jsonify(event), 200) if event else (jsonify({"error": "not found"}), 404)
 
 

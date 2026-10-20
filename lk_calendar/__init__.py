@@ -34,6 +34,8 @@ def register(app):
     interactions.register(app)
     from . import email_lookup
     email_lookup.register(app)
+    from . import meeting_notes
+    meeting_notes.register(app)
     from . import docs
     docs.register(app)
     from . import claude_connector
