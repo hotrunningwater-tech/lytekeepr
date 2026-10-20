@@ -600,7 +600,7 @@ def meeting_follow_up(conn, ev: dict) -> str | None:
     return None
 
 
-def set_meeting(event_id: int, meeting_status: str | None = None, my_notes: str | None = None) -> dict | None:
+def set_meeting(event_id: int, meeting_status: str | None = None, my_notes: str | None = None, expect_recording: bool | None = None) -> dict | None:
     """Your own notes and meeting status. Works on every event, including read-only Google ones; Google syncs never touch these."""
     with _conn() as conn:
         ev = get_event(event_id, conn)
@@ -613,6 +613,8 @@ def set_meeting(event_id: int, meeting_status: str | None = None, my_notes: str 
             conn.execute("UPDATE events SET meeting_status = ? WHERE id = ?", (MEETING_STATUSES[key], event_id))
         if my_notes is not None:
             conn.execute("UPDATE events SET my_notes = ? WHERE id = ?", (str(my_notes)[:4000], event_id))
+        if expect_recording is not None:                 # whether Fathom should record it (a LyteKeepr setting; Google is not touched)
+            conn.execute("UPDATE events SET expect_recording = ? WHERE id = ?", (1 if expect_recording else 0, event_id))
         ev = get_event(event_id, conn)
         meeting_follow_up(conn, ev)
         return ev

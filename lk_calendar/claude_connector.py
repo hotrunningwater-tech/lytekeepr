@@ -255,14 +255,18 @@ TOOLS = [
                                                       "since_days": {"type": "integer", "default": 30}}}, "read": True},
     {"name": "book_meeting", "title": "Book a meeting",
      "description": ("Create a real meeting in the user's Google Calendar (their chosen meetings calendar) and email the invites from Google. "
-                     "Adds a Google Meet link and marks it to be recorded by Fathom unless told otherwise. Today or later only. "
+                     "Adds a Google Meet link and marks it to be recorded by Fathom. Leave record_with_fathom out: it is always on unless the user explicitly says "
+                     "not to record this meeting. Today or later only. "
                      "This SENDS invitations: always confirm title, date, time and who is invited with the user first. "
                      "Invite people by contact name (as in LyteKeepr) or email address."),
      "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
                                                       "time": {"type": "string", "description": "HH:MM, 24-hour, the user's local time"},
                                                       "duration_min": {"type": "integer", "default": 30}, "invite": {"type": "array", "items": {"type": "string"}, "description": "Contact names or email addresses"},
-                                                      "google_meet": {"type": "boolean", "default": True}, "record_with_fathom": {"type": "boolean", "default": True},
+                                                      "google_meet": {"type": "boolean", "default": True}, "record_with_fathom": {"type": "boolean", "default": True, "description": "Leave out (on). false only when the user says not to record."},
                                                       "notes": {"type": "string"}}, "required": ["title", "date", "time"]}, "read": False},
+    {"name": "set_meeting_recording", "title": "Record a meeting with Fathom (on/off)",
+     "description": "Switch Fathom recording on or off for a meeting already in the calendar (item_id from get_agenda or list_calendar). Only when the user asks.",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "record": {"type": "boolean"}}, "required": ["item_id", "record"]}, "read": False},
     {"name": "cancel_meeting", "title": "Cancel a meeting", "destructive": True,
      "description": "Delete a meeting from the user's own Google Calendar; Google emails a cancellation to the people invited. Confirm with the user first. The id comes from get_agenda or list_calendar.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}}, "required": ["item_id"]}, "read": False},
@@ -579,10 +583,13 @@ def _run_tool(call, name: str, args: dict):
     if name == "book_meeting":
         body = {"title": args["title"], "start_date": args["date"], "start_time": args["time"], "duration_min": int(args.get("duration_min") or 30),
                 "invite": ", ".join(str(x) for x in (args.get("invite") or [])), "meet": args.get("google_meet", True) is not False,
-                "expect_recording": args.get("record_with_fathom", True) is not False, "notes": str(args.get("notes") or "")}
+                "expect_recording": args.get("record_with_fathom", True) is not False, "notes": str(args.get("notes") or "")}     # on unless told not to
         m = need(*call("POST", "/api/calendar/meetings", body))
         return {"booked": True, "item_id": m.get("id"), "title": m.get("title"), "date": m.get("start_date"), "time": m.get("start_time"),
                 "google_meet": m.get("join_url") or None, "invited": [a.get("email") for a in m.get("attendees") or []]}
+    if name == "set_meeting_recording":
+        ev = need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/meeting", {"expect_recording": bool(args.get("record"))}))
+        return {"item_id": ev.get("id"), "title": ev.get("title"), "record_with_fathom": bool(ev.get("expect_recording"))}
     if name == "cancel_meeting":
         return need(*call("DELETE", f"/api/calendar/meetings/{int(args['item_id'])}"))
     if name == "find_opportunities":

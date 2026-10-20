@@ -263,7 +263,8 @@ def google_status():
 @bp.put("/api/calendar/events/<int:event_id>/meeting")
 def update_meeting(event_id):
     data = _payload()
-    event = store.set_meeting(event_id, data.get("meeting_status"), data.get("my_notes"))
+    event = store.set_meeting(event_id, data.get("meeting_status"), data.get("my_notes"),
+                              bool(data["expect_recording"]) if "expect_recording" in data else None)
     return (jsonify(event), 200) if event else (jsonify({"error": "not found"}), 404)
 
 
