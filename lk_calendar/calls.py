@@ -177,7 +177,12 @@ def sync() -> dict:
     """Fetch calls recorded since the last fetch (first time: the last 30 days) and store them. Safe to run any time."""
     if not get_key():
         return {"status": "not_connected"}
-    since = store.get_state(_state("fathom_last_sync_utc")) or (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    last = store.get_state(_state("fathom_last_sync_utc"))
+    try:                                              # look back a few hours each time: a call Fathom listed before its transcript was ready gets it now
+        since = (datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%SZ") if last else ""
+    except ValueError:
+        since = ""
+    since = since or (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
     started = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     added = updated = 0
     cursor, pages = None, 0
@@ -504,8 +509,44 @@ def attention(days: int = 14) -> dict:
     return {"ready": ready, "missing": missing}
 
 
-# ------------------------------------------------------------------ hourly fetch, in every workspace that connected Fathom
+# ------------------------------------------------------------------ fetching: right after a call ends, and hourly, in every workspace with Fathom
 _started = False
+QUICK_MINUTES = 2              # a calendar call just ended and its recording hasn't arrived: check this often
+QUICK_FOR_MINUTES = 60         # ... for up to an hour after it ended
+HOURLY_MINUTES = 60            # otherwise (e.g. calls that weren't in the calendar)
+
+
+def waiting_for_recording() -> bool:
+    """Did a call in the calendar end within the last hour without its recording here yet?"""
+    now = store.now_local()
+    with _crm() as conn:
+        linked = {r[0] for r in conn.execute("SELECT event_id FROM calls WHERE event_id IS NOT NULL")}
+    with store._conn() as cal:
+        rows = cal.execute("""SELECT id, start_date, start_time, duration_min FROM events WHERE (has_call = 1 OR expect_recording = 1)
+                              AND meeting_status IN ('', 'completed') AND start_date BETWEEN ? AND ?""",
+                           ((now - timedelta(days=1)).date().isoformat(), now.date().isoformat())).fetchall()
+    for e in rows:
+        if e["id"] in linked:
+            continue
+        end = datetime.fromisoformat(f"{e['start_date']}T{e['start_time']}") + timedelta(minutes=e["duration_min"] or 30)
+        if end <= now <= end + timedelta(minutes=QUICK_FOR_MINUTES):
+            return True
+    return False
+
+
+def _tick() -> str:
+    """Fetch now if a call just ended and is waiting for its recording (every few minutes), or if an hour has passed."""
+    now = store.now_local()
+    last = store.get_state("fathom_last_pull") or ""
+    try:
+        since = (now - datetime.fromisoformat(last)).total_seconds() / 60 if last else 10 ** 6
+    except ValueError:
+        since = 10 ** 6
+    due = since >= HOURLY_MINUTES or (since >= QUICK_MINUTES and waiting_for_recording())
+    if not due:
+        return "not due"
+    store.set_state("fathom_last_pull", now.isoformat())
+    return sync_everyone()
 
 
 def sync_everyone() -> str:
@@ -527,10 +568,10 @@ def _loop() -> None:
     time.sleep(90)
     while True:
         try:
-            directory.run_in_each_workspace(sync_everyone, "Fathom calls")
+            directory.run_in_each_workspace(_tick, "Fathom calls")
         except Exception:
-            log.exception("Fathom fetch failed; it will try again in an hour")
-        time.sleep(3600)
+            log.exception("Fathom fetch failed; it will try again shortly")
+        time.sleep(60)
 
 
 def start() -> None:

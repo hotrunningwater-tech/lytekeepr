@@ -1198,6 +1198,7 @@
   $('#lkcToday').addEventListener('click', function () { state.weekTouched = false; state.weekStart = mondayOf(today()); load(); });
   document.getElementById('lkcCollapse').addEventListener('click', function () { setCollapsed(!state.collapsed); });
   applyCollapse();
+  $('#lkcChooseCals').addEventListener('click', function () { openCalendars(); });      // which Google calendars LyteKeepr shows
   $('#lkcDensity').addEventListener('click', function () { setDensity(state.density === 'fit' ? 'detailed' : 'fit'); });
   var resizeTimer = null;
   window.addEventListener('resize', function () {          // keep the day fitted when the window changes size
