@@ -1386,22 +1386,26 @@ def gmail_save_message():
     return jsonify(payload)
 
 
-# ---- Daily Gmail sync ----------------------------------------------------------------------------------------
-# Once a day (after 7 AM Toronto time) the same scan as the Gmail tab's button runs: emails from trusted CRM contacts go
-# straight onto the contact, everything else waits for review. A failure (for example an expired Google sign-in) is
-# only logged and retried on the next tick; set LK_GMAIL_DAILY=0 to switch it off. Does nothing if Gmail isn't connected.
+# ---- Automatic Gmail sync ------------------------------------------------------------------------------------
+# Every 15 minutes, on the server (your computer can be off), the same scan as the Gmail tab's button runs: only emails new since the
+# last scan are fetched; emails from trusted CRM contacts go straight onto the contact, everything else waits for review. A failure (for
+# example an expired Google sign-in) is only logged and retried next time; set LK_GMAIL_DAILY=0 to switch it off. Nothing without Gmail.
+GMAIL_SYNC_MINUTES = 15
+
+
 def _gmail_daily_tick() -> str:
-    from datetime import datetime
+    from datetime import datetime, timedelta
     from lk_calendar import store as _store
     if not get_active_account_id():
         return "skipped"
     now = _store.now_local()
-    if now.hour < 7:
-        return "not due"
     last = _store.get_state("gmail_last_daily_scan") or ""
-    if last[:10] == now.date().isoformat():
-        return "not due"
-    _store.set_state("gmail_last_daily_scan", now.isoformat())     # recorded first: a failure waits for tomorrow, never loops
+    try:
+        if last and now - datetime.fromisoformat(last) < timedelta(minutes=GMAIL_SYNC_MINUTES):
+            return "not due"
+    except ValueError:
+        pass
+    _store.set_state("gmail_last_daily_scan", now.isoformat())     # recorded first: a failure waits for the next turn, never loops
     run_gmail_scan(None)
     return "synced"
 
@@ -1415,8 +1419,8 @@ def _gmail_daily_loop():
             from lk_calendar import directory
             directory.run_in_each_workspace(_gmail_daily_tick, "daily Gmail sync")      # each workspace's own Gmail, into its own folder
         except Exception:
-            logging.getLogger(__name__).exception("daily Gmail sync failed; it will try again tomorrow")
-        time.sleep(600)
+            logging.getLogger(__name__).exception("automatic Gmail sync failed; it will try again in a few minutes")
+        time.sleep(60)
 
 
 if os.getenv("LK_GMAIL_DAILY", "1") != "0":
