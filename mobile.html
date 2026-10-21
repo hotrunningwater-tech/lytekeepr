@@ -731,7 +731,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
       b.appendChild(st);
       var rec = el('div', 'hint', e.expect_recording || e.has_call ? 'The Fathom recording shows up here after the call.' : 'No recording expected for this meeting.');
       b.appendChild(el('div', 'lbl', 'Recording')); b.appendChild(rec);
-      b.appendChild(el('div', 'lbl', 'Private notes'));
+      b.appendChild(el('div', 'lbl', 'My private notes'));
       var ta = el('textarea'); ta.id = 'notes-' + e.id; ta.placeholder = 'Prep and call notes. Only you see them; never sent to Google or guests.'; ta.value = e.private_notes || ''; b.appendChild(ta);
       var saved = el('span', 'saved'); b.appendChild(saved);
       ta.addEventListener('blur', function () {

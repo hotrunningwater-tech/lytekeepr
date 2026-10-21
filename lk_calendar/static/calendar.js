@@ -410,14 +410,35 @@
 
   var MEETING_STATUS_LABELS = { '': 'Scheduled', completed: 'Completed', no_show: 'No-show', cancelled: 'Cancelled' };
 
+  function openPrivateNotes(e) {
+    var ta = h('textarea', { class: 'lkc-private-editor', placeholder: 'Prep before the call, and anything during or after it. Only you see this; never sent to Google or guests.' }, e.private_notes || '');
+    var back = h('div', { class: 'lkc-private-back' });
+    function close() { back.remove(); document.removeEventListener('keydown', esc); }
+    function esc(ev) { if (ev.key === 'Escape') close(); }
+    var status = h('span', { class: 'lkc-empty' }, '');
+    var saveBtn = h('button', { class: 'btn primary', type: 'button', onclick: function () {
+      saveBtn.textContent = 'Saving…';
+      api('PUT', '/api/calendar/events/' + e.id + '/private-notes', { text: ta.value, mode: 'replace' })
+        .then(function () { e.private_notes = ta.value; close(); load(); })
+        .catch(function (err) { saveBtn.textContent = 'Save'; status.textContent = err.message; });
+    } }, 'Save');
+    back.appendChild(h('div', { class: 'lkc-private-modal', role: 'dialog', 'aria-label': 'My private notes' }, [
+      h('div', { class: 'lkc-private-head' }, [h('b', {}, 'My private notes · ' + e.title), h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: close }, '\u00d7')]),
+      ta, h('div', { class: 'lkc-actions' }, [saveBtn, h('button', { class: 'btn', type: 'button', onclick: close }, 'Cancel'), status])]));
+    back.addEventListener('click', function (ev) { if (ev.target === back) close(); });
+    document.addEventListener('keydown', esc);
+    document.body.appendChild(back);
+    ta.focus();
+  }
+
   function meetingBlock(e) {
     // My own notes + meeting status: stored separately from anything Google sends, so a sync never overwrites them.
-    var notes = h('textarea', { id: 'lkcMyNotes', placeholder: 'Private notes: prep, and anything during or after the call. Only you see them; never sent to Google or guests.' }, e.private_notes || '');
-    var save = h('button', { class: 'btn', type: 'button', onclick: function () {
-      save.textContent = 'Saving…';
-      api('PUT', '/api/calendar/events/' + e.id + '/private-notes', { text: document.getElementById('lkcMyNotes').value, mode: 'replace' })
-        .then(load).catch(function (err) { save.textContent = 'Save notes'; showError(err.message); });
-    } }, 'Save notes');
+    // My private notes: a short preview here; clicking it opens a large editor in a window
+    var notes = h('div', { class: 'lkc-private-preview', role: 'button', tabindex: '0', title: 'Open to read or edit',
+      onclick: function () { openPrivateNotes(e); }, onkeydown: function (ev) { if (ev.key === 'Enter') openPrivateNotes(e); } },
+      e.private_notes || 'Click to write prep and call notes. Only you see them; never sent to Google or guests.');
+    if (!e.private_notes) notes.classList.add('empty');
+    var save = h('button', { class: 'btn', type: 'button', onclick: function () { openPrivateNotes(e); } }, e.private_notes ? 'Open notes' : 'Write notes');
     var statuses = h('div', { class: 'lkc-actions' }, Object.keys(MEETING_STATUS_LABELS).map(function (k) {
       return h('button', { type: 'button', class: 'btn' + ((e.meeting_status || '') === k ? ' primary' : ''), onclick: function () {
         api('PUT', '/api/calendar/events/' + e.id + '/meeting', { meeting_status: k || 'scheduled' }).then(load).catch(function (err) { showError(err.message); });
@@ -426,7 +447,7 @@
     return h('div', { class: 'lkc-meeting' }, [
       h('span', { class: 'lkc-lbl' }, 'Meeting status'), statuses,
       e.has_call ? h('p', { class: 'lkc-empty' }, 'Conference call: marking it Completed adds a follow-up reminder 24 hours after it ends.') : null,
-      h('span', { class: 'lkc-lbl', style: 'margin-top:6px' }, 'My notes'), notes, save
+      h('span', { class: 'lkc-lbl', style: 'margin-top:6px' }, 'My private notes'), notes, save
     ]);
   }
 

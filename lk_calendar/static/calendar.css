@@ -240,3 +240,13 @@
 .lkc-filter-sep { width: 1px; align-self: stretch; background: rgba(41,67,78,.15); margin: 4px 4px; }
 .lkc-person b { width: 18px; height: 18px; border-radius: 50%; background: var(--ink); color: var(--surface); display: inline-flex; align-items: center;
   justify-content: center; font-size: 10px; font-family: var(--font-heading); }
+
+/* My private notes: a preview on the meeting, a large editor in a window */
+.lkc-private-preview { white-space: pre-wrap; overflow: hidden; max-height: 7.5em; padding: 10px 12px; border-radius: 12px; background: rgba(230,237,240,.9); color: var(--ink); font-size: 14px; line-height: 1.5; cursor: pointer; }
+.lkc-private-preview.empty { color: var(--ink-soft); }
+.lkc-private-preview:hover { box-shadow: 0 0 0 2px rgba(58,156,188,.35); }
+.lkc-private-back { position: fixed; inset: 0; background: rgba(20,32,38,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.lkc-private-modal { background: #f3f8fa; border-radius: 20px; padding: 20px; width: min(900px, 100%); height: min(85vh, 900px); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+.lkc-private-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 16px; color: var(--ink); }
+.lkc-private-head .x { border: none; background: rgba(230,237,240,.9); border-radius: 999px; width: 34px; height: 34px; font-size: 20px; cursor: pointer; }
+.lkc-private-editor { flex: 1; width: 100%; box-sizing: border-box; resize: none; border: none; border-radius: 14px; background: #fff; padding: 16px; font: inherit; font-size: 15px; line-height: 1.55; color: var(--ink); }
