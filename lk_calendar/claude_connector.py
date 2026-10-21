@@ -157,7 +157,20 @@ def _brand_key(call, need, text):
 
 
 def _strip_google(items: list) -> list:
-    return [e for e in items or [] if e.get("source") != "google"]
+    """Calendar items for Claude, Google meetings included: what a meeting is (title, time, guests, join link, status, the viewer's private notes),
+    with the raw Google description kept short."""
+    out = []
+    for e in items or []:
+        e = dict(e)
+        if e.get("source") == "google":
+            e["notes"] = (e.get("notes") or "")[:600]
+            try:
+                e["guests"] = [a.get("email") for a in (json.loads(e.get("attendees") or "[]") if isinstance(e.get("attendees"), str) else e.get("attendees") or [])]
+            except ValueError:
+                e["guests"] = []
+            e.pop("attendees", None)
+        out.append(e)
+    return out
 
 
 TOOLS = [
@@ -190,9 +203,9 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "get_funnel", "title": "Funnel board", "description": "One funnel: every stage with its contact entries (people, with their status) and its opportunity entries (shared deals with several people).",
      "inputSchema": {"type": "object", "properties": {"funnel_id": {"type": "integer"}}, "required": ["funnel_id"]}, "read": True},
-    {"name": "get_agenda", "title": "Agenda", "description": "Tasks and reminders that are overdue, due today and coming up in the next 7 days.",
+    {"name": "get_agenda", "title": "Agenda", "description": "Meetings (Google Calendar ones too, with guests), tasks and reminders that are overdue, due today and coming up in the next 7 days. item_id = id.",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
-    {"name": "list_calendar", "title": "Calendar items", "description": "Tasks, reminders and meetings created in LyteKeepr between two dates (inclusive).",
+    {"name": "list_calendar", "title": "Calendar items", "description": "Meetings (including Google Calendar ones, with guests), tasks and reminders between two dates (inclusive). Use it to find a meeting by person or date; item_id = id.",
      "inputSchema": {"type": "object", "properties": {"start_date": {"type": "string", "description": "YYYY-MM-DD"}, "end_date": {"type": "string", "description": "YYYY-MM-DD"}},
                      "required": ["start_date", "end_date"]}, "read": True},
     {"name": "calls_to_review", "title": "Calls to review", "description": "Recorded calls with a transcript not summarized yet, and meetings that passed with no recording (possible no-shows).",
