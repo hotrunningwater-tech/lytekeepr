@@ -272,6 +272,12 @@ TOOLS = [
                      "everything already written; use 'replace' only when the user asks to rewrite the whole note. Never sent to Google or the guests."),
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]}},
                      "required": ["item_id", "text"]}, "read": False},
+    {"name": "set_meeting_agenda", "title": "Write the meeting's description (guests see it)", "destructive": True,
+     "description": ("Write into the Google Calendar description of a meeting the user organized, e.g. an agenda. THE GUESTS SEE IT. First show the user the exact text "
+                     "and get a clear yes. mode 'append' (default) adds below the current description; 'replace' rewrites it. notify=true also emails the guests "
+                     "about the change (default false). Private prep goes in write_meeting_notes instead, never here."),
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]},
+                                                      "notify": {"type": "boolean"}}, "required": ["item_id", "text"]}, "read": False},
     {"name": "set_meeting_recording", "title": "Record a meeting with Fathom (on/off)",
      "description": "Switch Fathom recording on or off for a meeting already in the calendar (item_id from get_agenda or list_calendar). Only when the user asks.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "record": {"type": "boolean"}}, "required": ["item_id", "record"]}, "read": False},
@@ -598,6 +604,9 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", f"/api/calendar/events/{int(args['item_id'])}/private-notes"))
     if name == "write_meeting_notes":
         return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/private-notes", {"text": args.get("text", ""), "mode": args.get("mode") or "append"}))
+    if name == "set_meeting_agenda":
+        return need(*call("POST", f"/api/calendar/meetings/{int(args['item_id'])}/description",
+                          {"text": args.get("text", ""), "mode": args.get("mode") or "append", "notify": bool(args.get("notify"))}))
     if name == "set_meeting_recording":
         ev = need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/meeting", {"expect_recording": bool(args.get("record"))}))
         return {"item_id": ev.get("id"), "title": ev.get("title"), "record_with_fathom": bool(ev.get("expect_recording"))}

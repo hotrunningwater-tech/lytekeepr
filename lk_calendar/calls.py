@@ -648,6 +648,20 @@ def register(app):
             raise CallsError(str(exc))
         return (jsonify({"ok": True}), 200) if ok else (jsonify({"error": "not found"}), 404)
 
+    @app.post("/api/calendar/meetings/<int:event_id>/description")
+    @guarded
+    def meetings_description(event_id):
+        """Write the guest-visible description (e.g. an agenda) of a meeting you organized, in Google Calendar."""
+        from . import google_sync, access
+        ev = store.get_event(event_id)
+        if not ev or not access.can_event(ev):
+            return jsonify({"error": "not found"}), 404
+        body = request.get_json(silent=True) or {}
+        try:
+            return jsonify(google_sync.set_description(event_id, str(body.get("text") or ""), body.get("mode") or "append", bool(body.get("notify"))))
+        except google_sync.GoogleSyncError as exc:
+            raise CallsError(str(exc))
+
     @app.get("/api/calls/<int:call_id>")
     @guarded
     def calls_get(call_id):

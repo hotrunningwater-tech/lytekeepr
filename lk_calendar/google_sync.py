@@ -388,6 +388,46 @@ def delete_meeting(event_id: int) -> bool:
     return True
 
 
+def set_description(event_id: int, text: str, mode: str = "append", notify: bool = False) -> dict:
+    """Write the guest-visible description (e.g. an agenda) of a meeting the user organized, in Google Calendar.
+    append (default) adds below what is there; replace writes the whole description. Private notes are never touched or sent."""
+    import json
+    ev = store.get_event(event_id)
+    if not ev:
+        raise GoogleSyncError("No such meeting.")
+    if ev["source"] != "google" or not (ev["external_id"] or "").startswith("google:"):
+        raise GoogleSyncError("This is not a Google Calendar meeting.")
+    if not ev["external_id"].startswith(_prefix()):
+        raise GoogleSyncError("This meeting is in someone else's Google Calendar; only they can change it.")
+    url = f"{_events_url(ev.get('google_calendar') or 'primary')}/{urllib.parse.quote(ev['external_id'][len(_prefix()):])}"
+    token = _access_token()
+    def call(method, target, body=None):
+        req = urllib.request.Request(target, method=method, data=json.dumps(body).encode() if body is not None else None)
+        req.add_header("Authorization", f"Bearer {token}")
+        if body is not None:
+            req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read() or b"{}")
+        except urllib.error.HTTPError as exc:
+            low = exc.read().decode(errors="replace").lower()
+            if exc.code == 401 or (exc.code == 403 and ("insufficient" in low or "scope" in low)):
+                raise GoogleAuthError("Google hasn't allowed LyteKeepr to change your calendar yet. Press Reconnect Google and tick every box.") from exc
+            raise GoogleSyncError(f"Google could not change the meeting (error {exc.code}).") from exc
+        except urllib.error.URLError as exc:
+            raise GoogleSyncError(f"Could not reach Google: {exc}") from exc
+    item = call("GET", url)
+    organizer = item.get("organizer") or {}
+    if not organizer.get("self"):
+        raise GoogleSyncError(f"Only the organizer ({organizer.get('email') or 'someone else'}) can change what the guests see on this meeting.")
+    old = item.get("description") or ""
+    new = text if mode == "replace" else ((old.rstrip() + "\n\n" + text.strip()) if old.strip() else text.strip())
+    call("PATCH", url + ("?sendUpdates=all" if notify else "?sendUpdates=none"), {"description": new[:8000]})
+    with store._conn() as conn:                       # show it here at once (the next sync would bring it too)
+        conn.execute("UPDATE events SET notes = ? WHERE id = ?", (_clean_text(new)[:2000], event_id))
+    return {"item_id": event_id, "title": ev["title"], "description": new, "guests_notified": bool(notify)}
+
+
 def create_meeting(title: str, start_date: str, start_time: str, duration_min: int, invitees: list, add_meet: bool = True,
                    notes: str = "", expect_recording: bool = True, project: str = "google") -> dict:
     """Put a meeting in the user's Google Calendar, with a Google Meet link if asked, and send the invites. It is then kept here like
