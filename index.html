@@ -2595,6 +2595,8 @@
           if (crmPersonDetailView.hidden) crmBackTo = currentViewOrigin();       // opened from somewhere else: remember where
           closeCrmPersonDetailBtn.textContent = 'Back to ' + crmBackTo.label;
           closeAllCasePanels();
+          var calPanel = document.getElementById('calendarPanel');               // opened from the Calendar: it steps aside ("Back to Calendar" returns)
+          if (calPanel) calPanel.hidden = true;
           aiPanel.hidden = true;
           crmPersonDetailView.hidden = false;
           crmCurrentPersonId = personId;
