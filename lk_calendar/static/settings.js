@@ -536,7 +536,15 @@
         var el = k === 'company' ? company : k === 'profile_url' ? vals.url : vals[k];
         if (el && !el.value.trim()) el.value = p.fields[k];
       });
-      if (p.notes && !vals.notes.value.trim()) vals.notes.value = plain(p.notes);
+      if (p.notes) {                                   // the summary becomes a dated note (Notes card), never undated text
+        if (c.id) {
+          api('POST', '/api/crm/people/' + c.id + '/notes', { text: 'AI summary of what was pasted:\n' + plain(p.notes) })
+            .then(function () { notice('The summary was saved as a dated note in Notes.'); var el = document.getElementById('crmPersonDetailNotes');
+              if (el && window.lkRecords) window.lkRecords.renderNotes(el, c.id); }).catch(function (e) { notice(e.message); });
+        } else if (!vals.notes.value.trim()) {
+          vals.notes.value = '— ' + new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' —\n' + plain(p.notes);
+        }
+      }
     }
     var ai = page ? assistantPanel({ mode: 'ask', personId: c.id, getContact: function () { return Promise.resolve({ id: c.id }); },
       openHome: function (note) {            // the note already names the contact (and the email address when it is this contact)

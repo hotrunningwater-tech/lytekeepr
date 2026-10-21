@@ -340,7 +340,7 @@ def send_email(person_id, person_name: str, to_email: str, subject: str, body: s
             sender="You",
             direction="outgoing",
             message_text=full_text,
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),      # with its zone: the server runs on UTC, the page shows local time
             external_message_id=result.get("id"),
         )
         conn.commit()
