@@ -236,16 +236,16 @@
         lo = Math.min(lo, Math.floor(s / 60)); hi = Math.max(hi, Math.ceil(en / 60));
       });
       PX_PER_HOUR = 56;
-    } else {                                                // fit the day on screen: trim empty hours, then size the hours to the space
+    } else {                                                // fit the day on screen: the working day sized to the space
       var first = 24, last = 0;
       timed.forEach(function (e) {
         var s = minutes(e.start_time), en = Math.min(s + e.duration_min, 24 * 60);
         first = Math.min(first, Math.floor(s / 60)); last = Math.max(last, Math.ceil(en / 60));
       });
-      if (last === 0) { lo = 8; hi = 18; } else { lo = Math.max(0, first - 1); hi = Math.min(24, last + 1); }
-      for (var guard = 0; hi - lo < 8 && guard < 24; guard++) { if (guard % 2 === 0 && lo > 0) lo--; else if (hi < 24) hi++; else if (lo > 0) lo--; }
+      lo = 8; hi = 20;                                     // always the whole working day (8 AM - 8 PM), wider if meetings fall outside
+      if (last > 0) { lo = Math.max(0, Math.min(lo, first)); hi = Math.min(24, Math.max(hi, last)); }
       var avail = wrap ? wrap.clientHeight - HEAD_PX - STRIP_PX : 0;
-      PX_PER_HOUR = avail > 120 ? Math.max(34, Math.min(64, Math.floor(avail / (hi - lo)))) : 56;
+      PX_PER_HOUR = avail > 120 ? Math.max(22, Math.min(64, Math.floor(avail / (hi - lo)))) : 56;     // small enough that the whole range fits
     }
     var span = (hi - lo) * PX_PER_HOUR;
 
