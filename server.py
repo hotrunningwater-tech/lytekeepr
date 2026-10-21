@@ -520,9 +520,11 @@ def crm_recent_activity():
     limit = request.args.get("limit", default=5, type=int)
     conn = crm_db.get_connection()
     try:
-        return jsonify({"activity": crm_db.list_recent_activity(conn, limit=limit)})
+        rows = crm_db.list_recent_activity(conn, limit=max(limit, 50))
     finally:
         conn.close()
+    from lk_calendar import recent
+    return jsonify({"activity": recent.with_calls(rows, limit)})
 
 
 @app.get("/api/crm/people/<int:person_id>")

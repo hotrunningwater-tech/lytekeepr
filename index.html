@@ -2717,15 +2717,20 @@
 
             if (item.last_channel) {
               var tag = document.createElement('span');
-              tag.className = 'crm-channel-tag crm-channel-tag-' + item.last_channel.toLowerCase();
+              tag.className = 'crm-channel-tag crm-channel-tag-' + item.last_channel.toLowerCase().replace(/[^a-z0-9]+/g, '-');
               tag.textContent = item.last_channel;
               card.appendChild(tag);
             }
 
             var copy = document.createElement('p');
             copy.className = 'attention-copy';
-            var who = item.last_message_direction === 'outgoing' ? 'You' : (item.name || item.company_name || 'Them');
-            copy.textContent = who + ': "' + item.last_message_text + '"' + (item.last_message_at ? ' (' + formatCrmTimestamp(item.last_message_at) + ')' : '');
+            var when = item.last_message_at ? ' (' + formatCrmTimestamp(item.last_message_at) + ')' : '';
+            if (item.kind === 'call') copy.textContent = 'Call recorded: ' + item.last_message_text + when;
+            else if (item.kind === 'logged') copy.textContent = 'Logged ' + item.last_channel + ': "' + item.last_message_text + '"' + when;
+            else {
+              var who = item.last_message_direction === 'outgoing' ? 'You' : (item.name || item.company_name || 'Them');
+              copy.textContent = who + ': "' + item.last_message_text + '"' + when;
+            }
             card.appendChild(copy);
 
             if (item.funnel_name) {
