@@ -173,6 +173,14 @@ def _strip_google(items: list) -> list:
     return out
 
 
+# Tools that save text the user dictated (speech-to-text: typos, repeats, corrections on the fly). The text must be cleaned up, shown and approved first.
+CONFIRM_TEXT_TOOLS = {"doc_create": "content", "doc_write": "text", "tab_create": "content", "add_contact_note": "text", "log_conversation": "text",
+                      "write_meeting_notes": "text", "edit_contact_record": "text", "set_meeting_agenda": "text", "update_contact": "add_note"}
+CONFIRM_RULE = ("BEFORE SAVING: the user dictates by voice, with typos, repeated words and corrections on the fly. First write the cleaned-up text "
+                "(typos fixed, repeats removed, their corrections applied, their meaning and wording kept, nothing invented), show it in the chat, "
+                "and ask if it is good to save. Call this only after they say yes, with exactly that text and user_approved_text=true.")
+
+
 TOOLS = [
     {"name": "find", "title": "Find a person, company or opportunity",
      "description": ("START HERE when the user names someone or something. Searches contacts AND opportunities at once and says what each match is: "
@@ -237,7 +245,8 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "name": {"type": "string"}, "company": {"type": "string"},
                                                       "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
                                                       "instagram": {"type": "string", "description": "Instagram handle like @name"}, "linkedin": {"type": "string", "description": "LinkedIn profile link"},
-                                                      "add_note": {"type": "string"},
+                                                      "add_note": {"type": "string", "description": "A note to add. Clean it up, show it and get a yes first, then set user_approved_text=true."},
+                                                      "user_approved_text": {"type": "boolean"},
                                                       "brand": {"type": "string", "description": "Give the contact this brand ('' removes it). A contact in a branded funnel keeps the funnel's brand: "
                                                                                                  "change the funnel's brand or move them instead. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
                      "required": ["contact_id"]}, "read": False},
@@ -281,15 +290,15 @@ TOOLS = [
      "description": "The user's own private notes on a meeting (prep, and notes during or after the call). item_id from get_agenda or list_calendar. Only the user sees these.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}}, "required": ["item_id"]}, "read": True},
     {"name": "write_meeting_notes", "title": "Write private meeting notes",
-     "description": ("Add to the user's private notes on a meeting (prep plan, what was said, follow-ups). mode 'append' (the default) adds at the end and keeps "
+     "description": (CONFIRM_RULE + " " + "Add to the user's private notes on a meeting (prep plan, what was said, follow-ups). mode 'append' (the default) adds at the end and keeps "
                      "everything already written; use 'replace' only when the user asks to rewrite the whole note. Never sent to Google or the guests."),
-     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]}},
+     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]}},
                      "required": ["item_id", "text"]}, "read": False},
     {"name": "set_meeting_agenda", "title": "Write the meeting's description (guests see it)", "destructive": True,
-     "description": ("Write into the Google Calendar description of a meeting the user organized, e.g. an agenda. THE GUESTS SEE IT. First show the user the exact text "
+     "description": (CONFIRM_RULE + " " + "Write into the Google Calendar description of a meeting the user organized, e.g. an agenda. THE GUESTS SEE IT. First show the user the exact text "
                      "and get a clear yes. mode 'append' (default) adds below the current description; 'replace' rewrites it. notify=true also emails the guests "
                      "about the change (default false). Private prep goes in write_meeting_notes instead, never here."),
-     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]},
+     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]},
                                                       "notify": {"type": "boolean"}}, "required": ["item_id", "text"]}, "read": False},
     {"name": "set_meeting_recording", "title": "Record a meeting with Fathom (on/off)",
      "description": "Switch Fathom recording on or off for a meeting already in the calendar (item_id from get_agenda or list_calendar). Only when the user asks.",
@@ -351,17 +360,17 @@ TOOLS = [
      "description": "A document's text and all its tabs; or just one tab (tab = name or id); or one section (a # heading, by its words or number) of the text or of a tab.",
      "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "tab": {"type": "string"}, "section": {"type": "string"}}, "required": ["doc_id"]}, "read": True},
     {"name": "doc_create", "title": "Create a document",
-     "description": ("Create a document at the top of a brand or funnel, or in a folder (folder_id), optionally with text and named tabs. "
+     "description": (CONFIRM_RULE + " " + "Create a document at the top of a brand or funnel, or in a folder (folder_id), optionally with text and named tabs. "
                      "A funnel must have a brand first. If it's unclear where it belongs, ask."),
-     "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "folder_id": {"type": "integer"}, "content": {"type": "string"},
+     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "title": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "folder_id": {"type": "integer"}, "content": {"type": "string"},
                                                       "tabs": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "content": {"type": "string"}}, "required": ["name"]}}},
                      "required": ["title"]}, "read": False},
     {"name": "doc_write", "title": "Write in a document",
-     "description": ("Change the text of a document or of one of its tabs (tab = name or id), touching nothing else. mode: "
+     "description": (CONFIRM_RULE + " " + "Change the text of a document or of one of its tabs (tab = name or id), touching nothing else. mode: "
                      "'append' adds at the end (the default, e.g. saving what was just discussed); 'replace_section' replaces one # heading's part (section = its words or number); "
                      "'find_replace' replaces one exact passage (find must appear exactly once); 'replace' replaces the whole text. "
                      "Before 'replace', 'replace_section' or 'find_replace', the old text is kept as a previous version. Read first, then change only what was asked."),
-     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "text": {"type": "string"}, "tab": {"type": "string"},
+     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "doc_id": {"type": "integer"}, "text": {"type": "string"}, "tab": {"type": "string"},
                                                       "mode": {"type": "string", "enum": ["append", "replace_section", "find_replace", "replace"]},
                                                       "section": {"type": "string"}, "find": {"type": "string"}}, "required": ["doc_id", "text"]}, "read": False},
     {"name": "doc_update", "title": "Rename or move a document",
@@ -372,8 +381,8 @@ TOOLS = [
      "description": "Delete a document with its tabs. Only when the user asks; if it has a lot of text, confirm with the user first.",
      "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}}, "required": ["doc_id"]}, "read": False},
     {"name": "tab_create", "title": "Add a tab to a document",
-     "description": "Add a named tab to a document, optionally with text (e.g. 'Save what we discussed into a new tab called Partnerships'). position 1 = first.",
-     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "name": {"type": "string"}, "content": {"type": "string"}, "position": {"type": "integer"}},
+     "description": CONFIRM_RULE + " " + "Add a named tab to a document, optionally with text (e.g. 'Save what we discussed into a new tab called Partnerships'). position 1 = first.",
+     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "doc_id": {"type": "integer"}, "name": {"type": "string"}, "content": {"type": "string"}, "position": {"type": "integer"}},
                      "required": ["doc_id", "name"]}, "read": False},
     {"name": "tab_update", "title": "Rename or reorder a tab",
      "description": "Rename a tab and/or move it (position 1 = first). To change its text use doc_write with tab.",
@@ -394,20 +403,20 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "with_contents": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
     # --- notes and the communication history (calls, meetings and conversations logged by hand next to messages, emails and recordings) ---
     {"name": "add_contact_note", "title": "Add a note to a contact",
-     "description": ("A general note about a contact (not a conversation), dated and kept with them, e.g. 'prefers mornings', 'decides with her partner'. "
+     "description": (CONFIRM_RULE + " " + "A general note about a contact (not a conversation), dated and kept with them, e.g. 'prefers mornings', 'decides with her partner'. "
                      "For something that was said in a call, meeting or talk, use log_conversation instead."),
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["contact_id", "text"]}, "read": False},
+     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "contact_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["contact_id", "text"]}, "read": False},
     {"name": "log_conversation", "title": "Log a call or conversation",
-     "description": ("Record a phone call, meeting, in-person talk, video call or other conversation that no integration captured, in the contact's communication history "
+     "description": (CONFIRM_RULE + " " + "Record a phone call, meeting, in-person talk, video call or other conversation that no integration captured, in the contact's communication history "
                      "(e.g. 'I just spoke with John: the customer hasn't approved the color, don't proceed with the order'). Write what was said in the user's words; "
                      "when = when it happened (default now); add other_contact_ids if more people were in it, and opportunity_id when it was about one."),
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "type": {"type": "string", "enum": ["phone call", "meeting", "in person", "video call", "other"]},
+     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "contact_id": {"type": "integer"}, "type": {"type": "string", "enum": ["phone call", "meeting", "in person", "video call", "other"]},
                                                       "text": {"type": "string"}, "when": {"type": "string", "description": "YYYY-MM-DD or YYYY-MM-DD HH:MM"},
                                                       "opportunity_id": {"type": "integer"}, "other_contact_ids": {"type": "array", "items": {"type": "integer"}}},
                      "required": ["contact_id", "text"]}, "read": False},
     {"name": "edit_contact_record", "title": "Edit a note or logged conversation",
-     "description": "Change the text, date or type of a note or logged conversation (record_id comes from get_contact, the histories or search_contact_notes).",
-     "inputSchema": {"type": "object", "properties": {"record_id": {"type": "integer"}, "text": {"type": "string"}, "when": {"type": "string"},
+     "description": CONFIRM_RULE + " " + "Change the text, date or type of a note or logged conversation (record_id comes from get_contact, the histories or search_contact_notes).",
+     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "record_id": {"type": "integer"}, "text": {"type": "string"}, "when": {"type": "string"},
                                                       "type": {"type": "string"}, "opportunity_id": {"type": "integer"}}, "required": ["record_id"]}, "read": False},
     {"name": "delete_contact_record", "title": "Delete a note or logged conversation", "destructive": True,
      "description": "Delete a note or logged conversation. Only when the user asks.",
@@ -474,6 +483,12 @@ def _run_tool(call, name: str, args: dict):
         if status >= 400:
             raise ValueError((data or {}).get("error") or f"LyteKeepr answered with an error ({status})")
         return data
+
+    field = CONFIRM_TEXT_TOOLS.get(name)
+    dictated = field and ((args.get(field) or "").strip() or (name == "doc_create" and any((t.get("content") or "").strip() for t in args.get("tabs") or [])))
+    if dictated and args.get("user_approved_text") is not True:
+        return {"saved": False, "do_this_first": "Nothing was saved. Show the user the cleaned-up text in the chat and ask if it is good to save. "
+                                                  "When they say yes, call again with that exact text and user_approved_text=true."}
 
     if name == "find":
         text = str(args.get("query") or "").strip()
