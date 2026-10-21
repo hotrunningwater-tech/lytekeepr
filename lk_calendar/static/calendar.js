@@ -453,6 +453,7 @@
 
   // The recording of a meeting (Fathom), fetched once per meeting when its details open.
   var callCache = {};
+  var summaryOpen = {};            // which calls show their summary (hidden until opened)
   var callOpen = {};
   function recordingBlock(e) {
     if (!(e.has_call || e.kind === 'meeting' || e.expect_recording)) return null;
@@ -488,7 +489,7 @@
     })) : null;
     var buttons = [];
     if (c.has_transcript && !c.summary) buttons.push(h('button', { class: 'btn primary', type: 'button', onclick: function (ev) {
-      post('/api/calls/' + c.call_id + '/summarize', {}, ev.target, 'Summarizing…', function () { delete callCache[e.id]; load(); });
+      post('/api/calls/' + c.call_id + '/summarize', {}, ev.target, 'Summarizing…', function () { summaryOpen[c.call_id] = true; delete callCache[e.id]; load(); });
     } }, 'Summarize'));
     if (c.has_transcript) buttons.push(h('button', { class: 'btn', type: 'button', onclick: function (ev) {
       post('/api/calls/' + c.call_id + '/draft-followup', {}, ev.target, 'Writing…', function (d) {
@@ -497,11 +498,12 @@
         var home = document.getElementById('homeTab'); if (home) home.click();
       });
     } }, 'Draft follow-up'));
+    if (c.summary) buttons.push(h('button', { class: 'btn', type: 'button', onclick: function () { summaryOpen[c.call_id] = !summaryOpen[c.call_id]; render(); } }, summaryOpen[c.call_id] ? 'Hide summary' : 'Show summary'));
     if (c.has_transcript) buttons.push(h('button', { class: 'btn', type: 'button', onclick: function () { callOpen[c.call_id] = !callOpen[c.call_id]; render(); } }, callOpen[c.call_id] ? 'Hide transcript' : 'Show transcript'));
     return h('div', { class: 'lkc-call' }, people.concat([
       h('span', { class: 'lkc-lbl', style: 'margin-top:6px' }, 'Recording (Fathom)'),
       h('p', { class: 'lkc-empty', style: 'margin:0' }, (c.summary ? 'Summarized' : 'Transcript ready') + (c.duration_min ? ' · ' + c.duration_min + ' min' : '') + '. It also shows on the contact\'s page.'),
-      c.summary ? h('div', { class: 'crm-call-summary' }, c.summary) : null,
+      c.summary && summaryOpen[c.call_id] ? h('div', { class: 'crm-call-summary' }, c.summary) : null,
       transcript,
       buttons.length ? h('div', { class: 'lkc-actions' }, buttons) : null
     ]));

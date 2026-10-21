@@ -575,7 +575,7 @@
 </div>
 
 <script src="chat.js"></script>
-<script src="lk-calendar/calendar.js?v=cals1"></script>
+<script src="lk-calendar/calendar.js?v=sum1"></script>
 <script src="lk-calendar/settings.js?v=aisum1"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
@@ -2336,6 +2336,7 @@
 
     // Recorded calls (Fathom) sit in the same timeline as the messages, in date order, collapsed until opened.
     var crmCallOpen = {};
+    var crmCallSummaryOpen = {};          // which calls show their summary (hidden until opened)
     function crmWhen(ts) { var d = new Date(ts || 0); return isNaN(d) ? 0 : d.getTime(); }
     function loadCrmPersonCalls(personId, messages) {
       fetch('/api/calls/person/' + personId).then(function (res) { return res.ok ? res.json() : null; }).then(function (data) {
@@ -2370,8 +2371,13 @@
       var names = (c.contacts || []).map(function (p) { return p.name; });
       who.textContent = 'With ' + ((c.invitees || []).map(function (i) { return i.name || i.email; }).join(', ') || names.join(', ') || 'unknown');
       row.appendChild(who);
-      if (c.summary) {
-        var sum = document.createElement('div'); sum.className = 'crm-call-summary'; sum.textContent = c.summary; row.appendChild(sum);
+      if (c.summary) {                                  // the saved summary: Show / Hide, like the transcript
+        var sumOpen = !!crmCallSummaryOpen[c.call_id];
+        var sumToggle = document.createElement('button'); sumToggle.type = 'button'; sumToggle.className = 'crm-call-toggle';
+        sumToggle.textContent = sumOpen ? '▾ Hide summary' : '▸ Show summary';
+        sumToggle.addEventListener('click', function () { crmCallSummaryOpen[c.call_id] = !sumOpen; renderCrmPersonDetailMessages(); });
+        row.appendChild(sumToggle);
+        if (sumOpen) { var sum = document.createElement('div'); sum.className = 'crm-call-summary'; sum.textContent = c.summary; row.appendChild(sum); }
       }
       var open = !!crmCallOpen[c.call_id];
       if (c.has_transcript) {
@@ -2401,7 +2407,7 @@
       function btn(label, cls, onClick) { var b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-small ' + cls; b.textContent = label; b.addEventListener('click', function () { onClick(b); }); actions.appendChild(b); return b; }
       var personId = crmCurrentPersonId;
       if (c.has_transcript && !c.summary) btn('Summarize', 'btn-primary', function (b) {
-        crmCallAction('/api/calls/' + c.call_id + '/summarize', {}, b, 'Summarizing…').then(function () { loadCrmPersonCalls(personId, crmPersonDetailAllMessages); });
+        crmCallAction('/api/calls/' + c.call_id + '/summarize', {}, b, 'Summarizing…').then(function () { crmCallSummaryOpen[c.call_id] = true; loadCrmPersonCalls(personId, crmPersonDetailAllMessages); });
       });
       var canEmail = !window.lkMe || window.lkMe.role === 'admin';      // follow-ups go out from the admin's Gmail
       if (c.has_transcript && canEmail) btn('Draft follow-up', c.summary ? 'btn-primary' : 'btn-secondary', function (b) {
