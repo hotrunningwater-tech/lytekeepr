@@ -2596,7 +2596,11 @@
           closeCrmPersonDetailBtn.textContent = 'Back to ' + crmBackTo.label;
           closeAllCasePanels();
           var calPanel = document.getElementById('calendarPanel');               // opened from the Calendar: it steps aside ("Back to Calendar" returns)
-          if (calPanel) calPanel.hidden = true;
+          if (calPanel && !calPanel.hidden) {
+            calPanel.hidden = true;
+            var mainPanel = document.getElementById('caseOverviewPanel');       // the contact page lives in the main panel, which the Calendar hides
+            if (mainPanel) mainPanel.hidden = false;
+          }
           aiPanel.hidden = true;
           crmPersonDetailView.hidden = false;
           crmCurrentPersonId = personId;
