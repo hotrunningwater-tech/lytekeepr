@@ -169,8 +169,49 @@ def message(email_id) -> dict:
     raise ValueError("No such email among the ones you can see.")
 
 
+def reply(text: str, email_id=None, contact=None) -> dict:
+    """Reply in the thread of one saved email (or of the contact's latest email): Re: subject, to its sender (or, for your own email,
+    to its recipients), sent from the admin's Gmail and saved on the contact like any sent email. The admin only."""
+    from . import users
+    if not users.is_admin():
+        raise PermissionError("Replies go out from the admin's Gmail; only the admin can send them.")
+    if not (text or "").strip():
+        raise ValueError("Write the reply first.")
+    target = None
+    if email_id:
+        target = next(((a, mid, e) for a, mid, e in _entries() if mid == email_id), None)
+    elif contact:
+        found = latest(contact)
+        last = max([x for x in (found["last_from_them"], found["last_from_you"]) if x], key=lambda x: x["when"] or "", default=None)
+        if last:
+            target = next(((a, mid, e) for a, mid, e in _entries() if mid == last["email_id"]), None)
+    if not target:
+        raise ValueError("No such email among the saved ones to reply to.")
+    account, mid, e = target
+    me = _me()
+    sender = _addr(e.get("from"))
+    to = [sender] if sender not in me else [t for t in (_addr(x) for x in e.get("to") or []) if t and t not in me]
+    if not to:
+        raise ValueError("Couldn't tell who to reply to.")
+    from gmail import client as gmail_client
+    meta = gmail_client.get_message(mid)
+    headers = {h.get("name", "").lower(): h.get("value", "") for h in (meta.get("payload", {}).get("headers") or [])}
+    message_id = headers.get("message-id")
+    subject = e.get("subject") or ""
+    subject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+    from assistant import email_send_flow
+    name = ((e.get("from") or {}).get("name") if sender not in me else "") or to[0]
+    result = email_send_flow.send_email(None, name, ", ".join(to), subject, text.strip(), thread=(e.get("threadId"), message_id) if message_id else None)
+    return {**result, "to": to, "subject": subject, "in_thread": bool(message_id)}
+
+
 def register(app):
     from flask import jsonify, request
+
+    @app.post("/api/crm/email/reply")
+    def email_reply_route():
+        b = request.get_json(silent=True) or {}
+        return run(reply, b.get("text", ""), b.get("email_id"), b.get("contact"))
 
     def run(fn, *a):
         try:

@@ -301,15 +301,15 @@ def update_pending_send(subject: str, body: str) -> dict | None:
     return payload
 
 
-def send_email(person_id, person_name: str, to_email: str, subject: str, body: str, reply_in_thread: bool = False) -> dict:
+def send_email(person_id, person_name: str, to_email: str, subject: str, body: str, reply_in_thread: bool = False, thread: tuple | None = None) -> dict:
     """Sends one real email through Gmail and records it: the message on the contact, then the "email sent" status and follow-up task.
     Returns {"status": "sent"/"failed", "message", "person_name"}. Shared by the single draft and the funnel batch."""
     account_id = get_active_account_id()
     if not account_id:
         return {"status": "failed", "message": "No Gmail account is connected.", "person_name": person_name}
 
-    thread_id, in_reply_to = None, None
-    if reply_in_thread and person_id:
+    thread_id, in_reply_to = thread if thread else (None, None)     # thread = (Gmail thread id, Message-ID): a reply to that exact email
+    if reply_in_thread and person_id and not thread:
         thread_id, in_reply_to, subject = _reply_target(person_id, subject)
 
     mime = MIMEText(body)

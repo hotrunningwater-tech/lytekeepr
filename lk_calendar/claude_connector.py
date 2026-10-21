@@ -175,7 +175,7 @@ def _strip_google(items: list) -> list:
 
 # Tools that save text the user dictated (speech-to-text: typos, repeats, corrections on the fly). The text must be cleaned up, shown and approved first.
 CONFIRM_TEXT_TOOLS = {"doc_create": "content", "doc_write": "text", "tab_create": "content", "add_contact_note": "text", "log_conversation": "text",
-                      "write_meeting_notes": "text", "edit_contact_record": "text", "set_meeting_agenda": "text", "update_contact": "add_note"}
+                      "write_meeting_notes": "text", "edit_contact_record": "text", "set_meeting_agenda": "text", "update_contact": "add_note", "reply_email": "text"}
 CONFIRM_RULE = ("BEFORE SAVING: the user dictates by voice, with typos, repeated words and corrections on the fly. First write the cleaned-up text "
                 "(typos fixed, repeats removed, their corrections applied, their meaning and wording kept, nothing invented), show it in the chat, "
                 "and ask if it is good to save. Call this only after they say yes, with exactly that text and user_approved_text=true.")
@@ -444,6 +444,12 @@ TOOLS = [
                      "inside the full text (slower). Only emails saved in LyteKeepr, not the whole inbox."),
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "query": {"type": "string"}, "since": {"type": "string"},
                                                       "in_body": {"type": "boolean"}, "limit": {"type": "integer"}}}, "read": True},
+    {"name": "reply_email", "title": "Reply to an email", "destructive": True,
+     "description": (CONFIRM_RULE + " " + "Reply inside the thread of one saved email (email_id from email_lookup or email_latest), or of a contact's latest email (contact): "
+                     "it goes from the user's Gmail as 'Re: <subject>' to the sender (or, if the user wrote the last one, to its recipients), and is saved on the contact. "
+                     "Show the user who it goes to, the subject and the exact reply first; send only after their yes."),
+     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean"}, "email_id": {"type": "string"}, "contact": {"type": "string"},
+                                                      "text": {"type": "string", "description": "The reply"}}, "required": ["text"]}, "read": False},
     {"name": "email_latest", "title": "Latest emails with a contact",
      "description": "The last email from a contact and the user's last email to them, in full, and whether they replied after it. The everyday 'what did he say back?'.",
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name, contact id or email address"}}, "required": ["contact"]}, "read": True},
@@ -778,6 +784,8 @@ def _run_tool(call, name: str, args: dict):
         q = {"contact": args.get("contact") or "", "q": args.get("query") or "", "since": args.get("since") or "",
              "in_body": "1" if args.get("in_body") else "0", "limit": args.get("limit") or 20}
         return need(*call("GET", "/api/crm/email/lookup?" + urllib.parse.urlencode({k: v for k, v in q.items() if v not in ("", None)})))
+    if name == "reply_email":
+        return need(*call("POST", "/api/crm/email/reply", {k: args[k] for k in ("text", "email_id", "contact") if args.get(k)}))
     if name == "email_latest":
         return need(*call("GET", "/api/crm/email/latest?" + urllib.parse.urlencode({"contact": args.get("contact", "")})))
     if name == "email_thread":
