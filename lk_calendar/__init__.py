@@ -36,6 +36,8 @@ def register(app):
     email_lookup.register(app)
     from . import meeting_notes
     meeting_notes.register(app)
+    from . import goals
+    goals.register(app)
     from . import docs
     docs.register(app)
     from . import claude_connector

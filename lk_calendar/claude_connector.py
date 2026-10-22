@@ -221,7 +221,7 @@ TOOLS = [
     {"name": "get_call", "title": "Call transcript", "description": "One recorded call (from Fathom): who was on it, the summary if any, and the full transcript.",
      "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}}, "required": ["call_id"]}, "read": True},
     {"name": "create_task", "title": "Create a task",
-     "description": "Add a task to the LyteKeepr calendar. Use for follow-ups too (e.g. 'Follow up with Sara about pricing'). Today or later only.",
+     "description": "Add a task (shows on the user's Home, under Actions needed when due today, otherwise under Tasks; the calendar shows only meetings). Use for follow-ups too (e.g. 'Follow up with Sara about pricing'). Today or later only.",
      "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
                                                       "time": {"type": "string", "description": "HH:MM, 24-hour; leave out for no specific time"},
                                                       "notes": {"type": "string"}, "brand": {"type": "string", "description": "Which brand the task is for; default LyteKeepr. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
@@ -456,6 +456,18 @@ TOOLS = [
     {"name": "email_thread", "title": "A whole email thread",
      "description": "Every saved email of one conversation, oldest first, in full (email_id or thread_id from email_lookup). For deep reading or summaries only.",
      "inputSchema": {"type": "object", "properties": {"email_id": {"type": "string"}, "thread_id": {"type": "string"}}}, "read": True},
+    # --- goals and tasks on Home (each person's own; goals: today's and this week's) ---
+    {"name": "list_goals", "title": "Goals", "description": ("The user's goals for today and this week (done or not, with ids), unfinished goals from earlier days, "
+                                                            "and goals teammates chose to share. Tasks are in get_agenda."),
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "add_goal", "title": "Add a goal", "description": "Add a goal for today (period 'day') or this week (period 'week'). Short, as the user said it. shared=true shows it to the team.",
+     "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}, "period": {"type": "string", "enum": ["day", "week"]}, "shared": {"type": "boolean"}},
+                     "required": ["text"]}, "read": False},
+    {"name": "update_goal", "title": "Change a goal", "description": "Tick a goal done (done=true) or reopen it, rename it, show it to the team or hide it (shared), or move an earlier unfinished daily goal to today (to_today=true).",
+     "inputSchema": {"type": "object", "properties": {"goal_id": {"type": "integer"}, "done": {"type": "boolean"}, "text": {"type": "string"}, "shared": {"type": "boolean"},
+                                                      "to_today": {"type": "boolean"}}, "required": ["goal_id"]}, "read": False},
+    {"name": "delete_goal", "title": "Delete a goal", "destructive": True, "description": "Delete one of the user's goals. Only when asked.",
+     "inputSchema": {"type": "object", "properties": {"goal_id": {"type": "integer"}}, "required": ["goal_id"]}, "read": False},
     # --- who is in touch with whom (counted from email addresses, no AI) ---
     {"name": "who_is_connected", "title": "Who is connected to a contact",
      "description": "The people a contact keeps appearing with in emails (From, To, CC), with how many separate threads they share. Facts from email headers, not guesses.",
@@ -790,6 +802,21 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", "/api/crm/email/latest?" + urllib.parse.urlencode({"contact": args.get("contact", "")})))
     if name == "email_thread":
         return need(*call("GET", "/api/crm/email/thread?" + urllib.parse.urlencode({k: args[k] for k in ("email_id", "thread_id") if args.get(k)})))
+    if name == "list_goals":
+        return need(*call("GET", "/api/calendar/goals"))
+    if name == "add_goal":
+        return need(*call("POST", "/api/calendar/goals", {"text": args.get("text", ""), "period": args.get("period") or "day", "shared": bool(args.get("shared"))}))
+    if name == "update_goal":
+        gid = int(args["goal_id"])
+        out = None
+        if args.get("to_today"):
+            out = need(*call("POST", f"/api/calendar/goals/{gid}/to-today"))
+        body = {k: args[k] for k in ("done", "text", "shared") if args.get(k) is not None}
+        if body:
+            out = need(*call("PUT", f"/api/calendar/goals/{gid}", body))
+        return out or {"unchanged": True}
+    if name == "delete_goal":
+        return need(*call("POST", f"/api/calendar/goals/{int(args['goal_id'])}/delete"))
     if name == "who_is_connected":
         return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/connections"))["connections"]
     if name == "find_related_people":

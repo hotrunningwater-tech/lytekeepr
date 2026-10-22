@@ -135,9 +135,11 @@
     ]).then(function (r) {
       setBrands(r[3]);
       state.google = r[2];
-      state.events = r[0].events; state.me = r[0].me;
+      // The calendar shows meetings only; tasks, follow-ups and reminders live on Home
+      state.events = r[0].events.filter(isMeetingItem); state.me = r[0].me;
       state.now = r[0].now;
       state.agenda = r[1];
+      ['overdue', 'today', 'upcoming'].forEach(function (k) { state.agenda[k] = (state.agenda[k] || []).filter(isMeetingItem); });
       render();
       updateBadge();
     }).catch(function (e) { if (e.message !== 'login required') showError(e.message); });
@@ -146,11 +148,12 @@
     var box = $('#lkcSideInfo');
     if (box) box.prepend(h('p', { class: 'lkc-err' }, msg));
   }
-  function updateBadge() {
+  function isMeetingItem(e) { return e.kind === 'meeting' || e.source === 'google' || !!e.has_call || !!e.expect_recording; }
+  function updateBadge() {                                  // the number of today's meetings still to come
     var badge = document.getElementById('calendarTabBadge');
     if (!badge) return;
-    var a = state.agenda;
-    var n = buildItems(a.overdue).length + buildItems(a.today.filter(function (o) { return !o.done; })).length;
+    var nowHm = (state.now || '').slice(11, 16);
+    var n = (state.agenda.today || []).filter(function (o) { return !o.done && (o.untimed || (o.start_time || '') >= nowHm); }).length;
     badge.textContent = n;
     badge.hidden = !n;
   }
@@ -283,7 +286,7 @@
         var min = Math.round(((ev.clientY - rect.top) / PX_PER_HOUR * 60) / 30) * 30 + lo * 60;
         var slot = hhmm(Math.min(min, 23 * 60 + 30));
         if (isPast(dayIso, slot)) return;          // nothing new can be put in the past
-        openForm({ start_date: dayIso, start_time: slot });
+        openForm({ start_date: dayIso, start_time: slot, kind: 'meeting' });
       } });
       for (var l = 0; l < hi - lo; l++) col.appendChild(h('div', { class: 'lkc-line', style: 'top:' + l * PX_PER_HOUR + 'px' }));
       day.items.forEach(function (e) {
@@ -397,7 +400,7 @@
     }
     out.push(agendaSection('today', 'Today', todays.map(function (o) { return agendaRow(o, false); }), 'Nothing today.'));
     out.push(agendaSection('upcoming', 'Up next', upcoming.map(function (o) { return agendaRow(o, false); }), 'Nothing in the next 7 days.'));
-    out.push(h('p', { class: 'lkc-empty' }, 'Click an event to see it. Click an empty slot to add one.'));
+    out.push(h('p', { class: 'lkc-empty' }, 'The calendar shows meetings. Tasks, follow-ups and reminders are on Home. Click an empty slot to add a meeting.'));
     return out;
   }
 
@@ -1237,5 +1240,8 @@
   // Keep "now" line and badge fresh while the tab is open.
   setInterval(function () { if (!panel.hidden && state.mode !== 'form' && state.mode !== 'import' && state.mode !== 'calendars') load(); }, 60000);
   // Badge on first page load, even before the tab is opened.
-  api('GET', '/api/calendar/agenda').then(function (a) { state.agenda = a; state.now = a.now; updateBadge(); }).catch(function () {});
+  api('GET', '/api/calendar/agenda').then(function (a) {        // meetings only, like the calendar itself
+    ['overdue', 'today', 'upcoming'].forEach(function (k) { a[k] = (a[k] || []).filter(isMeetingItem); });
+    state.agenda = a; state.now = a.now; updateBadge();
+  }).catch(function () {});
 })();

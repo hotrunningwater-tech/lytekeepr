@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=37">
+<link rel="stylesheet" href="styles.css?v=38">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -93,13 +93,40 @@
     <section class="panel case-overview" id="caseOverviewPanel">
       <div id="caseOverviewContent">
         <div class="overview-heading">
-          <h1>Needs Your Attention</h1>
-          <p class="overview-sub">What LyteKeepr thinks you should act on now</p>
+          <h1>Today</h1>
+          <p class="overview-sub" id="homeDateLine">Your actions, goals, meetings and tasks</p>
         </div>
 
-        <div class="attention-list" id="callsAttentionList"></div>
-        <div class="attention-list" id="suggestionsAttentionList"></div>
-        <div class="attention-list" id="attentionList"></div>
+        <div class="home-section">
+          <div class="home-section-head"><span class="block-label">Actions needed</span><span class="home-count" id="homeActionsCount" hidden>0</span>
+            <span class="home-head-tools" id="homeActionsTools"></span></div>
+          <div class="home-list" id="homeActions"></div>
+          <div class="attention-list" id="callsAttentionList"></div>
+          <div class="attention-list" id="suggestionsAttentionList"></div>
+          <div class="attention-list" id="attentionList"></div>
+        </div>
+
+        <div class="home-goals-grid">
+          <div class="home-card" id="homeGoalsToday"></div>
+          <div class="home-card" id="homeGoalsWeek"></div>
+        </div>
+        <div id="homeTeamGoals"></div>
+
+        <div class="home-section">
+          <div class="home-section-head"><span class="block-label">Meetings</span></div>
+          <div class="home-list" id="homeMeetings"></div>
+        </div>
+
+        <div class="home-section">
+          <div class="home-section-head"><span class="block-label">Tasks</span></div>
+          <div class="home-add" id="homeTaskAdd"></div>
+          <div class="home-list" id="homeTasks"></div>
+        </div>
+
+        <div class="block" id="homeRecentBlock">
+          <span class="block-label">Recent Activity</span>
+          <div class="attention-list" id="recentActivityList"></div>
+        </div>
 
         <div class="block">
           <span class="block-label">LinkedIn Follow-ups</span>
@@ -202,10 +229,6 @@
           </div>
         </div>
 
-        <div class="block">
-          <span class="block-label">Recent Activity</span>
-          <div class="attention-list" id="recentActivityList"></div>
-        </div>
       </div>
 
 
@@ -575,10 +598,11 @@
 </div>
 
 <script src="chat.js"></script>
-<script src="lk-calendar/calendar.js?v=task2"></script>
+<script src="lk-calendar/calendar.js?v=home2"></script>
 <script src="lk-calendar/settings.js?v=aisum1"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
+<script src="lk-calendar/home.js?v=2"></script>
 <script src="lk-calendar/docs.js?v=2"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
@@ -1917,7 +1941,7 @@
       fetch('/api/calls/attention').then(function (res) { return res.ok ? res.json() : null; }).then(function (data) {
         callsAttentionList.innerHTML = '';
         homeCallsCount = data ? data.ready.length + data.missing.length : 0;
-        var clear = attentionList.querySelector('.attention-clear'); if (clear) clear.hidden = homeCallsCount + homeSuggestCount > 0;
+        var clear = attentionList.querySelector('.attention-clear'); if (clear) clear.hidden = homeCallsCount + homeSuggestCount + (window.lkHomeActionCount || 0) > 0;
         if (!data) return;
         data.ready.forEach(function (c) {
           var who = (c.contacts || []).map(function (p) { return p.name; }).join(', ');
@@ -1957,7 +1981,7 @@
         suggestionsAttentionList.innerHTML = '';
         var list = (data && data.suggestions) || [];
         homeSuggestCount = list.length;
-        var clear = attentionList.querySelector('.attention-clear'); if (clear) clear.hidden = homeCallsCount + homeSuggestCount > 0;
+        var clear = attentionList.querySelector('.attention-clear'); if (clear) clear.hidden = homeCallsCount + homeSuggestCount + (window.lkHomeActionCount || 0) > 0;
         list.forEach(function (sg) {
           var title = sg.kind === 'add_to_opportunity' ? 'Add ' + sg.name + ' to “' + sg.opportunity + '”?' : 'New contact: ' + sg.name + '?';
           var buttons = [
@@ -1985,7 +2009,7 @@
       if (!actionable.length) {
         var allClear = document.createElement('div');
         allClear.className = 'attention attention-clear';
-        allClear.hidden = homeCallsCount + homeSuggestCount > 0;           // calls and suggestions waiting below the heading count as attention too
+        allClear.hidden = homeCallsCount + homeSuggestCount + (window.lkHomeActionCount || 0) > 0;           // calls and suggestions waiting below the heading count as attention too
         var clearFlag = document.createElement('span');
         clearFlag.className = 'attention-flag';
         clearFlag.textContent = 'All caught up';

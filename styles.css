@@ -2779,3 +2779,55 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .lko-sugg { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; background: rgba(58,156,188,.08); border: 1px dashed rgba(58,156,188,.45); border-radius: 12px; padding: 8px 10px; }
 .lko-sugg small { display: block; color: var(--ink-soft); font-size: 12px; }
 .lko-conn small { color: var(--ink-soft); }
+
+/* ---------- Home: the daily workspace (actions, goals, meetings, tasks) ---------- */
+.home-section { display: flex; flex-direction: column; gap: 10px; }
+.home-section > .attention-list:empty { display: none; }
+.home-section-head { display: flex; align-items: center; gap: 8px; }
+.home-section-head .block-label { margin: 0 0 0 4px; }
+.home-count { background: var(--coral); color: #fff; border-radius: var(--radius-pill); font-family: var(--font-heading); font-size: 10.5px; font-weight: 700; padding: 1px 8px; }
+.home-head-tools { margin-left: auto; }
+.home-list { display: flex; flex-direction: column; gap: 6px; }
+.home-goals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 1100px) { .home-goals-grid { grid-template-columns: 1fr; } }
+.home-card { background: rgba(127, 168, 184, 0.08); border: 1px solid rgba(127, 168, 184, 0.28); border-radius: 14px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hm-team { margin-top: -6px; }
+.hm-row { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid rgba(127, 168, 184, 0.22); border-radius: 12px; padding: 9px 12px; }
+.hm-row.hm-group { background: rgba(233, 139, 116, 0.08); border-color: rgba(233, 139, 116, 0.3); }
+#homeActions .hm-row { border-left: 3px solid var(--coral); }
+#homeActions .hm-sub .hm-row { border-left-width: 1px; }
+.hm-sub { display: flex; flex-direction: column; gap: 5px; margin: 6px 0 4px 28px; }
+.hm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hm-title { font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; text-align: left; }
+.hm-title.done { text-decoration: line-through; color: var(--ink-soft); }
+.hm-link { border: none; background: none; padding: 0; font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer; }
+.hm-link:hover { color: var(--deep); text-decoration: underline; }
+.hm-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--ink-soft); }
+.hm-late { color: #c4614a; font-weight: 600; }
+.hm-brand { display: inline-flex; align-items: center; gap: 5px; } .hm-brand i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.hm-check { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--teal); background: #fff; color: #fff; font-size: 11px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.hm-check:hover { border-color: var(--deep); }
+.hm-check.on { background: var(--teal); border-color: var(--teal); }
+.hm-check.ro { cursor: default; }
+.hm-mini { flex: none; border: 1px solid rgba(127, 168, 184, 0.4); background: rgba(127, 168, 184, 0.12); color: var(--ink); border-radius: var(--radius-pill); padding: 5px 11px; font-family: var(--font-heading); font-size: 11.5px; font-weight: 600; cursor: pointer; text-decoration: none; }
+.hm-mini:hover { background: rgba(127, 168, 184, 0.24); }
+.hm-tools { display: inline-flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.hm-row:hover .hm-tools, .hm-tools .hm-icon.on { opacity: 1; }
+.hm-icon { border: none; background: none; color: var(--ink-soft); font-size: 14px; width: 24px; height: 24px; border-radius: 6px; cursor: pointer; }
+.hm-icon:hover { background: rgba(127, 168, 184, 0.16); color: var(--ink); }
+.hm-icon.on { color: var(--teal); }
+.hm-input { width: 100%; box-sizing: border-box; border: 1px dashed rgba(127, 168, 184, 0.55); background: rgba(255, 255, 255, 0.6); border-radius: 12px; padding: 9px 12px; font: inherit; font-size: 13px; color: var(--ink); }
+.hm-input:focus { outline: none; border-style: solid; border-color: var(--teal); background: #fff; }
+.home-add { display: flex; gap: 8px; align-items: center; }
+.home-add .hm-input { flex: 1; } .home-add .hm-date { flex: none; width: 150px; }
+.hm-progress { display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--ink-soft); }
+.hm-bar { flex: 1; height: 6px; border-radius: 6px; background: rgba(127, 168, 184, 0.2); overflow: hidden; }
+.hm-bar i { display: block; height: 100%; background: var(--teal); border-radius: 6px; transition: width .2s; }
+.hm-earlier-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.hm-earlier-box .block-label { margin: 4px 0 0 4px; }
+.hm-earlier { background: rgba(255, 255, 255, 0.55); border-style: dashed; }
+.hm-meeting { cursor: pointer; } .hm-meeting:hover { border-color: rgba(127, 168, 184, 0.55); }
+.hm-when { flex: none; width: 92px; display: flex; flex-direction: column; font-size: 11.5px; color: var(--ink-soft); }
+.hm-when b { font-family: var(--font-heading); font-size: 12px; color: var(--ink); font-weight: 600; }
+.hm-day { font-family: var(--font-heading); font-size: 11px; font-weight: 600; color: var(--ink-soft); margin: 6px 0 0 4px; }
+.hm-empty { margin: 0 4px; font-size: 12.5px; color: var(--ink-soft); }
