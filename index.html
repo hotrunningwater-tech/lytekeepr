@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=38">
+<link rel="stylesheet" href="styles.css?v=39">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -94,42 +94,46 @@
       <div id="caseOverviewContent">
         <div class="overview-heading">
           <h1>Today</h1>
-          <p class="overview-sub" id="homeDateLine">Your actions, goals, meetings and tasks</p>
+          <p class="overview-sub" id="homeDateLine">Your actions, goals and tasks</p>
         </div>
 
-        <div class="home-section">
+        <div class="home-section" id="homeActionsSection">
           <div class="home-section-head"><span class="block-label">Actions needed</span><span class="home-count" id="homeActionsCount" hidden>0</span>
             <span class="home-head-tools" id="homeActionsTools"></span></div>
-          <div class="home-list" id="homeActions"></div>
-          <div class="attention-list" id="callsAttentionList"></div>
-          <div class="attention-list" id="suggestionsAttentionList"></div>
-          <div class="attention-list" id="attentionList"></div>
-        </div>
+          <div class="hx" id="hxTasks" data-key="Tasks">
+            <button class="hx-toggle" type="button" aria-expanded="false"><span class="hx-label">Tasks due</span><span class="hx-count">0</span><span class="hx-arrow">▶</span></button>
+            <div class="hx-body" hidden>
+              <div class="home-list" id="homeActions"></div>
+            </div>
+          </div>
+          <div class="hx" id="hxFollowups" data-key="Followups">
+            <button class="hx-toggle" type="button" aria-expanded="false"><span class="hx-label">Follow-ups</span><span class="hx-count">0</span><span class="hx-arrow">▶</span></button>
+            <div class="hx-body" hidden>
+              <div class="home-list" id="homeFollowups"></div>
+            </div>
+          </div>
+          <div class="hx" id="hxCalls" data-key="Calls">
+            <button class="hx-toggle" type="button" aria-expanded="false"><span class="hx-label">Calls to review</span><span class="hx-count">0</span><span class="hx-arrow">▶</span></button>
+            <div class="hx-body" hidden>
+              <div class="attention-list" id="callsAttentionList"></div>
+            </div>
+          </div>
+          <div class="hx" id="hxSuggest" data-key="Suggest">
+            <button class="hx-toggle" type="button" aria-expanded="false"><span class="hx-label">Suggestions</span><span class="hx-count">0</span><span class="hx-arrow">▶</span></button>
+            <div class="hx-body" hidden>
+              <div class="attention-list" id="suggestionsAttentionList"></div>
+            </div>
+          </div>
+          <div class="hx" id="hxApprove" data-key="Approve">
+            <button class="hx-toggle" type="button" aria-expanded="false"><span class="hx-label">Emails to approve</span><span class="hx-count">0</span><span class="hx-arrow">▶</span></button>
+            <div class="hx-body" hidden>
+              <div class="attention-list" id="attentionList"></div>
+            </div>
+          </div>
+          <div class="hx" id="hxLinkedin" data-key="Linkedin">
+            <button class="hx-toggle" type="button" aria-expanded="false"><span class="hx-label">LinkedIn follow-ups</span><span class="hx-count">0</span><span class="hx-arrow">▶</span></button>
+            <div class="hx-body" hidden>
 
-        <div class="home-goals-grid">
-          <div class="home-card" id="homeGoalsToday"></div>
-          <div class="home-card" id="homeGoalsWeek"></div>
-        </div>
-        <div id="homeTeamGoals"></div>
-
-        <div class="home-section">
-          <div class="home-section-head"><span class="block-label">Meetings</span></div>
-          <div class="home-list" id="homeMeetings"></div>
-        </div>
-
-        <div class="home-section">
-          <div class="home-section-head"><span class="block-label">Tasks</span></div>
-          <div class="home-add" id="homeTaskAdd"></div>
-          <div class="home-list" id="homeTasks"></div>
-        </div>
-
-        <div class="block" id="homeRecentBlock">
-          <span class="block-label">Recent Activity</span>
-          <div class="attention-list" id="recentActivityList"></div>
-        </div>
-
-        <div class="block">
-          <span class="block-label">LinkedIn Follow-ups</span>
 
           <div class="reminder-add-row">
             <select id="followupLeadSelect">
@@ -217,19 +221,46 @@
               <p class="crm-empty" id="followupWaitingEmpty" hidden>Nothing waiting.</p>
             </div>
           </div>
-        </div>
-
-        <div class="block">
-          <span class="block-label">Waiting / No Action Needed</span>
-          <div class="upcoming-list" id="upcomingList">
+        
+            </div>
+          </div>
+          <div class="hx" id="hxWaiting" data-key="Waiting">
+            <button class="hx-toggle is-calm" type="button" aria-expanded="false"><span class="hx-label">Waiting / no action needed</span><span class="hx-count">0</span><span class="hx-arrow">▶</span></button>
+            <div class="hx-body" hidden>
+              <div class="upcoming-list" id="upcomingList">
             <div class="attention attention-quiet" id="upcomingEmpty">
               <span class="attention-flag">Nothing in progress</span>
               <p class="attention-copy">No follow-up sequences are currently running.</p>
             </div>
           </div>
+
+            </div>
+          </div>
         </div>
 
-      </div>
+        <div class="home-goals-grid">
+          <div class="home-card" id="homeGoalsToday"></div>
+          <div class="home-card" id="homeGoalsWeek"></div>
+        </div>
+        <div id="homeTeamGoals"></div>
+
+        <div class="home-section" id="homeMeetingsSection" hidden>
+          <div class="home-section-head"><span class="block-label">Meetings</span></div>
+          <div class="home-list" id="homeMeetings"></div>
+        </div>
+
+        <div class="home-section">
+          <div class="home-section-head"><span class="block-label">Tasks</span></div>
+          <div class="home-add" id="homeTaskAdd"></div>
+          <div class="home-list" id="homeTasks"></div>
+        </div>
+
+        <div class="block" id="homeRecentBlock">
+          <span class="block-label">Recent Activity</span>
+          <div class="attention-list" id="recentActivityList"></div>
+        </div>
+
+              </div>
 
 
       <div id="linkedinPanel" class="document-viewer" hidden>
@@ -602,7 +633,7 @@
 <script src="lk-calendar/settings.js?v=aisum1"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
-<script src="lk-calendar/home.js?v=2"></script>
+<script src="lk-calendar/home.js?v=3"></script>
 <script src="lk-calendar/docs.js?v=2"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>

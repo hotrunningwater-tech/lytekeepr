@@ -19,6 +19,7 @@
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.error || 'Something went wrong'); return d; }); });
   }
   function $(id) { return document.getElementById(id); }
+  function fill(el, kids) { el.replaceChildren.apply(el, (kids || []).filter(function (k) { return k != null && k !== false; })); }
   if (!$('homeActions')) return;
   function fail(e) { if (window.lkContacts && window.lkContacts.notice) window.lkContacts.notice(e.message); else alert(e.message); }
 
@@ -59,6 +60,7 @@
     var overdue = (a.overdue || []).filter(function (e) { return !isMeeting(e); });
     var todays = (a.today || []).filter(function (e) { return !isMeeting(e) && !e.done; });
     renderActions(overdue, todays, today);
+    countRows();
     renderGoals();
     renderMeetings(a, today);
     renderTasks((a.upcoming || []).filter(function (e) { return !isMeeting(e); }), today);
@@ -103,26 +105,60 @@
     } }, 'All done');
     var row = h('div', { class: 'hm-row hm-group' }, [check(false, function () { all.click(); }, 'Mark all done'),
       h('div', { class: 'hm-main' }, [h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { state.open[key] = !open; render(); } }, (open ? '▾ ' : '▸ ') + label),
-        h('div', { class: 'hm-meta' }, [late ? h('span', { class: 'hm-late' }, late + ' overdue') : h('span', {}, 'Due today'), brandDot(g.project)].filter(Boolean))]),
+        h('div', { class: 'hm-meta' }, [late ? h('span', { class: 'hm-late' }, late + ' overdue') : h('span', {}, g.members[0].date === today ? 'Due today' : dayLabel(g.members[0].date, today)), brandDot(g.project)].filter(Boolean))]),
       all]);
     var wrap = h('div', {}, [row]);
     if (open) wrap.appendChild(h('div', { class: 'hm-sub' }, g.members.map(function (m) { return itemRow(m, today, m.date < today); })));
     return wrap;
   }
   function renderActions(overdue, todays, today) {
-    var items = fold(overdue.concat(todays));
-    var count = overdue.length + todays.length;
-    $('homeActionsCount').textContent = count; $('homeActionsCount').hidden = !count;
-    window.lkHomeActionCount = count;
-    var clear = document.querySelector('#attentionList .attention-clear');
-    if (clear && count) clear.hidden = true;
-    $('homeActionsTools').replaceChildren(overdue.length ? h('button', { class: 'hm-mini', type: 'button', onclick: function () {
+    var due = overdue.concat(todays);
+    var own = due.filter(function (e) { return !e.lead; }), leads = due.filter(function (e) { return !!e.lead; });
+    state.counts.Tasks = own.length; state.counts.Followups = leads.length;
+    fill($('homeActionsTools'), [overdue.length ? h('button', { class: 'hm-mini', type: 'button', onclick: function () {
       api('POST', '/api/calendar/overdue/move', { to: 'today' }).then(load).catch(fail);
-    } }, 'Move overdue to today') : '');
-    $('homeActions').replaceChildren.apply($('homeActions'), items.map(function (it) {
-      return it.group ? groupRow(it, today) : itemRow(it, today, it.date < today);
-    }));
+    } }, 'Move overdue to today') : null]);
+    fill($('homeActions'), own.length ? own.map(function (e) { return itemRow(e, today, e.date < today); }) : [h('p', { class: 'hm-empty' }, 'No tasks due.')]);
+    fill($('homeFollowups'), fold(leads).map(function (it) { return it.group ? groupRow(it, today) : itemRow(it, today, it.date < today); }));
   }
+
+  /* ---------- the expandable rows under "Actions needed": one per type, with its count ---------- */
+  state.counts = {};
+  var KEEP_SHOWN = { Linkedin: 1, Waiting: 1 };          // rows that stay even at 0 (the LinkedIn one has its own form)
+  function domCount(key) {
+    if (key === 'Calls') return $('callsAttentionList').querySelectorAll(':scope > .attention').length;
+    if (key === 'Suggest') return $('suggestionsAttentionList').querySelectorAll(':scope > .attention').length;
+    if (key === 'Approve') return $('attentionList').querySelectorAll('.followup-live-card:not(.attention-quiet)').length;
+    if (key === 'Linkedin') { var c = $('followupActionCount'); return c ? +c.textContent || 0 : 0; }
+    if (key === 'Waiting') return $('upcomingList').querySelectorAll('.attention:not(#upcomingEmpty)').length;
+    return state.counts[key] || 0;
+  }
+  function countRows() {
+    var total = 0;
+    document.querySelectorAll('#homeActionsSection .hx').forEach(function (row) {
+      var key = row.getAttribute('data-key'), n = domCount(key);
+      row.querySelector('.hx-count').textContent = n;
+      row.hidden = !n && !KEEP_SHOWN[key];
+      if (!KEEP_SHOWN[key]) total += n;
+    });
+    $('homeActionsCount').textContent = total; $('homeActionsCount').hidden = !total;
+    window.lkHomeActionCount = total;
+  }
+  var OPEN_KEY = 'lkHomeOpen';
+  function openSet() { try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '{"Tasks":1}'); } catch (e) { return { Tasks: 1 }; } }
+  document.querySelectorAll('#homeActionsSection .hx').forEach(function (row) {
+    var key = row.getAttribute('data-key'), btn = row.querySelector('.hx-toggle'), body = row.querySelector('.hx-body');
+    function show(on) { body.hidden = !on; btn.setAttribute('aria-expanded', on ? 'true' : 'false'); }
+    show(!!openSet()[key]);
+    btn.addEventListener('click', function () {
+      var o = openSet(), on = body.hidden; if (on) o[key] = 1; else delete o[key];
+      try { localStorage.setItem(OPEN_KEY, JSON.stringify(o)); } catch (e) { /* storage blocked */ }
+      show(on);
+    });
+    new MutationObserver(function () { countRows(); }).observe(body, { childList: true, subtree: true, characterData: true });
+  });
+  var licount = $('followupActionCount');
+  if (licount) new MutationObserver(function () { countRows(); }).observe(licount, { childList: true, characterData: true, subtree: true });
 
   /* ---------- goals: today and this week (per person; "visible to team" is a choice per goal) ---------- */
   function goalRow(gl, mine) {
@@ -156,14 +192,14 @@
         h('div', { class: 'hm-meta' }, 'Not done ' + dayLabel(gl.period_start, g.today).toLowerCase())]),
         h('button', { class: 'hm-mini', type: 'button', onclick: function () { api('POST', '/api/calendar/goals/' + gl.goal_id + '/to-today').then(load).catch(fail); } }, 'Move to today')]);
     });
-    $('homeGoalsToday').replaceChildren(h('div', { class: 'home-section-head' }, [h('span', { class: 'block-label' }, "Today's goals")]),
+    fill($('homeGoalsToday'), [h('div', { class: 'home-section-head' }, [h('span', { class: 'block-label' }, "Today's goals")]),
       progress(g.today_goals), h('div', { class: 'home-list' }, g.today_goals.map(function (x) { return goalRow(x, true); })),
       goalInput('day', g.today_goals.length ? 'Add another goal…' : 'What must get done today?'),
-      earlier.length ? h('div', { class: 'hm-earlier-box' }, [h('span', { class: 'block-label' }, 'Still open from earlier')].concat(earlier)) : null);
-    $('homeGoalsWeek').replaceChildren(h('div', { class: 'home-section-head' }, [h('span', { class: 'block-label' }, 'This week')]),
+      earlier.length ? h('div', { class: 'hm-earlier-box' }, [h('span', { class: 'block-label' }, 'Still open from earlier')].concat(earlier)) : null]);
+    fill($('homeGoalsWeek'), [h('div', { class: 'home-section-head' }, [h('span', { class: 'block-label' }, 'This week')]),
       progress(g.week_goals), h('div', { class: 'home-list' }, g.week_goals.map(function (x) { return goalRow(x, true); })),
-      goalInput('week', g.week_goals.length ? 'Add another goal for the week…' : 'Main goals for this week'));
-    $('homeTeamGoals').replaceChildren.apply($('homeTeamGoals'), (g.team || []).map(function (t) {
+      goalInput('week', g.week_goals.length ? 'Add another goal for the week…' : 'Main goals for this week')]);
+    fill($('homeTeamGoals'), (g.team || []).map(function (t) {
       return h('div', { class: 'home-card hm-team' }, [h('span', { class: 'block-label' }, t.who + ' · shared goals'),
         h('div', { class: 'home-list' }, t.today.concat(t.week).map(function (x) { return goalRow(x, false); }))]);
     }));
@@ -182,7 +218,8 @@
         h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, e.title), guests.length ? h('div', { class: 'hm-meta' }, 'With ' + guests.slice(0, 3).join(', ') + (guests.length > 3 ? ' +' + (guests.length - 3) : '')) : null]),
         e.join_url ? h('a', { class: 'hm-mini', href: e.join_url, target: '_blank', rel: 'noopener', onclick: function (ev) { ev.stopPropagation(); } }, 'Join') : null]);
     });
-    $('homeMeetings').replaceChildren.apply($('homeMeetings'), rows.length ? rows : [h('p', { class: 'hm-empty' }, 'No meetings coming up this week.')]);
+    fill($('homeMeetings'), rows);
+    $('homeMeetingsSection').hidden = !rows.length;             // only when there is a meeting coming up
   }
 
   /* ---------- upcoming tasks (the next 7 days), and adding one ---------- */
@@ -209,7 +246,7 @@
       out.push(h('div', { class: 'hm-day' }, dayLabel(d, today)));
       byDay[d].forEach(function (it) { out.push(it.group ? groupRow(it, today) : itemRow(it, today, false)); });
     });
-    $('homeTasks').replaceChildren.apply($('homeTasks'), out.length ? out : [h('p', { class: 'hm-empty' }, 'Nothing planned for the next 7 days.')]);
+    fill($('homeTasks'), out.length ? out : [h('p', { class: 'hm-empty' }, 'Nothing planned for the next 7 days.')]);
   }
 
   load();
