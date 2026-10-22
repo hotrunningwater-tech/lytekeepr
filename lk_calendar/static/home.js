@@ -135,17 +135,18 @@
   }
   function countRows() {
     var total = 0;
-    document.querySelectorAll('#homeActionsSection .hx').forEach(function (row) {
+    document.querySelectorAll('#hxAll > .hx-body > .hx').forEach(function (row) {      // the rows by type, inside the one "Actions needed" row
       var key = row.getAttribute('data-key'), n = domCount(key);
-      row.querySelector('.hx-count').textContent = n;
-      row.hidden = !n && !KEEP_SHOWN[key];
+      var c = row.querySelector('.hx-count');
+      if (c.textContent !== String(n)) c.textContent = n;             // only real changes (the counts sit inside what is watched)
+      var hide = !n && !KEEP_SHOWN[key]; if (row.hidden !== hide) row.hidden = hide;
       if (!KEEP_SHOWN[key]) total += n;
     });
-    $('homeActionsCount').textContent = total; $('homeActionsCount').hidden = !total;
+    if ($('homeActionsCount').textContent !== String(total)) $('homeActionsCount').textContent = total;
     window.lkHomeActionCount = total;
   }
-  var OPEN_KEY = 'lkHomeOpen';
-  function openSet() { try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '{"Tasks":1}'); } catch (e) { return { Tasks: 1 }; } }
+  var OPEN_KEY = 'lkHomeOpen2';
+  function openSet() { try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '{}'); } catch (e) { return {}; } }      // everything starts collapsed
   document.querySelectorAll('#homeActionsSection .hx').forEach(function (row) {
     var key = row.getAttribute('data-key'), btn = row.querySelector('.hx-toggle'), body = row.querySelector('.hx-body');
     function show(on) { body.hidden = !on; btn.setAttribute('aria-expanded', on ? 'true' : 'false'); }
@@ -155,7 +156,7 @@
       try { localStorage.setItem(OPEN_KEY, JSON.stringify(o)); } catch (e) { /* storage blocked */ }
       show(on);
     });
-    new MutationObserver(function () { countRows(); }).observe(body, { childList: true, subtree: true, characterData: true });
+    if (key !== 'All') new MutationObserver(function () { countRows(); }).observe(body.querySelector(':scope > .home-list, :scope > .attention-list, :scope > .upcoming-list') || body, { childList: true, subtree: true });
   });
   var licount = $('followupActionCount');
   if (licount) new MutationObserver(function () { countRows(); }).observe(licount, { childList: true, characterData: true, subtree: true });

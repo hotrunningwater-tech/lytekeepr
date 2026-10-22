@@ -277,7 +277,7 @@ body {
   min-height: 0;
 }
 
-.case-overview { flex: 1.15; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; min-height: 0; }
+.case-overview { flex: 2; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; min-height: 0; }
 .ai-panel { flex: 1; display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow: hidden; }
 
 #caseOverviewContent {
@@ -2790,6 +2790,11 @@ body.no-linkedin #linkedinTab { display: none !important; }
 
 /* one expandable row per type under "Actions needed" */
 .hx { background: rgba(127, 168, 184, 0.08); border: 1px solid rgba(127, 168, 184, 0.25); border-radius: 12px; padding: 2px 14px; }
+.hx-toggle:focus { outline: none; } .hx-toggle:focus-visible { outline: 2px solid rgba(233, 139, 116, 0.5); outline-offset: 2px; border-radius: 8px; }
+.hx-outer { background: rgba(233, 139, 116, 0.08); border-color: rgba(233, 139, 116, 0.35); }
+.hx-outer > .hx-toggle .hx-label { color: var(--ink); }
+.hx-outer > .hx-body > .hx { background: #fff; }
+.hx-outer .home-head-tools { display: flex; justify-content: flex-end; }
 .hx-toggle { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; padding: 12px 0; cursor: pointer; text-align: left; }
 .hx-label { font-family: var(--font-heading); font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-soft); }
 .hx-count { font-family: var(--font-heading); font-size: 11px; font-weight: 700; color: var(--surface); background: var(--coral); border-radius: 999px; padding: 2px 9px; }
