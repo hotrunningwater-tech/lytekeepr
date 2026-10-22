@@ -231,6 +231,7 @@
 
 /* "+ New meeting" at the top of the side panel: the standard pill button */
 .lkc-newmeeting { align-self: flex-end; }
+.lkc-newbtns { align-self: flex-end; display: flex; gap: 8px; }
 .lkc-day.past { opacity: .25; cursor: default; }
 .lkc-day.past:hover { background: none; }
 .lkc-connect { background: rgba(127,168,184,.16); }

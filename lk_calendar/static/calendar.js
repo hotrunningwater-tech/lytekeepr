@@ -362,7 +362,9 @@
 
   function renderAgenda() {
     var a = state.agenda, out = [];
-    out.push(h('button', { class: 'btn btn-primary lkc-newmeeting', type: 'button', onclick: function () { openForm({ kind: 'meeting' }); } }, '+ New meeting'));
+    out.push(h('div', { class: 'lkc-newbtns' }, [
+      h('button', { class: 'btn lkc-newtask', type: 'button', onclick: function () { openForm({ kind: 'task' }); } }, '+ New task'),
+      h('button', { class: 'btn btn-primary lkc-newmeeting', type: 'button', onclick: function () { openForm({ kind: 'meeting' }); } }, '+ New meeting')]));
     var g = state.google;
     if (g && g.needs_reconnect) {
       out.push(h('div', { class: 'lkc-reconnect' }, [
@@ -768,7 +770,7 @@
       return h('option', { value: m, selected: (f.duration_min || defaultDur[f.kind]) === m }, m < 60 ? m + ' min' : (m / 60) + (m === 60 ? ' hour' : ' hours'));
     }));
     return [h('form', { class: 'lkc-card lkc-form', onsubmit: function (ev) { ev.preventDefault(); save(); } }, [
-      h('div', { class: 'lkc-top' }, [h('h2', { class: 'lkc-title' }, f.id ? 'Edit item' : f.kind === 'meeting' ? 'New meeting' : 'New item'),
+      h('div', { class: 'lkc-top' }, [h('h2', { class: 'lkc-title' }, f.id ? 'Edit item' : f.kind === 'meeting' ? 'New meeting' : f.kind === 'task' ? 'New task' : 'New item'),
         h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: closeSide }, '×')]),
       kindTabs,
       h('div', {}, [h('span', { class: 'lkc-lbl' }, 'Title'), h('input', { type: 'text', id: 'lkcTitleInput', maxlength: 200, value: f.title, placeholder: f.kind === 'meeting' ? 'e.g. Intro call with Sara' : 'e.g. Send LinkedIn batch' })]),
