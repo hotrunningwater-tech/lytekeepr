@@ -363,7 +363,7 @@
   function renderAgenda() {
     var a = state.agenda, out = [];
     out.push(h('div', { class: 'lkc-newbtns' }, [
-      h('button', { class: 'btn lkc-newtask', type: 'button', onclick: function () { openForm({ kind: 'task' }); } }, '+ New task'),
+      h('button', { class: 'btn btn-primary lkc-newtask', type: 'button', onclick: function () { openForm({ kind: 'task' }); } }, '+ New task'),
       h('button', { class: 'btn btn-primary lkc-newmeeting', type: 'button', onclick: function () { openForm({ kind: 'meeting' }); } }, '+ New meeting')]));
     var g = state.google;
     if (g && g.needs_reconnect) {
