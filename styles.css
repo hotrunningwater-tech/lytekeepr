@@ -2829,15 +2829,19 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .home-tasks .home-section-head .block-label { color: var(--coral); font-weight: 700; }
 .home-tasks .hm-day:first-child { margin-top: 0; }
 .hm-day.hm-late { color: var(--coral); }
+/* goals: white rows, bold text */
+.hm-row.hm-goal { background: #fff; border-color: rgba(127, 168, 184, 0.35); }
+.hm-row.hm-goal:hover { border-color: rgba(127, 168, 184, 0.7); }
+.hm-goal .hm-title:not(.done) { font-weight: 600; }
 #homeTeamGoals:empty { display: none; }
 .home-goals-row .hm-meeting { flex-wrap: wrap; gap: 6px 10px; }
 .home-goals-row .hm-when { width: auto; flex-direction: row; gap: 6px; align-items: baseline; flex-basis: 100%; }
 #homeDateLine { font-family: var(--font-heading); font-size: 20px; font-weight: 700; color: var(--coral); margin-top: 4px; }
 /* tasks not overdue: a calm green; overdue keeps the coral */
-.home-tasks .hm-row.hm-ok, .hm-row.hm-goal { background: rgba(126, 186, 140, 0.14); border-color: rgba(126, 186, 140, 0.45); }
-.home-tasks .hm-row.hm-ok:hover, .hm-row.hm-goal:hover { border-color: rgba(126, 186, 140, 0.8); }
-.home-tasks .hm-row.hm-ok .hm-check, .hm-row.hm-goal .hm-check:not(.on) { border-color: #7eba8c; }
-.home-tasks .hm-row.hm-ok .hm-check:hover, .hm-row.hm-goal .hm-check:not(.ro):hover { background: rgba(126, 186, 140, 0.2); }
+.home-tasks .hm-row.hm-ok { background: rgba(126, 186, 140, 0.14); border-color: rgba(126, 186, 140, 0.45); }
+.home-tasks .hm-row.hm-ok:hover { border-color: rgba(126, 186, 140, 0.8); }
+.home-tasks .hm-row.hm-ok .hm-check { border-color: #7eba8c; }
+.home-tasks .hm-row.hm-ok .hm-check:hover { background: rgba(126, 186, 140, 0.2); }
 
 /* rows: tasks, follow-ups, goals — the coral "attention" card look */
 .hm-row { display: flex; align-items: center; gap: 12px; background: rgba(233, 139, 116, 0.12); border: 1px solid rgba(233, 139, 116, 0.35); border-radius: 12px; padding: 11px 14px; transition: border-color .15s; }
