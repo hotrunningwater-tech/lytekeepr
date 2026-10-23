@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
 <link rel="stylesheet" href="styles.css?v=46">
-<link rel="stylesheet" href="lk-calendar/calendar.css?v=task1">
+<link rel="stylesheet" href="lk-calendar/calendar.css?v=task1b">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
 <body>
@@ -419,14 +419,17 @@
           <span class="lkc-range" id="lkcRange"></span>
           <button class="btn" type="button" id="lkcNext" aria-label="Next week">›</button>
           <button class="btn" type="button" id="lkcToday">Today</button>
-          <button class="btn" type="button" id="lkcChooseCals" title="Choose which of your Google calendars LyteKeepr shows">Google calendars</button>
+          <button class="btn" type="button" id="lkcDensity" title="Fit the whole day on screen, or a roomier view that scrolls">Fit day</button>
           <button class="btn" type="button" id="lkcSyncGoogle" title="Pull your primary Google Calendar (timed events, read-only)">Sync Google</button>
           <button class="btn" type="button" id="lkcImport">Import leads</button>
         </div>
       </div>
       <div class="lkc-filter-row">
         <div class="lkc-filters" id="lkcFilters"></div>
-        <button class="lkc-chip lkc-density" type="button" id="lkcDensity" title="Fit the whole day on screen, or a roomier view that scrolls">Fit day</button>
+        <div class="lkc-newbtns">
+          <button class="btn btn-primary" type="button" id="lkcNewTask">+ New task</button>
+          <button class="btn btn-primary" type="button" id="lkcNewMeeting">+ New meeting</button>
+        </div>
       </div>
       <div class="lkc-body">
         <div class="lkc-grid-wrap" id="lkcGridWrap"></div>
@@ -628,7 +631,7 @@
 </div>
 
 <script src="chat.js"></script>
-<script src="lk-calendar/calendar.js?v=home3"></script>
+<script src="lk-calendar/calendar.js?v=home4"></script>
 <script src="lk-calendar/settings.js?v=aisum1"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>

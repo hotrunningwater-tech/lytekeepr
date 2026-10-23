@@ -365,9 +365,6 @@
 
   function renderAgenda() {
     var a = state.agenda, out = [];
-    out.push(h('div', { class: 'lkc-newbtns' }, [
-      h('button', { class: 'btn btn-primary lkc-newtask', type: 'button', onclick: function () { openForm({ kind: 'task' }); } }, '+ New task'),
-      h('button', { class: 'btn btn-primary lkc-newmeeting', type: 'button', onclick: function () { openForm({ kind: 'meeting' }); } }, '+ New meeting')]));
     var g = state.google;
     if (g && g.needs_reconnect) {
       out.push(h('div', { class: 'lkc-reconnect' }, [
@@ -1207,7 +1204,8 @@
   $('#lkcToday').addEventListener('click', function () { state.weekTouched = false; state.weekStart = mondayOf(today()); load(); });
   document.getElementById('lkcCollapse').addEventListener('click', function () { setCollapsed(!state.collapsed); });
   applyCollapse();
-  $('#lkcChooseCals').addEventListener('click', function () { openCalendars(); });      // which Google calendars LyteKeepr shows
+  $('#lkcNewTask').addEventListener('click', function () { openForm({ kind: 'task' }); });      // always in view, whatever the side panel shows
+  $('#lkcNewMeeting').addEventListener('click', function () { openForm({ kind: 'meeting' }); });
   $('#lkcDensity').addEventListener('click', function () { setDensity(state.density === 'fit' ? 'detailed' : 'fit'); });
   var resizeTimer = null;
   window.addEventListener('resize', function () {          // keep the day fitted when the window changes size
