@@ -52,4 +52,13 @@ def with_calls(message_rows: list, limit: int = 5) -> list:
         offer(r["person_id"], {**{k: who.get(k) for k in ("person_id", "name", "company_name", "funnel_name", "funnel_stage_name")},
                                "kind": "logged", "last_channel": r["channel"] or "conversation", "last_message_direction": "logged",
                                "last_message_text": (r["text"] or "")[:200], "last_message_at": r["happened_at"]})
-    return sorted(latest.values(), key=lambda x: _moment(x["last_message_at"]), reverse=True)[:limit]
+    out, by_call = [], {}
+    for item in sorted(latest.values(), key=lambda x: _moment(x["last_message_at"]), reverse=True):
+        if item.get("kind") == "call":                # one call with several contacts on it: one row, their names together
+            first = by_call.get(item["call_id"])
+            if first:
+                first["name"] = f"{first['name']}, {item['name']}"
+                continue
+            item = by_call[item["call_id"]] = dict(item)
+        out.append(item)
+    return out[:limit]
