@@ -2825,23 +2825,37 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .home-auto .hx > .hx-toggle { display: none; }
 .home-auto .hx { padding-top: 12px; background: #fff; }
 .home-auto .hx-body { padding-bottom: 14px; }
-.home-goals-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; align-items: start; }
-.home-tasks .home-section-head .block-label { color: var(--coral); font-weight: 700; }
 .home-tasks .hm-day:first-child { margin-top: 0; }
 .hm-day.hm-late { color: var(--coral); }
-/* goals: white rows, bold text */
-.hm-row.hm-goal { background: #fff; border-color: rgba(127, 168, 184, 0.35); }
-.hm-row.hm-goal:hover { border-color: rgba(127, 168, 184, 0.7); }
 .hm-goal .hm-title:not(.done) { font-weight: 600; }
-#homeTeamGoals:empty { display: none; }
-.home-goals-row .hm-meeting { flex-wrap: wrap; gap: 6px 10px; }
-.home-goals-row .hm-when { width: auto; flex-direction: row; gap: 6px; align-items: baseline; flex-basis: 100%; }
 #homeDateLine { font-family: var(--font-heading); font-size: 20px; font-weight: 700; color: var(--coral); margin-top: 4px; }
-/* tasks not overdue: a calm green; overdue keeps the coral */
-.home-tasks .hm-row.hm-ok { background: rgba(126, 186, 140, 0.14); border-color: rgba(126, 186, 140, 0.45); }
-.home-tasks .hm-row.hm-ok:hover { border-color: rgba(126, 186, 140, 0.8); }
-.home-tasks .hm-row.hm-ok .hm-check { border-color: #7eba8c; }
-.home-tasks .hm-row.hm-ok .hm-check:hover { background: rgba(126, 186, 140, 0.2); }
+/* the clean look: tabs on the right of the date, light grey everywhere, rows as plain lines (overdue shows only in its date) */
+.home-tabs { display: inline-flex; gap: 4px; background: rgba(41, 67, 78, 0.05); border: 1px solid rgba(41, 67, 78, 0.08); border-radius: 999px; padding: 4px; }
+.home-tab { border: none; background: none; border-radius: 999px; padding: 9px 18px; font-family: var(--font-heading); font-size: 13px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+.home-tab:hover { color: var(--ink); }
+.home-tab.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(41, 67, 78, 0.12); }
+.home-tab:focus { outline: none; } .home-tab:focus-visible { outline: 2px solid rgba(41, 67, 78, 0.3); outline-offset: 2px; }
+.home-auto-bar { background: rgba(41, 67, 78, 0.03); border-color: rgba(41, 67, 78, 0.08); }
+.home-chip { border-color: rgba(41, 67, 78, 0.12); }
+.home-chip:hover { border-color: rgba(41, 67, 78, 0.3); }
+.home-chip.on { background: var(--ink); border-color: var(--ink); }
+.home-chip.on b { color: var(--ink); }
+.home-pane { padding: 18px 22px; }
+.home-pane > [data-pane] { display: flex; flex-direction: column; gap: 10px; }
+.home-pane > [data-pane][hidden] { display: none; }
+.home-pane .home-section-head:has(.home-head-tools:empty) { display: none; }
+.home-pane .home-list { gap: 0; }
+.home-pane .hm-row, #homeMeetingsSection .hm-row { background: transparent; border: none; border-bottom: 1px solid rgba(41, 67, 78, 0.08); border-radius: 0; padding: 11px 4px; }
+.home-pane .hm-row:hover, #homeMeetingsSection .hm-row:hover { background: rgba(41, 67, 78, 0.03); }
+.home-pane .hm-check:not(.on) { border-color: rgba(41, 67, 78, 0.28); border-width: 1.5px; }
+.home-pane .hm-check:not(.on):not(.ro):hover { border-color: #7eba8c; background: rgba(126, 186, 140, 0.15); }
+.home-pane .hm-check.on { background: #7eba8c; border-color: #7eba8c; }
+.home-pane .hm-earlier { background: rgba(41, 67, 78, 0.03); border: 1px dashed rgba(41, 67, 78, 0.15); border-radius: 10px; }
+.home-pane .hm-bar { background: rgba(41, 67, 78, 0.07); }
+.home-pane .hm-bar i { background: #7eba8c; }
+.home-pane .hm-day { color: var(--ink-soft); }
+.home-pane .hm-day.hm-late { color: var(--coral); }
+.home-pane .hm-team { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 
 /* rows: tasks, follow-ups, goals — the coral "attention" card look */
 .hm-row { display: flex; align-items: center; gap: 12px; background: rgba(233, 139, 116, 0.12); border: 1px solid rgba(233, 139, 116, 0.35); border-radius: 12px; padding: 11px 14px; transition: border-color .15s; }
@@ -2894,3 +2908,4 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .hm-when b { font-family: var(--font-heading); font-size: 12px; color: var(--ink); font-weight: 600; }
 .hm-day { font-family: var(--font-heading); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 8px 0 0 4px; }
 .hm-empty { margin: 0 4px; font-size: 12.5px; color: var(--ink-soft); }
+#homeMeetingsSection .home-section-head .block-label { color: var(--ink-soft); }

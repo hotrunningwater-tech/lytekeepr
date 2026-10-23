@@ -92,7 +92,7 @@
                                                : { class: 'hm-title' }, e.title);
     var meta = [overdue ? h('span', { class: 'hm-late' }, 'Overdue · ' + dayLabel(e.date, today)) : (e.untimed ? null : h('span', {}, time12(e.start_time))),
                 brandDot(e.project)].filter(Boolean);
-    return h('div', { class: 'hm-row' + (overdue ? '' : ' hm-ok') }, [check(false, function () { markDone(e); }), h('div', { class: 'hm-main' }, [title, meta.length ? h('div', { class: 'hm-meta' }, meta) : null])]);
+    return h('div', { class: 'hm-row' }, [check(false, function () { markDone(e); }), h('div', { class: 'hm-main' }, [title, meta.length ? h('div', { class: 'hm-meta' }, meta) : null])]);
   }
   function groupRow(g, today) {
     var key = 'g:' + g.channel + (g.dm ? ':dm' : '');
@@ -198,6 +198,12 @@
     return list.length ? h('div', { class: 'hm-progress' }, [h('div', { class: 'hm-bar' }, [h('i', { style: 'width:' + Math.round(100 * done / list.length) + '%' })]),
       h('span', {}, done + ' of ' + list.length + ' done')]) : null;
   }
+  function teamBox(key) {           // teammates' shared goals for this period, under your own
+    return (state.goals.team || []).filter(function (t) { return t[key].length; }).map(function (t) {
+      return h('div', { class: 'hm-team' }, [h('span', { class: 'block-label' }, t.who + ' · shared'),
+        h('div', { class: 'home-list' }, t[key].map(function (x) { return goalRow(x, false); }))]);
+    });
+  }
   function renderGoals() {
     var g = state.goals;
     var earlier = (g.earlier_open || []).map(function (gl) {
@@ -205,18 +211,21 @@
         h('div', { class: 'hm-meta' }, 'Not done ' + dayLabel(gl.period_start, g.today).toLowerCase())]),
         h('button', { class: 'hm-mini', type: 'button', onclick: function () { api('POST', '/api/calendar/goals/' + gl.goal_id + '/to-today').then(load).catch(fail); } }, 'Move to today')]);
     });
-    fill($('homeGoalsToday'), [h('div', { class: 'home-section-head' }, [h('span', { class: 'block-label' }, "Today's goals")]),
+    fill($('homeGoalsToday'), [goalInput('day', g.today_goals.length ? 'Add another goal…' : 'What must get done today?'),
       progress(g.today_goals), h('div', { class: 'home-list' }, g.today_goals.map(function (x) { return goalRow(x, true); })),
-      goalInput('day', g.today_goals.length ? 'Add another goal…' : 'What must get done today?'),
-      earlier.length ? h('div', { class: 'hm-earlier-box' }, [h('span', { class: 'block-label' }, 'Still open from earlier')].concat(earlier)) : null]);
-    fill($('homeGoalsWeek'), [h('div', { class: 'home-section-head' }, [h('span', { class: 'block-label' }, 'This week')]),
-      progress(g.week_goals), h('div', { class: 'home-list' }, g.week_goals.map(function (x) { return goalRow(x, true); })),
-      goalInput('week', g.week_goals.length ? 'Add another goal for the week…' : 'Main goals for this week')]);
-    fill($('homeTeamGoals'), (g.team || []).map(function (t) {
-      return h('div', { class: 'home-card hm-team' }, [h('span', { class: 'block-label' }, t.who + ' · shared goals'),
-        h('div', { class: 'home-list' }, t.today.concat(t.week).map(function (x) { return goalRow(x, false); }))]);
-    }));
+      earlier.length ? h('div', { class: 'hm-earlier-box' }, [h('span', { class: 'block-label' }, 'Still open from earlier')].concat(earlier)) : null].concat(teamBox('today')));
+    fill($('homeGoalsWeek'), [goalInput('week', g.week_goals.length ? 'Add another goal for the week…' : 'Main goals for this week'),
+      progress(g.week_goals), h('div', { class: 'home-list' }, g.week_goals.map(function (x) { return goalRow(x, true); }))].concat(teamBox('week')));
   }
+
+  /* ---------- the three tabs: Tasks (the default), Daily goals, Weekly goals ---------- */
+  document.querySelectorAll('#homeTabs .home-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var pane = tab.getAttribute('data-pane');
+      document.querySelectorAll('#homeTabs .home-tab').forEach(function (t) { t.classList.toggle('on', t === tab); t.setAttribute('aria-selected', t === tab ? 'true' : 'false'); });
+      document.querySelectorAll('.home-pane > [data-pane]').forEach(function (p) { p.hidden = p.getAttribute('data-pane') !== pane; });
+    });
+  });
 
   /* ---------- meetings: today's still to come, then the next days ---------- */
   function renderMeetings(a, today) {
