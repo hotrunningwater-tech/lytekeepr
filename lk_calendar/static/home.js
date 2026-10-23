@@ -151,6 +151,8 @@
       var body = row.querySelector('.hx-body'); if (body.hidden === on) body.hidden = !on;
       chips[k].classList.toggle('on', on);
     });
+    var any = rows.some(function (row) { return !row.hidden; });
+    if ($('homeChipHide').hidden === any) $('homeChipHide').hidden = !any;
   }
   rows.forEach(function (row) {
     var k = row.getAttribute('data-key'), calm = row.querySelector('.hx-toggle').classList.contains('is-calm');
@@ -174,6 +176,10 @@
     window.lkHomeActionCount = total + (state.ownDue || 0);
     showOpen();
   }
+  $('homeChipHide').addEventListener('click', function () {       // close the open list, keep just the bar
+    try { localStorage.setItem(OPEN_KEY, ''); } catch (e) { /* storage blocked */ }
+    showOpen();
+  });
   var licount = $('followupActionCount');
   if (licount) new MutationObserver(function () { countRows(); }).observe(licount, { childList: true, characterData: true, subtree: true });
   countRows();
