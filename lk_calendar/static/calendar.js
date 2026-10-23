@@ -1204,8 +1204,7 @@
   $('#lkcToday').addEventListener('click', function () { state.weekTouched = false; state.weekStart = mondayOf(today()); load(); });
   document.getElementById('lkcCollapse').addEventListener('click', function () { setCollapsed(!state.collapsed); });
   applyCollapse();
-  $('#lkcNewTask').addEventListener('click', function () { openForm({ kind: 'task' }); });      // always in view, whatever the side panel shows
-  $('#lkcNewMeeting').addEventListener('click', function () { openForm({ kind: 'meeting' }); });
+  $('#lkcNewMeeting').addEventListener('click', function () { openForm({ kind: 'meeting' }); });      // always in view, whatever the side panel shows
   $('#lkcDensity').addEventListener('click', function () { setDensity(state.density === 'fit' ? 'detailed' : 'fit'); });
   var resizeTimer = null;
   window.addEventListener('resize', function () {          // keep the day fitted when the window changes size
