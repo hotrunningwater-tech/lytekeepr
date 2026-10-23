@@ -2825,12 +2825,19 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .home-auto .hx > .hx-toggle { display: none; }
 .home-auto .hx { padding-top: 12px; background: #fff; }
 .home-auto .hx-body { padding-bottom: 14px; }
-.home-cols { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-.home-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.home-goals-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; align-items: start; }
 .home-tasks .home-section-head .block-label { color: var(--coral); font-weight: 700; }
 .home-tasks .hm-day:first-child { margin-top: 0; }
 .hm-day.hm-late { color: var(--coral); }
-@media (max-width: 1100px) { .home-cols { grid-template-columns: 1fr; } }
+#homeTeamGoals:empty { display: none; }
+.home-goals-row .hm-meeting { flex-wrap: wrap; gap: 6px 10px; }
+.home-goals-row .hm-when { width: auto; flex-direction: row; gap: 6px; align-items: baseline; flex-basis: 100%; }
+#homeDateLine { font-family: var(--font-heading); font-size: 20px; font-weight: 700; color: var(--coral); margin-top: 4px; }
+/* tasks not overdue: a calm green; overdue keeps the coral */
+.home-tasks .hm-row.hm-ok { background: rgba(126, 186, 140, 0.14); border-color: rgba(126, 186, 140, 0.45); }
+.home-tasks .hm-row.hm-ok:hover { border-color: rgba(126, 186, 140, 0.8); }
+.home-tasks .hm-row.hm-ok .hm-check { border-color: #7eba8c; }
+.home-tasks .hm-row.hm-ok .hm-check:hover { background: rgba(126, 186, 140, 0.2); }
 
 /* rows: tasks, follow-ups, goals — the coral "attention" card look */
 .hm-row { display: flex; align-items: center; gap: 12px; background: rgba(233, 139, 116, 0.12); border: 1px solid rgba(233, 139, 116, 0.35); border-radius: 12px; padding: 11px 14px; transition: border-color .15s; }

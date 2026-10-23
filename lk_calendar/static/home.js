@@ -1,5 +1,5 @@
 /* Home, the daily workspace: the automatic items (follow-ups, calls to review, reminders) as a bar of counts, then your tasks
-   (overdue, today, the next days) next to today's and this week's goals and the meetings coming up. Tasks live here, not in the calendar (the calendar shows meetings). Goals are per person. */
+   (overdue, today, the next days) under today's and this week's goals and the meetings coming up. Tasks live here, not in the calendar (the calendar shows meetings). Goals are per person. */
 (function () {
   'use strict';
 
@@ -92,7 +92,7 @@
                                                : { class: 'hm-title' }, e.title);
     var meta = [overdue ? h('span', { class: 'hm-late' }, 'Overdue · ' + dayLabel(e.date, today)) : (e.untimed ? null : h('span', {}, time12(e.start_time))),
                 brandDot(e.project)].filter(Boolean);
-    return h('div', { class: 'hm-row' }, [check(false, function () { markDone(e); }), h('div', { class: 'hm-main' }, [title, meta.length ? h('div', { class: 'hm-meta' }, meta) : null])]);
+    return h('div', { class: 'hm-row' + (overdue ? '' : ' hm-ok') }, [check(false, function () { markDone(e); }), h('div', { class: 'hm-main' }, [title, meta.length ? h('div', { class: 'hm-meta' }, meta) : null])]);
   }
   function groupRow(g, today) {
     var key = 'g:' + g.channel + (g.dm ? ':dm' : '');
@@ -261,12 +261,6 @@
     });
     fill($('homeTasks'), out.length ? out : [h('p', { class: 'hm-empty' }, 'Nothing planned for the next 7 days.')]);
   }
-
-  $('homeNewTask').addEventListener('click', function () { var t = $('homeTaskTitle'); if (t) { t.scrollIntoView({ block: 'center' }); t.focus(); } });
-  $('homeNewMeeting').addEventListener('click', function () {
-    var tab = $('calendarTab'); if (tab) tab.click();
-    if (window.lkCalendarNew) window.lkCalendarNew('meeting');
-  });
 
   load();
   setInterval(load, 120000);

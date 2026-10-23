@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=41">
+<link rel="stylesheet" href="styles.css?v=42">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -95,8 +95,6 @@
         <div class="overview-heading home-top">
           <div><h1>Today</h1>
           <p class="overview-sub" id="homeDateLine">Your goals, tasks and meetings</p></div>
-          <button class="btn btn-secondary home-new" type="button" id="homeNewMeeting">+ Meeting</button>
-          <button class="btn btn-primary home-new" type="button" id="homeNewTask">+ Task</button>
         </div>
 
         <div class="home-section home-auto" id="homeActionsSection">
@@ -235,22 +233,21 @@
          </div>
         </div>
 
-        <div class="home-cols">
-          <div class="home-card home-tasks">
-            <div class="home-section-head"><span class="block-label">Tasks</span><div class="home-head-tools" id="homeActionsTools"></div></div>
-            <div class="home-add" id="homeTaskAdd"></div>
-            <div class="home-list" id="homeActions"></div>
-            <div class="home-list" id="homeTasks"></div>
+        <div class="home-goals-row">
+          <div class="home-card" id="homeGoalsToday"></div>
+          <div class="home-card" id="homeGoalsWeek"></div>
+          <div class="home-card" id="homeMeetingsSection" hidden>
+            <div class="home-section-head"><span class="block-label">Meetings</span></div>
+            <div class="home-list" id="homeMeetings"></div>
           </div>
-          <div class="home-side">
-            <div class="home-card" id="homeGoalsToday"></div>
-            <div class="home-card" id="homeGoalsWeek"></div>
-            <div id="homeTeamGoals"></div>
-            <div class="home-card" id="homeMeetingsSection" hidden>
-              <div class="home-section-head"><span class="block-label">Meetings</span></div>
-              <div class="home-list" id="homeMeetings"></div>
-            </div>
-          </div>
+        </div>
+        <div id="homeTeamGoals"></div>
+
+        <div class="home-card home-tasks">
+          <div class="home-section-head"><span class="block-label">Tasks</span><div class="home-head-tools" id="homeActionsTools"></div></div>
+          <div class="home-add" id="homeTaskAdd"></div>
+          <div class="home-list" id="homeActions"></div>
+          <div class="home-list" id="homeTasks"></div>
         </div>
 
         <div class="block" id="homeRecentBlock">
@@ -631,7 +628,7 @@
 <script src="lk-calendar/settings.js?v=aisum1"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
-<script src="lk-calendar/home.js?v=6"></script>
+<script src="lk-calendar/home.js?v=7"></script>
 <script src="lk-calendar/docs.js?v=2"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
