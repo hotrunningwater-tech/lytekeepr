@@ -67,18 +67,19 @@
   }
 
   /* ---------- your tasks due (overdue + today); lead follow-ups go to the automatic bar, cold ones folded per channel ---------- */
-  function fold(list) {
+  function fold(list) {             // every lead follow-up of one channel in one row (DMs, follow-ups and replies together)
     var groups = {}, out = [];
     list.forEach(function (e) {
-      if (e.lead && e.lead.bucket === 'cold') {
-        var key = (e.lead.channel || '') + ':' + (/^send dm/i.test(e.title) ? 'dm' : 'follow');
+      if (e.lead) {
+        var key = (e.lead.channel || 'other').toLowerCase();
         var g = groups[key];
-        if (!g) { g = groups[key] = { group: true, channel: e.lead.channel, dm: /^send dm/i.test(e.title), members: [], project: e.project }; out.push(g); }
+        if (!g) { g = groups[key] = { group: true, channel: key, members: [] }; out.push(g); }
         g.members.push(e);
       } else out.push(e);
     });
     return out;
   }
+  function kindOf(e) { return /^send dm/i.test(e.title) ? 'Send DM' : /^reply/i.test(e.title) ? 'Reply' : 'Follow up'; }
   function check(done, onToggle, title) {
     return h('button', { class: 'hm-check' + (done ? ' on' : ''), type: 'button', title: title || (done ? 'Mark not done' : 'Mark done'), 'aria-label': title || 'Done',
       onclick: function (ev) { ev.stopPropagation(); onToggle(); } }, done ? '✓' : '');
@@ -95,8 +96,11 @@
     return h('div', { class: 'hm-row' }, [check(false, function () { markDone(e); }), h('div', { class: 'hm-main' }, [title, meta.length ? h('div', { class: 'hm-meta' }, meta) : null])]);
   }
   function groupRow(g, today) {
-    var key = 'g:' + g.channel + (g.dm ? ':dm' : '');
-    var label = (g.dm ? 'Send DM' : 'Follow up') + ' · ' + g.members.length + ' ' + (g.channel || '') + (g.members.length === 1 ? ' lead' : ' leads');
+    var key = 'g:' + g.channel;
+    var name = { linkedin: 'LinkedIn', instagram: 'Instagram', email: 'Email', other: 'Other' }[g.channel] || (g.channel.charAt(0).toUpperCase() + g.channel.slice(1));
+    var label = name + ' · ' + g.members.length;
+    var kinds = {}; g.members.forEach(function (m) { var k = kindOf(m); kinds[k] = (kinds[k] || 0) + 1; });
+    var brands = {}; g.members.forEach(function (m) { if (m.project) brands[m.project] = 1; });
     var late = g.members.filter(function (m) { return m.date < today; }).length;
     var open = !!state.open[key];
     var all = h('button', { class: 'hm-mini', type: 'button', onclick: function (ev) {
@@ -105,7 +109,8 @@
     } }, 'All done');
     var row = h('div', { class: 'hm-row hm-group' }, [check(false, function () { all.click(); }, 'Mark all done'),
       h('div', { class: 'hm-main' }, [h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { state.open[key] = !open; render(); } }, (open ? '▾ ' : '▸ ') + label),
-        h('div', { class: 'hm-meta' }, [late ? h('span', { class: 'hm-late' }, late + ' overdue') : h('span', {}, g.members[0].date === today ? 'Due today' : dayLabel(g.members[0].date, today)), brandDot(g.project)].filter(Boolean))]),
+        h('div', { class: 'hm-meta' }, [late ? h('span', { class: 'hm-late' }, late + ' overdue') : h('span', {}, g.members[0].date === today ? 'Due today' : dayLabel(g.members[0].date, today)),
+          h('span', {}, Object.keys(kinds).map(function (k) { return kinds[k] + ' ' + k; }).join(' · '))].concat(Object.keys(brands).map(brandDot)).filter(Boolean))]),
       all]);
     var wrap = h('div', {}, [row]);
     if (open) wrap.appendChild(h('div', { class: 'hm-sub' }, g.members.map(function (m) { return itemRow(m, today, m.date < today); })));

@@ -632,7 +632,7 @@
 <script src="lk-calendar/settings.js?v=aisum1"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
-<script src="lk-calendar/home.js?v=8"></script>
+<script src="lk-calendar/home.js?v=10"></script>
 <script src="lk-calendar/docs.js?v=2"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
@@ -1989,7 +1989,8 @@
                 : ['Add as contact', 'subtle-link-btn', function () {     // nobody on the call is a contact yet: the other person, prefilled
                     var other = (c.invitees || []).filter(function (i) { return i.external; })[0] || (c.invitees || [])[0] || {};
                     if (window.lkContacts) window.lkContacts.addContact({ email: other.email || '', name: other.name && other.name !== other.email ? other.name : '', channel: 'email' }, loadCallsAttention);
-                  }]
+                  }],
+              ['Dismiss', 'subtle-link-btn', function (el) { callPost('/api/calls/' + c.call_id + '/status', { status: 'done' }, el, 'Dismissing…').then(loadCallsAttention); }]      // nothing to do with this call: off Home, kept in the contact's calls
             ]));
         });
         data.missing.forEach(function (m) {
