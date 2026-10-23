@@ -2806,6 +2806,32 @@ body.no-linkedin #linkedinTab { display: none !important; }
 #attentionList .attention-clear { display: none; }
 #hxLinkedin .hx-body .block-label { display: none; }
 
+/* layout B: header with + Meeting / + Task, the automatic bar of chips, then tasks next to goals and meetings */
+.overview-heading.home-top { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.home-top > div:first-child { margin-right: auto; }
+.home-new { flex: none; }
+.home-auto { gap: 10px; }
+.home-auto-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: rgba(233, 139, 116, 0.08); border: 1px solid rgba(233, 139, 116, 0.3); border-radius: 14px; padding: 10px 14px; }
+.home-auto-bar > .hx-label { margin-right: 6px; }
+.home-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-chip { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid rgba(233, 139, 116, 0.4); border-radius: 999px; padding: 6px 12px; font-family: var(--font-heading); font-size: 12px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.home-chip b { background: var(--coral); color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 11px; }
+.home-chip.is-calm { border-color: rgba(127, 168, 184, 0.4); color: var(--ink-soft); }
+.home-chip.is-calm b { background: var(--teal); }
+.home-chip:hover { border-color: var(--coral); }
+.home-chip.on { background: var(--coral); border-color: var(--coral); color: #fff; }
+.home-chip.on b { background: #fff; color: var(--coral); }
+.home-chip:focus { outline: none; } .home-chip:focus-visible { outline: 2px solid rgba(233, 139, 116, 0.5); outline-offset: 2px; }
+.home-auto .hx > .hx-toggle { display: none; }
+.home-auto .hx { padding-top: 12px; background: #fff; }
+.home-auto .hx-body { padding-bottom: 14px; }
+.home-cols { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.home-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.home-tasks .home-section-head .block-label { color: var(--coral); font-weight: 700; }
+.home-tasks .hm-day:first-child { margin-top: 0; }
+.hm-day.hm-late { color: var(--coral); }
+@media (max-width: 1100px) { .home-cols { grid-template-columns: 1fr; } }
+
 /* rows: tasks, follow-ups, goals — the coral "attention" card look */
 .hm-row { display: flex; align-items: center; gap: 12px; background: rgba(233, 139, 116, 0.12); border: 1px solid rgba(233, 139, 116, 0.35); border-radius: 12px; padding: 11px 14px; transition: border-color .15s; }
 .hm-row:hover { border-color: rgba(233, 139, 116, 0.6); }

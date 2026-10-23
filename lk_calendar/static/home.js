@@ -1,5 +1,5 @@
-/* Home, the daily workspace: actions needed (overdue and due-today tasks, follow-ups, reminders), today's and this week's goals,
-   meetings, and upcoming tasks. Tasks live here, not in the calendar (the calendar shows meetings). Goals are per person. */
+/* Home, the daily workspace: the automatic items (follow-ups, calls to review, reminders) as a bar of counts, then your tasks
+   (overdue, today, the next days) next to today's and this week's goals and the meetings coming up. Tasks live here, not in the calendar (the calendar shows meetings). Goals are per person. */
 (function () {
   'use strict';
 
@@ -63,10 +63,10 @@
     countRows();
     renderGoals();
     renderMeetings(a, today);
-    renderTasks((a.upcoming || []).filter(function (e) { return !isMeeting(e); }), today);
+    renderTasks((a.upcoming || []).filter(function (e) { return !isMeeting(e) && !e.lead; }), today);
   }
 
-  /* ---------- actions needed: overdue + due today; cold follow-ups folded into one row per channel ---------- */
+  /* ---------- your tasks due (overdue + today); lead follow-ups go to the automatic bar, cold ones folded per channel ---------- */
   function fold(list) {
     var groups = {}, out = [];
     list.forEach(function (e) {
@@ -114,17 +114,19 @@
   function renderActions(overdue, todays, today) {
     var due = overdue.concat(todays);
     var own = due.filter(function (e) { return !e.lead; }), leads = due.filter(function (e) { return !!e.lead; });
-    state.counts.Tasks = own.length; state.counts.Followups = leads.length;
-    fill($('homeActionsTools'), [overdue.length ? h('button', { class: 'hm-mini', type: 'button', onclick: function () {
+    state.counts.Followups = leads.length; state.ownDue = own.length;
+    var late = own.filter(function (e) { return e.date < today; }), now = own.filter(function (e) { return e.date >= today; });
+    fill($('homeActionsTools'), [late.length ? h('button', { class: 'hm-mini', type: 'button', onclick: function () {
       api('POST', '/api/calendar/overdue/move', { to: 'today' }).then(load).catch(fail);
     } }, 'Move overdue to today') : null]);
-    fill($('homeActions'), own.length ? own.map(function (e) { return itemRow(e, today, e.date < today); }) : [h('p', { class: 'hm-empty' }, 'No tasks due.')]);
+    fill($('homeActions'), [late.length ? h('div', { class: 'hm-day hm-late' }, 'Overdue') : null].concat(late.map(function (e) { return itemRow(e, today, true); }),
+      [h('div', { class: 'hm-day' }, 'Today')], now.length ? now.map(function (e) { return itemRow(e, today, false); }) : [h('p', { class: 'hm-empty' }, 'Nothing due today.')]));
     fill($('homeFollowups'), fold(leads).map(function (it) { return it.group ? groupRow(it, today) : itemRow(it, today, it.date < today); }));
   }
 
-  /* ---------- the expandable rows under "Actions needed": one per type, with its count ---------- */
+  /* ---------- the automatic bar: one chip per type with its count; a chip opens its list below the bar ---------- */
   state.counts = {};
-  var KEEP_SHOWN = { Linkedin: 1, Waiting: 1 };          // rows that stay even at 0 (the LinkedIn one has its own form)
+  var KEEP_SHOWN = { Linkedin: 1, Waiting: 1 };          // chips that stay even at 0 (the LinkedIn one has its own form)
   function domCount(key) {
     if (key === 'Calls') return $('callsAttentionList').querySelectorAll(':scope > .attention').length;
     if (key === 'Suggest') return $('suggestionsAttentionList').querySelectorAll(':scope > .attention').length;
@@ -133,33 +135,43 @@
     if (key === 'Waiting') return $('upcomingList').querySelectorAll('.attention:not(#upcomingEmpty)').length;
     return state.counts[key] || 0;
   }
+  var OPEN_KEY = 'lkHomeChip';
+  function openKey() { try { return localStorage.getItem(OPEN_KEY) || ''; } catch (e) { return ''; } }      // nothing open by default
+  var rows = [].slice.call(document.querySelectorAll('#hxAll > .hx')), chips = {};
+  function showOpen() {
+    var key = openKey();
+    rows.forEach(function (row) {
+      var k = row.getAttribute('data-key'), on = k === key && !chips[k].hidden;
+      if (row.hidden === on) row.hidden = !on;
+      var body = row.querySelector('.hx-body'); if (body.hidden === on) body.hidden = !on;
+      chips[k].classList.toggle('on', on);
+    });
+  }
+  rows.forEach(function (row) {
+    var k = row.getAttribute('data-key'), calm = row.querySelector('.hx-toggle').classList.contains('is-calm');
+    var chip = h('button', { class: 'home-chip' + (calm ? ' is-calm' : ''), type: 'button', onclick: function () {
+      var next = openKey() === k ? '' : k;
+      try { localStorage.setItem(OPEN_KEY, next); } catch (e) { /* storage blocked */ }
+      showOpen();
+    } }, [row.querySelector('.hx-label').textContent, h('b', {}, '0')]);
+    chips[k] = chip; $('homeChips').appendChild(chip);
+    var list = row.querySelector('.hx-body > .home-list, .hx-body > .attention-list, .hx-body > .upcoming-list');
+    if (list) new MutationObserver(function () { countRows(); }).observe(list, { childList: true, subtree: true });
+  });
   function countRows() {
     var total = 0;
-    document.querySelectorAll('#hxAll > .hx-body > .hx').forEach(function (row) {      // the rows by type, inside the one "Actions needed" row
-      var key = row.getAttribute('data-key'), n = domCount(key);
-      var c = row.querySelector('.hx-count');
-      if (c.textContent !== String(n)) c.textContent = n;             // only real changes (the counts sit inside what is watched)
-      var hide = !n && !KEEP_SHOWN[key]; if (row.hidden !== hide) row.hidden = hide;
-      if (!KEEP_SHOWN[key]) total += n;
+    rows.forEach(function (row) {
+      var k = row.getAttribute('data-key'), n = domCount(k), chip = chips[k], b = chip.querySelector('b');
+      if (b.textContent !== String(n)) b.textContent = n;              // only real changes (the counts sit inside what is watched)
+      var hide = !n && !KEEP_SHOWN[k]; if (chip.hidden !== hide) chip.hidden = hide;
+      if (!KEEP_SHOWN[k]) total += n;
     });
-    if ($('homeActionsCount').textContent !== String(total)) $('homeActionsCount').textContent = total;
-    window.lkHomeActionCount = total;
+    window.lkHomeActionCount = total + (state.ownDue || 0);
+    showOpen();
   }
-  var OPEN_KEY = 'lkHomeOpen2';
-  function openSet() { try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '{}'); } catch (e) { return {}; } }      // everything starts collapsed
-  document.querySelectorAll('#homeActionsSection .hx').forEach(function (row) {
-    var key = row.getAttribute('data-key'), btn = row.querySelector('.hx-toggle'), body = row.querySelector('.hx-body');
-    function show(on) { body.hidden = !on; btn.setAttribute('aria-expanded', on ? 'true' : 'false'); }
-    show(!!openSet()[key]);
-    btn.addEventListener('click', function () {
-      var o = openSet(), on = body.hidden; if (on) o[key] = 1; else delete o[key];
-      try { localStorage.setItem(OPEN_KEY, JSON.stringify(o)); } catch (e) { /* storage blocked */ }
-      show(on);
-    });
-    if (key !== 'All') new MutationObserver(function () { countRows(); }).observe(body.querySelector(':scope > .home-list, :scope > .attention-list, :scope > .upcoming-list') || body, { childList: true, subtree: true });
-  });
   var licount = $('followupActionCount');
   if (licount) new MutationObserver(function () { countRows(); }).observe(licount, { childList: true, characterData: true, subtree: true });
+  countRows();
 
   /* ---------- goals: today and this week (per person; "visible to team" is a choice per goal) ---------- */
   function goalRow(gl, mine) {
@@ -249,6 +261,12 @@
     });
     fill($('homeTasks'), out.length ? out : [h('p', { class: 'hm-empty' }, 'Nothing planned for the next 7 days.')]);
   }
+
+  $('homeNewTask').addEventListener('click', function () { var t = $('homeTaskTitle'); if (t) { t.scrollIntoView({ block: 'center' }); t.focus(); } });
+  $('homeNewMeeting').addEventListener('click', function () {
+    var tab = $('calendarTab'); if (tab) tab.click();
+    if (window.lkCalendarNew) window.lkCalendarNew('meeting');
+  });
 
   load();
   setInterval(load, 120000);

@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=40">
+<link rel="stylesheet" href="styles.css?v=41">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
@@ -92,22 +92,16 @@
     <!-- Case Overview -->
     <section class="panel case-overview" id="caseOverviewPanel">
       <div id="caseOverviewContent">
-        <div class="overview-heading">
-          <h1>Today</h1>
-          <p class="overview-sub" id="homeDateLine">Your actions, goals and tasks</p>
+        <div class="overview-heading home-top">
+          <div><h1>Today</h1>
+          <p class="overview-sub" id="homeDateLine">Your goals, tasks and meetings</p></div>
+          <button class="btn btn-secondary home-new" type="button" id="homeNewMeeting">+ Meeting</button>
+          <button class="btn btn-primary home-new" type="button" id="homeNewTask">+ Task</button>
         </div>
 
-        <div class="home-section" id="homeActionsSection">
-         <div class="hx hx-outer" id="hxAll" data-key="All">
-          <button class="hx-toggle" type="button" aria-expanded="false"><span class="hx-label">Actions needed</span><span class="hx-count" id="homeActionsCount">0</span><span class="hx-arrow">▶</span></button>
-          <div class="hx-body" hidden>
-          <div class="home-head-tools" id="homeActionsTools"></div>
-          <div class="hx" id="hxTasks" data-key="Tasks">
-            <button class="hx-toggle" type="button" aria-expanded="false"><span class="hx-label">Tasks due</span><span class="hx-count">0</span><span class="hx-arrow">▶</span></button>
-            <div class="hx-body" hidden>
-              <div class="home-list" id="homeActions"></div>
-            </div>
-          </div>
+        <div class="home-section home-auto" id="homeActionsSection">
+         <div class="home-auto-bar"><span class="hx-label">Automatic</span><div class="home-chips" id="homeChips"></div></div>
+         <div id="hxAll">
           <div class="hx" id="hxFollowups" data-key="Followups">
             <button class="hx-toggle" type="button" aria-expanded="false"><span class="hx-label">Follow-ups</span><span class="hx-count">0</span><span class="hx-arrow">▶</span></button>
             <div class="hx-body" hidden>
@@ -238,25 +232,25 @@
 
             </div>
           </div>
-          </div>
          </div>
         </div>
 
-        <div class="home-goals-grid">
-          <div class="home-card" id="homeGoalsToday"></div>
-          <div class="home-card" id="homeGoalsWeek"></div>
-        </div>
-        <div id="homeTeamGoals"></div>
-
-        <div class="home-section" id="homeMeetingsSection" hidden>
-          <div class="home-section-head"><span class="block-label">Meetings</span></div>
-          <div class="home-list" id="homeMeetings"></div>
-        </div>
-
-        <div class="home-section">
-          <div class="home-section-head"><span class="block-label">Tasks</span></div>
-          <div class="home-add" id="homeTaskAdd"></div>
-          <div class="home-list" id="homeTasks"></div>
+        <div class="home-cols">
+          <div class="home-card home-tasks">
+            <div class="home-section-head"><span class="block-label">Tasks</span><div class="home-head-tools" id="homeActionsTools"></div></div>
+            <div class="home-add" id="homeTaskAdd"></div>
+            <div class="home-list" id="homeActions"></div>
+            <div class="home-list" id="homeTasks"></div>
+          </div>
+          <div class="home-side">
+            <div class="home-card" id="homeGoalsToday"></div>
+            <div class="home-card" id="homeGoalsWeek"></div>
+            <div id="homeTeamGoals"></div>
+            <div class="home-card" id="homeMeetingsSection" hidden>
+              <div class="home-section-head"><span class="block-label">Meetings</span></div>
+              <div class="home-list" id="homeMeetings"></div>
+            </div>
+          </div>
         </div>
 
         <div class="block" id="homeRecentBlock">
@@ -633,11 +627,11 @@
 </div>
 
 <script src="chat.js"></script>
-<script src="lk-calendar/calendar.js?v=home2"></script>
+<script src="lk-calendar/calendar.js?v=home3"></script>
 <script src="lk-calendar/settings.js?v=aisum1"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
-<script src="lk-calendar/home.js?v=5"></script>
+<script src="lk-calendar/home.js?v=6"></script>
 <script src="lk-calendar/docs.js?v=2"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>

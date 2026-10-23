@@ -750,6 +750,8 @@
     var input = $('#lkcTitleInput'); if (input) input.focus();
   }
 
+  window.lkCalendarNew = function (kind) { openForm({ kind: kind || 'meeting' }); };      // Home's "+ Meeting"
+
   function renderForm() {
     var f = state.form;
     var durations = [15, 30, 45, 60, 90, 120, 180];
