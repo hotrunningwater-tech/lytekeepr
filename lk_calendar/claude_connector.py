@@ -230,6 +230,18 @@ TOOLS = [
      "description": "The scheduled autopilot run's work list (every 2 hours). `instructions` says what to do with each section: follow it for every item, "
                     "save with the tools it names, then stop. Do not ask the user anything; nothing here is ever sent.",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "save_message_review", "title": "Save message review",
+     "description": "After reading the new_messages from autopilot_queue: the keys read, the few clear flags, and times leads gave for the next contact. Call once per run. Nothing is sent.",
+     "inputSchema": {"type": "object", "properties": {
+         "reviewed": {"type": "array", "items": {"type": "string"}, "description": "Every item key read on this run"},
+         "flags": {"type": "array", "items": {"type": "object", "properties": {
+             "key": {"type": "string"}, "kind": {"type": "string", "enum": ["interested", "waiting", "commitment"]},
+             "side": {"type": "string", "enum": ["ours", "theirs"], "description": "commitments only"},
+             "summary": {"type": "string"}, "quote": {"type": "string"}, "due": {"type": "string", "description": "YYYY-MM-DD, commitments only"}},
+             "required": ["key", "kind", "summary"]}},
+         "follow_ups": {"type": "array", "items": {"type": "object", "properties": {
+             "contact_id": {"type": "integer"}, "date": {"type": "string"}, "quote": {"type": "string"}}, "required": ["contact_id", "date"]}}},
+         "required": ["reviewed"]}},
     {"name": "save_meeting_brief", "title": "Save meeting brief",
      "description": "Save the brief for an upcoming meeting (autopilot). Replaces an earlier brief; never touches the user's own notes; never sent to Google or guests.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["item_id", "text"]}},
@@ -607,6 +619,8 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", "/api/calls/attention"))
     if name == "autopilot_queue":
         return need(*call("GET", "/api/calendar/autopilot/queue"))
+    if name == "save_message_review":
+        return need(*call("POST", "/api/calendar/inbox/review", {k: args.get(k) or [] for k in ("reviewed", "flags", "follow_ups")}))
     if name == "save_meeting_brief":
         return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/brief", {"text": args.get("text", "")}))
     if name == "save_call_summary":

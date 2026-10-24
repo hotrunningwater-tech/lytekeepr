@@ -2915,3 +2915,5 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .hm-quiet-head .hm-days { width: auto; padding: 7px 12px; }
 .hm-brief { white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: var(--ink); background: rgba(41, 67, 78, 0.03); border-left: 3px solid #7eba8c; padding: 10px 14px; margin: 4px 0 8px; }
 .call-summary-fold summary { cursor: pointer; font-family: var(--font-heading); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.hm-flag-sum { font-size: 13px; color: var(--ink); }
+.hm-quote { font-size: 12.5px; color: var(--ink-soft); font-style: italic; overflow-wrap: anywhere; }

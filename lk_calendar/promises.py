@@ -5,6 +5,8 @@ After new emails (or LinkedIn messages) arrive for an outreach lead, the newest 
 - If that newest message, whoever wrote it, promises a time for the next contact ("I'll get back to you next week",
   "let's talk in November", "Monday works"), the follow-up moves to that date. The AI only finds the words; the date is
   calculated here, in code, from the day the message was sent. No promise: the usual rule for the status stays.
+Since 2026-10-24 the promised time is read by the scheduled Claude run instead (inbox_watch: save_message_review follow_ups), on the
+user's own Claude plan; the sync hook here only does the plain-code part (no_reader). read_promise stays for tests and manual use.
 Each message is looked at once (lead_message_seen), so the AI is asked only about new messages.
 """
 
@@ -164,9 +166,15 @@ def review_leads(channels=("email", "linkedin"), reader=read_promise) -> dict:
     return out
 
 
+def no_reader(text: str, sent: date) -> dict:
+    """Promised times are now read by the scheduled Claude run (inbox_watch), on the user's own plan, not by our paid AI here."""
+    return {"when": "none"}
+
+
 def review_quietly() -> None:
-    """For hooks after new mail or messages arrive: never let a problem here break the sync that called it."""
+    """For hooks after new mail or messages arrive: never let a problem here break the sync that called it.
+    Only the plain-code part runs here (a reply switches the lead to "replied"); the promised times come from the Claude run."""
     try:
-        review_leads()
+        review_leads(reader=no_reader)
     except Exception:
         log.exception("reviewing follow-up promises failed; it will run again after the next sync")

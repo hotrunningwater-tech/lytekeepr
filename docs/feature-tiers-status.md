@@ -27,8 +27,8 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 | 8 | Customer and deal analysis | Client-requested | Claude analyzes on request. "Not contacted recently" is built: the contacts_gone_quiet tool (by days and funnel) | 8 |
 | 9 | Contact creation and organization | Client-requested | Contacts, company as a field, brands, funnels. Missing: a company record or page | 8 |
 | 10 | Basic CRM management | Client-requested | Contacts, funnels, notes, tasks, reminders. Companies have the same gap as #9 | 9 |
-| 11 | Unanswered emails and potential customers | Scheduled (Claude) | Today plain code plus our AI: a reply from an outreach lead switches the lead to "replied" and creates a "Reply to …" task, and promises.py uses OpenAI to spot promised dates. Not built: Claude reviewing new incoming mail on the schedule, telling real interest from spam, and a small list of flags | 4 |
-| 12 | Business commitments and promises | Scheduled (Claude) | Today only promised dates for leads (promises.py, our AI). Not built: Claude finding clear promises, deadlines and deliverables in emails and transcripts on the schedule, without duplicates | 3 |
+| 11 | Unanswered emails and potential customers | Scheduled (Claude) | Built 2026-10-24: the queue's new_messages feed (emails and messages from contacts, Primary-inbox emails from new senders minus automated ones, new transcripts; last 3 days, 40 a run). Claude saves only clear flags (interested, waiting for your answer) through save_message_review. Home: "From messages", with Add contact and Dismiss. A waiting flag closes itself once you reply. Admin's mailbox only. Needs tuning on real mail | 8 |
+| 12 | Business commitments and promises | Scheduled (Claude) | Built 2026-10-24: the same run flags clear promises and deadlines (ours or theirs, with the due date) from messages and call transcripts, and moves a lead's follow-up to a time they gave. promises.py no longer calls our AI. Home: Done / Dismiss. Needs tuning on real mail | 8 |
 
 ## Tier 1 — Paid
 
@@ -43,13 +43,13 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 ## Not built yet, needed for both tiers
 
 - **Tier gating:** nothing decides yet which features a customer gets (free or paid). The queue and the tools will check the customer's tier on the server.
-- **Our paid AI in places Claude could do the work:** promises.py (reply and promised-date detection), the Summarize and Draft follow-up buttons, the contact assistant, and the Ask LyteKeepr chat panel use OpenAI. The plan: move scheduled work to the Claude run (groups 3 and 4). Whether the buttons and the chat panel stay is a product decision still open.
+- **Our paid AI in places Claude could do the work:** promises.py no longer uses it (done in group 3). Still on it: the Summarize and Draft follow-up buttons, the contact assistant, and the Ask LyteKeepr chat panel use OpenAI. The plan: move scheduled work to the Claude run (groups 3 and 4). Whether the buttons and the chat panel stay is a product decision still open.
 
 ## Build groups (features built or finished together)
 
 1. **Done 2026-10-24: Gone quiet (P1 + #8).** A "last contact" date per contact from every source. Home chip, Not now, and Claude tools.
 2. **Done 2026-10-24: Meetings on autopilot (P7 + P5).** The scheduled queue, briefs, call summaries, follow-up and no-show drafts, and the single setup prompt (Settings, plus the phone's clock circle).
-3. **New messages on autopilot (#11 + #12).** Both read the same feed: new incoming emails and messages (and new transcripts) since the last run. The queue hands Claude the new items; Claude saves only clear flags (interested, waiting for an answer, a commitment with its deadline) through save tools; Home shows a short list with Dismiss. This replaces our AI in promises.py. Precision first: no newsletters, spam or casual remarks, and no duplicates.
+3. **Done 2026-10-24: New messages on autopilot (#11 + #12).** Both read the same feed: new incoming emails and messages (and new transcripts) since the last run. The queue hands Claude the new items; Claude saves only clear flags (interested, waiting for an answer, a commitment with its deadline) through save tools; Home shows a short list with Dismiss. This replaces our AI in promises.py. Precision first: no newsletters, spam or casual remarks, and no duplicates.
 4. **Won deals and onboarding (P2).** A "won" mark on funnel stages, then the scheduled run finds newly won contacts and saves a welcome email draft and onboarding reminders.
 5. **Tier gating.** Free vs paid per workspace; the queue and the tools respect it.
 6. **Capture test (P8).** Test in the Claude app: a voice note and a business-card photo become a contact and a note. Fix anything the test shows.

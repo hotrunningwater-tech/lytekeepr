@@ -38,6 +38,8 @@ def register(app):
     meeting_notes.register(app)
     from . import autopilot
     autopilot.register(app)
+    from . import inbox_watch
+    inbox_watch.register(app)
     from . import quiet
     quiet.register(app)
     from . import goals

@@ -46,9 +46,10 @@
   function load() {
     return Promise.all([api('GET', '/api/calendar/agenda'), api('GET', '/api/calendar/goals'),
                         api('GET', '/api/crm/brands').catch(function () { return { brands: [] }; }),
-                        api('GET', '/api/crm/quiet?days=' + state.quietDays).catch(function () { return null; })])
+                        api('GET', '/api/crm/quiet?days=' + state.quietDays).catch(function () { return null; }),
+                        api('GET', '/api/calendar/inbox/flags').catch(function () { return { flags: [] }; })])
       .then(function (r) {
-        state.agenda = r[0]; state.goals = r[1]; state.quiet = r[3];
+        state.agenda = r[0]; state.goals = r[1]; state.quiet = r[3]; state.flags = r[4].flags || [];
         state.brands = {}; (r[2].brands || []).forEach(function (b) { state.brands[b.key] = b; });
         render();
       }).catch(function () {});
@@ -62,6 +63,7 @@
     var todays = (a.today || []).filter(function (e) { return !isMeeting(e) && !e.done; });
     renderActions(overdue, todays, today);
     renderQuiet();
+    renderFlags(today);
     countRows();
     renderGoals();
     renderMeetings(a, today);
@@ -129,6 +131,36 @@
     fill($('homeActions'), [late.length ? h('div', { class: 'hm-day hm-late' }, 'Overdue') : null].concat(late.map(function (e) { return itemRow(e, today, true); }),
       [h('div', { class: 'hm-day' }, 'Today')], now.length ? now.map(function (e) { return itemRow(e, today, false); }) : [h('p', { class: 'hm-empty' }, 'Nothing due today.')]));
     fill($('homeFollowups'), fold(leads).map(function (it) { return it.group ? groupRow(it, today) : itemRow(it, today, it.date < today); }));
+  }
+
+  /* ---------- from messages: the few flags the scheduled Claude run left (interested, waiting for you, commitments) ---------- */
+  var FLAG_GROUPS = [['interested', 'Interested'], ['waiting', 'Waiting for your answer'], ['commitment', 'Commitments']];
+  function setFlag(f, st) { api('POST', '/api/calendar/inbox/flags/' + f.flag_id, { state: st }).then(load).catch(fail); }
+  function flagRow(f, today) {
+    var who = f.person_id ? h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { if (window.openCrmPersonDetail) window.openCrmPersonDetail(f.person_id); } }, f.who)
+                          : h('span', { class: 'hm-title' }, f.who + (f.email && f.email !== f.who ? ' · ' + f.email : ''));
+    var meta = [f.kind === 'commitment' ? h('span', {}, f.side === 'ours' ? 'You promised' : 'They promised') : null,
+                f.due ? h('span', { class: f.due < today ? 'hm-late' : '' }, 'Due ' + dayLabel(f.due, today)) : null,
+                f.at ? h('span', {}, 'Said ' + dayLabel(f.at.slice(0, 10), today).toLowerCase()) : null].filter(Boolean);
+    return h('div', { class: 'hm-row' }, [
+      h('div', { class: 'hm-main' }, [who, h('span', { class: 'hm-flag-sum' }, f.summary),
+        f.quote ? h('span', { class: 'hm-quote' }, '“' + f.quote + '”') : null, meta.length ? h('div', { class: 'hm-meta' }, meta) : null]),
+      !f.person_id && f.email && window.lkContacts && window.lkContacts.addContact ? h('button', { class: 'hm-mini', type: 'button', onclick: function () {
+        window.lkContacts.addContact({ email: f.email, name: f.who !== f.email ? f.who : '', channel: 'email' }, load); } }, 'Add contact') : null,
+      f.kind === 'commitment' ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { setFlag(f, 'done'); } }, 'Done') : null,
+      h('button', { class: 'hm-mini', type: 'button', onclick: function () { setFlag(f, 'dismissed'); } }, 'Dismiss')]);
+  }
+  function renderFlags(today) {
+    var flags = state.flags || [];
+    state.counts.Flags = flags.length;
+    var out = [];
+    FLAG_GROUPS.forEach(function (g) {
+      var list = flags.filter(function (f) { return f.kind === g[0]; });
+      if (!list.length) return;
+      out.push(h('div', { class: 'hm-day' }, g[1] + ' · ' + list.length));
+      list.forEach(function (f) { out.push(flagRow(f, today)); });
+    });
+    fill($('homeFlags'), out);
   }
 
   /* ---------- gone quiet: funnel contacts nobody has been in touch with for N days ---------- */

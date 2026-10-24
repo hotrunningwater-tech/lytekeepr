@@ -21,7 +21,8 @@ from . import access, meeting_notes, store
 PROMPT = ("Run the LyteKeepr autopilot: call autopilot_queue and follow the instructions it gives for each item, saving the results "
           "with the tools it names. Do not ask me anything and do not send any email; whatever needs me waits in LyteKeepr. "
           "If there is nothing to do, stop.")
-DOES = "Today: a brief before each meeting with a contact, and after a recorded call the summary and a follow-up email draft (a \"want to reschedule?\" draft after a no-show)."
+DOES = ("Today: new emails and messages are read for interested people, messages waiting for your answer, and promises with deadlines; "
+        "a brief before each meeting with a contact; and after a recorded call the summary and a follow-up email draft (a \"want to reschedule?\" draft after a no-show).")
 INSTRUCTIONS = {
     "meetings_needing_brief": "For each meeting: read get_contact and get_contact_history for its contacts (and get_meeting_notes), then write a short brief "
                               "(who they are, where things stand, the last conversations, open questions, what to aim for in this meeting). Save with save_meeting_brief.",
@@ -100,7 +101,8 @@ def queue() -> dict:
     from . import calls, users
     now = store.now_local()
     admin = users.is_admin()
-    out = {"instructions": INSTRUCTIONS, "meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [],
+    from . import inbox_watch
+    out = {"instructions": {**INSTRUCTIONS, "new_messages": inbox_watch.INSTRUCTIONS}, "new_messages": inbox_watch.feed(), "meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [],
            "needing_followup_draft": [], "waiting_for_recording": [], "asked_what_happened": []}
     with store._conn() as conn:
         meeting_notes._ready(conn)
