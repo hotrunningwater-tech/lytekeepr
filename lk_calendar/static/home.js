@@ -270,10 +270,13 @@
     var rows = list.slice(0, 8).map(function (e) {
       var guests = [];
       try { guests = (typeof e.attendees === 'string' ? JSON.parse(e.attendees || '[]') : e.attendees || []).map(function (x) { return x.name || x.email; }); } catch (err) { guests = []; }
-      return h('div', { class: 'hm-row hm-meeting', onclick: function () { var tab = $('calendarTab'); if (tab) tab.click(); } }, [
+      var key = 'brief:' + e.id, open = !!state.open[key];
+      var row = h('div', { class: 'hm-row hm-meeting', onclick: function () { var tab = $('calendarTab'); if (tab) tab.click(); } }, [
         h('div', { class: 'hm-when' }, [h('b', {}, dayLabel(e.date, today)), h('span', {}, e.untimed ? '' : time12(e.start_time))]),
         h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, e.title), guests.length ? h('div', { class: 'hm-meta' }, 'With ' + guests.slice(0, 3).join(', ') + (guests.length > 3 ? ' +' + (guests.length - 3) : '')) : null]),
+        e.brief ? h('button', { class: 'hm-mini', type: 'button', title: 'The brief Claude prepared for this meeting', onclick: function (ev) { ev.stopPropagation(); state.open[key] = !open; render(); } }, open ? 'Hide brief' : 'Brief') : null,
         e.join_url ? h('a', { class: 'hm-mini', href: e.join_url, target: '_blank', rel: 'noopener', onclick: function (ev) { ev.stopPropagation(); } }, 'Join') : null]);
+      return open ? h('div', {}, [row, h('div', { class: 'hm-brief' }, e.brief)]) : row;
     });
     fill($('homeMeetings'), rows);
     $('homeMeetingsSection').hidden = !rows.length;             // only when there is a meeting coming up

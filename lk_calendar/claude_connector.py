@@ -226,6 +226,25 @@ TOOLS = [
     {"name": "list_calendar", "title": "Calendar items", "description": "Meetings (including Google Calendar ones, with guests), tasks and reminders between two dates (inclusive). Use it to find a meeting by person or date; item_id = id.",
      "inputSchema": {"type": "object", "properties": {"start_date": {"type": "string", "description": "YYYY-MM-DD"}, "end_date": {"type": "string", "description": "YYYY-MM-DD"}},
                      "required": ["start_date", "end_date"]}, "read": True},
+    {"name": "autopilot_queue", "title": "Autopilot: work to do",
+     "description": "For the scheduled autopilot run (every 2 hours): what needs doing now. Do each item, saving with the tools named, then stop; do not ask the user anything, nothing here is ever sent. "
+                    "meetings_needing_brief -> read get_contact / get_contact_history for each contact (and get_meeting_notes), write a short brief (who they are, where things stand, "
+                    "last conversations, open questions, what to aim for in this meeting), save with save_meeting_brief. "
+                    "calls_needing_summary -> get_call, summarize (what was discussed, decisions, next steps with owners), save with save_call_summary. "
+                    "needing_followup_draft -> write a short follow-up email from what `use` says (never invent facts), save with save_followup_draft. "
+                    "too_short_to_summarize, waiting_for_recording, asked_what_happened -> nothing to do (the recording may still come; the user answers on Home).",
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "save_meeting_brief", "title": "Save meeting brief",
+     "description": "Save the brief for an upcoming meeting (autopilot). Replaces an earlier brief; never touches the user's own notes; never sent to Google or guests.",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["item_id", "text"]}},
+    {"name": "save_call_summary", "title": "Save call summary",
+     "description": "Save the summary of a recorded call (autopilot). Shows on Home under Calls to review and on the contact.",
+     "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}, "summary": {"type": "string"}}, "required": ["call_id", "summary"]}},
+    {"name": "save_followup_draft", "title": "Save follow-up draft",
+     "description": "Save a follow-up email draft after a meeting (autopilot): call_id for a recorded call, or item_id for a meeting with no recording. "
+                    "Goes to the first contact on it with an email. NOT sent: the user reviews it on Home and sends it themselves. Body without a subject line; sign off with 'Best,' and [Your Name].",
+     "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}, "item_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"}},
+                     "required": ["subject", "body"]}},
     {"name": "calls_to_review", "title": "Calls to review", "description": "Recorded calls with a transcript not summarized yet, and meetings that passed with no recording (possible no-shows).",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "get_call", "title": "Call transcript", "description": "One recorded call (from Fathom): who was on it, the summary if any, and the full transcript.",
@@ -297,7 +316,7 @@ TOOLS = [
                                                       "google_meet": {"type": "boolean", "default": True}, "record_with_fathom": {"type": "boolean", "default": True, "description": "Leave out (on). false only when the user says not to record."},
                                                       "notes": {"type": "string"}}, "required": ["title", "date", "time"]}, "read": False},
     {"name": "get_meeting_notes", "title": "A meeting's private notes",
-     "description": "The user's own private notes on a meeting (prep, and notes during or after the call). item_id from get_agenda or list_calendar. Only the user sees these.",
+     "description": "The user's own private notes on a meeting (prep, and notes during or after the call), and the brief saved by the scheduled autopilot run if any. item_id from get_agenda or list_calendar. Only the user sees these.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}}, "required": ["item_id"]}, "read": True},
     {"name": "write_meeting_notes", "title": "Write private meeting notes",
      "description": (CONFIRM_RULE + " " + "Add to the user's private notes on a meeting (prep plan, what was said, follow-ups). mode 'append' (the default) adds at the end and keeps "
@@ -590,6 +609,14 @@ def _run_tool(call, name: str, args: dict):
         return _strip_google(need(*call("GET", f"/api/calendar/events?{q}"))["events"])
     if name == "calls_to_review":
         return need(*call("GET", "/api/calls/attention"))
+    if name == "autopilot_queue":
+        return need(*call("GET", "/api/calendar/autopilot/queue"))
+    if name == "save_meeting_brief":
+        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/brief", {"text": args.get("text", "")}))
+    if name == "save_call_summary":
+        return need(*call("PUT", f"/api/calls/{int(args['call_id'])}/summary", {"summary": args.get("summary", "")}))
+    if name == "save_followup_draft":
+        return need(*call("POST", "/api/calendar/autopilot/drafts", {k: args.get(k) for k in ("call_id", "item_id", "subject", "body")}))
     if name == "get_call":
         return need(*call("GET", f"/api/calls/{int(args['call_id'])}"))["call"]
     if name == "create_task":

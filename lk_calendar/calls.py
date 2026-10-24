@@ -476,7 +476,7 @@ def attention(days: int = 14) -> dict:
     since = (store.now_local() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M")
     cond, args = _mine_sql()                        # Home asks each person only about their own calls
     with _crm() as conn:
-        ready = [dict(r) for r in conn.execute(f"""SELECT call_id, title, started_at, duration_min, invitees FROM calls
+        ready = [dict(r) for r in conn.execute(f"""SELECT call_id, title, started_at, duration_min, invitees, summary FROM calls
                                                     WHERE status = 'ready' AND transcript != '[]' AND started_at >= ? AND {cond}
                                                     ORDER BY started_at DESC""", (since, *args))]
         for r in ready:
@@ -506,7 +506,15 @@ def attention(days: int = 14) -> dict:
                 starts = f"{e['start_date']}T{e['start_time']}"
                 if end <= cutoff and e["id"] not in linked and starts >= connected:
                     missing.append({"event_id": e["id"], "title": e["title"], "date": e["start_date"], "time": e["start_time"]})
-    return {"ready": ready, "missing": missing}
+    from . import autopilot                         # follow-up drafts the scheduled Claude run left: on their call, or on their own
+    waiting = autopilot.drafts()
+    by_call = {d["ref"]: d for d in waiting if d["ref"].startswith("call:")}
+    for r in ready:
+        d = by_call.get(f"call:{r['call_id']}")
+        r["draft"] = {"draft_id": d["draft_id"], "to": d["to_email"], "subject": d["subject"]} if d else None
+    others = [{"draft_id": d["draft_id"], "to": d["to_email"], "subject": d["subject"], "title": d["title"], "kind": d["kind"]}
+              for d in waiting if not d["ref"].startswith("call:")]
+    return {"ready": ready, "missing": missing, "drafts": others}
 
 
 # ------------------------------------------------------------------ fetching: right after a call ends, and hourly, in every workspace with Fathom

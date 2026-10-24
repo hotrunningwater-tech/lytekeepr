@@ -56,8 +56,11 @@ def get(event_id: int) -> dict:
     with store._conn() as conn:
         _ready(conn)
         row = conn.execute("SELECT text, updated_at FROM meeting_private_notes WHERE meeting_key = ? AND who = ?", (_key(ev), _me())).fetchone()
+    from . import autopilot
+    with_brief = [dict(ev)]
+    autopilot.add_briefs(with_brief)
     return {"item_id": ev["id"], "title": ev["title"], "date": ev["start_date"], "time": ev["start_time"],
-            "private_notes": row["text"] if row else "", "updated_at": row["updated_at"] if row else ""}
+            "private_notes": row["text"] if row else "", "updated_at": row["updated_at"] if row else "", "brief": with_brief[0].get("brief", "")}
 
 
 def write(event_id: int, text: str, mode: str = "append") -> dict:
@@ -90,6 +93,8 @@ def add_to(events: list) -> None:
         if isinstance(e, dict) and e.get("id") is not None:
             e["private_notes"] = mine.get(_key(e), "")
             e.pop("my_notes", None)
+    from . import autopilot
+    autopilot.add_briefs(events)                      # and the brief Claude wrote for them, if any
 
 
 def has_any(conn, ev) -> bool:

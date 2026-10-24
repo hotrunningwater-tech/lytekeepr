@@ -447,6 +447,8 @@
       } }, MEETING_STATUS_LABELS[k]);
     }));
     return h('div', { class: 'lkc-meeting' }, [
+      e.brief ? h('span', { class: 'lkc-lbl' }, 'Brief (prepared by Claude)') : null,
+      e.brief ? h('div', { class: 'lkc-private-preview lkc-brief' }, e.brief) : null,
       h('span', { class: 'lkc-lbl' }, 'Meeting status'), statuses,
       e.has_call ? h('p', { class: 'lkc-empty' }, 'Conference call: marking it Completed adds a follow-up reminder 24 hours after it ends.') : null,
       h('span', { class: 'lkc-lbl', style: 'margin-top:6px' }, 'My private notes'), notes, save

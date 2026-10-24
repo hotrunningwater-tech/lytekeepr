@@ -31,8 +31,8 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=47">
-<link rel="stylesheet" href="lk-calendar/calendar.css?v=task1b">
+<link rel="stylesheet" href="styles.css?v=48">
+<link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team6">
 </head>
 <body>
@@ -636,11 +636,11 @@
 </div>
 
 <script src="chat.js"></script>
-<script src="lk-calendar/calendar.js?v=home5"></script>
+<script src="lk-calendar/calendar.js?v=home6"></script>
 <script src="lk-calendar/settings.js?v=aisum1"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
-<script src="lk-calendar/home.js?v=12"></script>
+<script src="lk-calendar/home.js?v=13"></script>
 <script src="lk-calendar/docs.js?v=2"></script>
 <script src="lk-calendar/viewstate.js"></script>
 <script type="module" src="email/index.js"></script>
@@ -1974,19 +1974,27 @@
         .then(function (res) { return res.json().then(function (d) { if (!res.ok) throw new Error(d.error || 'Something went wrong'); return d; }); })
         .catch(function (e) { el.disabled = false; el.textContent = old; alert(e.message); throw e; });
     }
+    function reviewDraft(id, el) {                   // the draft opens in the usual send card; nothing is sent until Send now
+      callPost('/api/calendar/autopilot/drafts/' + id + '/review', {}, el, 'Opening…').then(function () {
+        el.disabled = false; el.textContent = 'Review draft';
+        if (window.lkHomeChat && window.lkHomeChat.showDraft) window.lkHomeChat.showDraft('Here is the follow-up email Claude prepared. Edit it, then press Send now.');
+        loadCallsAttention();
+      });
+    }
     function loadCallsAttention() {
       if (!callsAttentionList) return;
       fetch('/api/calls/attention').then(function (res) { return res.ok ? res.json() : null; }).then(function (data) {
         callsAttentionList.innerHTML = '';
-        homeCallsCount = data ? data.ready.length + data.missing.length : 0;
+        homeCallsCount = data ? data.ready.length + data.missing.length + (data.drafts || []).length : 0;
         var clear = attentionList.querySelector('.attention-clear'); if (clear) clear.hidden = homeCallsCount + homeSuggestCount + (window.lkHomeActionCount || 0) > 0;
         if (!data) return;
         data.ready.forEach(function (c) {
           var who = (c.contacts || []).map(function (p) { return p.name; }).join(', ');
-          callsAttentionList.appendChild(callRow('Call' + (who ? ' with ' + who : '') + ' — transcript ready',
+          var card = callRow('Call' + (who ? ' with ' + who : '') + (c.summary ? ' — summary ready' : ' — transcript ready'),
             [c.title, formatCrmTimestamp(c.started_at), c.duration_min ? c.duration_min + ' min' : ''].filter(Boolean).join(' · '), [
-              ['Summarize', 'btn btn-primary btn-small', function (el) { callPost('/api/calls/' + c.call_id + '/summarize', {}, el, 'Summarizing…').then(loadCallsAttention); }],
-              (window.lkMe && window.lkMe.role !== 'admin') ? null : ['Draft follow-up', 'btn btn-secondary btn-small', function (el) {
+              c.draft ? ['Review draft', 'btn btn-primary btn-small', function (el) { reviewDraft(c.draft.draft_id, el); }] : null,
+              c.summary ? null : ['Summarize', 'btn btn-primary btn-small', function (el) { callPost('/api/calls/' + c.call_id + '/summarize', {}, el, 'Summarizing…').then(loadCallsAttention); }],
+              (c.draft || (window.lkMe && window.lkMe.role !== 'admin')) ? null : ['Draft follow-up', 'btn btn-secondary btn-small', function (el) {
                 callPost('/api/calls/' + c.call_id + '/draft-followup', {}, el, 'Writing…').then(function (d) {
                   el.disabled = false; el.textContent = 'Draft follow-up';
                   if (window.lkHomeChat && window.lkHomeChat.showDraft) window.lkHomeChat.showDraft('Your follow-up email to ' + (d.person_name || 'them') + ' after "' + c.title + '" is ready below. Edit it, then press Send now.');
@@ -1999,6 +2007,20 @@
                     if (window.lkContacts) window.lkContacts.addContact({ email: other.email || '', name: other.name && other.name !== other.email ? other.name : '', channel: 'email' }, loadCallsAttention);
                   }],
               ['Dismiss', 'subtle-link-btn', function (el) { callPost('/api/calls/' + c.call_id + '/status', { status: 'done' }, el, 'Dismissing…').then(loadCallsAttention); }]      // nothing to do with this call: off Home, kept in the contact's calls
+            ]);
+          if (c.summary) {                                // the summary (written by the scheduled Claude run, or by Summarize), folded
+            var more = document.createElement('details'); more.className = 'call-summary-fold';
+            var sum = document.createElement('summary'); sum.textContent = 'Summary'; more.appendChild(sum);
+            var txt = document.createElement('p'); txt.className = 'attention-copy'; txt.style.whiteSpace = 'pre-wrap'; txt.textContent = c.summary; more.appendChild(txt);
+            card.insertBefore(more, card.querySelector('.attention-actions'));
+          }
+          callsAttentionList.appendChild(card);
+        });
+        (data.drafts || []).forEach(function (d) {          // a follow-up for a meeting with no recording (you said it happened, or it was a no-show)
+          callsAttentionList.appendChild(callRow(d.kind === 'no_show' ? 'No-show — reschedule email ready' : 'Follow-up email ready',
+            d.title + ' · to ' + d.to, [
+              ['Review draft', 'btn btn-primary btn-small', function (el) { reviewDraft(d.draft_id, el); }],
+              ['Dismiss', 'subtle-link-btn', function (el) { callPost('/api/calendar/autopilot/drafts/' + d.draft_id + '/dismiss', {}, el, 'Dismissing…').then(loadCallsAttention); }]
             ]));
         });
         data.missing.forEach(function (m) {

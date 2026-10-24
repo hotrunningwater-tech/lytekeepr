@@ -16,10 +16,10 @@ Each feature was checked against the code on 2026-10-24. The rating shows how cl
 | 3 | Search across communications | Messages, notes and docs are searchable. Email search works by a contact's address, not free text across the whole Gmail | 8 |
 | 11 | Unanswered emails (free) | Gmail syncs every 15 minutes. A reply from a lead switches the lead to "replied" and creates a "Reply to …" task. This covers leads only, not the whole inbox | 7 |
 | P1 | Neglected lead detection | Built: automatic follow-up tasks for leads, plus "Gone quiet" on Home (funnel contacts with no contact for 14/30/60/90 days, with Not now). Added 2026-10-24 | 9 |
-| P5 | Post-meeting processing | Fathom pulls the recording within minutes after a call and links it to the contacts. Home shows "Calls to review" with Summarize and Draft follow-up. The summary only runs when you click | 6 |
+| P5 | Post-meeting processing | Built: Fathom pulls the recording; Claude's scheduled run (every 2 hours, autopilot_queue) writes the summary and a follow-up draft, plus a reschedule draft for no-shows. Drafts wait on Home, never sent on their own. Added 2026-10-24 | 9 |
 | 8 | Customer and deal analysis | Claude can analyze on request. "Not contacted recently" is built: the contacts_gone_quiet tool and the Gone quiet list (by days and funnel). Added 2026-10-24 | 8 |
 | 12 | Commitments and promises (free) | Partly built: promises.py spots a promised time in a lead's message ("next week", "Monday works") and moves the follow-up date. Other kinds of commitment ("I'll send the deck") aren't tracked | 4 |
-| P7 | Automatic meeting prep | Not built. The parts exist, but nothing runs before a meeting | 3 |
+| P7 | Automatic meeting prep | Built: Claude's scheduled run writes a brief for each meeting with a contact in the next 26 hours, shown on Home and on the meeting. Added 2026-10-24 | 9 |
 | P8 | Voice notes and business cards | Not built. Closest thing: the contact assistant turns pasted notes into a proposed contact update | 2 |
 | P2 | New-customer onboarding | Not built. There is no trigger when a deal is won | 1 |
 
@@ -28,7 +28,7 @@ Each feature was checked against the code on 2026-10-24. The rating shows how cl
 Only the features rated below 9 are grouped. Each group shares the same underlying piece of work.
 
 1. **(Done 2026-10-24) "Gone quiet" detection: P1 Neglected leads + #8 Not contacted recently.** Both need a "last contact" date per contact, from emails, LinkedIn, calls and logged conversations. With that in place, P1 is a Home row ("Funnel contacts not touched in 14 days") and #8 is a filter plus a tool for Claude.
-2. **Meetings on autopilot: P7 Automatic meeting prep + P5 Post-meeting processing.** Both run on the meeting timeline, and the Fathom timer that checks for recordings after calls is already there. Before a meeting, a brief is generated from history and notes. After it, the summary and the follow-up draft are ready without a click.
+2. **(Done 2026-10-24) Meetings on autopilot: P7 Automatic meeting prep + P5 Post-meeting processing.** Both run on the meeting timeline, and the Fathom timer that checks for recordings after calls is already there. Before a meeting, a brief is generated from history and notes. After it, the summary and the follow-up draft are ready without a click.
 3. **Gmail beyond your contacts: #11 Unanswered emails for the whole inbox + #3 Free-text email search.** Both need Gmail access beyond contact addresses, and both need the same filter to keep newsletters and automated mail out.
 4. **Commitments: #12.** Extends promises.py from "a promised time" to "a promised action" ("I'll send the deck"), which becomes a task. Do it after group 2, so action items from call transcripts go through the same step.
 5. **Company records: #9.** A company page that lists its people, opportunities and history.

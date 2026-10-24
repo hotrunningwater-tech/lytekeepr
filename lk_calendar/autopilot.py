@@ -1,0 +1,285 @@
+"""Meetings on autopilot, done by Claude on a schedule (every 2 hours). LyteKeepr only lists the work and keeps the results;
+no AI runs here (Claude writes, on the user's own Claude plan, through the connector).
+- Before a meeting: a brief for each meeting in the next 26 hours that has a contact as a guest. Kept like a private meeting note
+  (per person, never sent to Google or guests) but apart from the person's own notes: who = 'brief:<who>'. Shown on the meeting and on Home.
+- After a meeting: once the Fathom transcript is in, the call summary (the call's own summary field) and a follow-up email draft.
+  A transcript too short to mean anything (a test call) is listed as too short and left alone.
+  A meeting with no recording is left alone until the user says what happened (Home asks 2 hours after it ends):
+  "It happened" -> a follow-up draft from the notes and brief; "No-show" -> a short "sorry we missed you, reschedule?" draft.
+  Recordings still on their way are listed as waiting, so nothing is written for them yet.
+- Drafts (autopilot_drafts) are never sent: Home shows them under Calls to review; "Review & send" opens the usual send card.
+  Emails go out from the admin's Gmail, so only the admin gets draft work.
+Only the person's own meetings and calls, the same rule as Calls to review."""
+
+import json
+from datetime import datetime, timedelta
+
+from . import access, meeting_notes, store
+
+BRIEF_HOURS = 26                # a 2-hourly run briefs every meeting well ahead of time
+LOOK_BACK_DAYS = 7
+MIN_TRANSCRIPT_CHARS = 300      # less than this is a test call or a dropped line
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS autopilot_drafts (
+    draft_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ref TEXT NOT NULL,              -- 'call:<call_id>' or 'event:<event_id>'
+    kind TEXT NOT NULL,             -- 'call' | 'happened' | 'no_show'
+    who TEXT NOT NULL,
+    person_id INTEGER,
+    to_email TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    subject TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'waiting',   -- waiting | dismissed
+    created_at TEXT NOT NULL
+);
+"""
+
+
+class AutopilotError(ValueError):
+    pass
+
+
+def _conn():
+    conn = store._conn()
+    conn.executescript(SCHEMA)
+    return conn
+
+
+def _brief_who() -> str:
+    return "brief:" + meeting_notes._me()
+
+
+def _mine(ev) -> bool:
+    """The current person's own meeting (the rule Calls to review uses)."""
+    from . import calls
+    me = calls._me()
+    return ev["owner_id"] == me if me else ev["owner_id"] not in calls._member_ids()
+
+
+def _is_meeting(e) -> bool:
+    return e.get("kind") == "meeting" or e.get("source") == "google" or bool(e.get("has_call")) or bool(e.get("expect_recording"))
+
+
+def _guests(event_id: int) -> list:
+    from . import calls
+    return [a for a in calls.event_attendees(event_id) if a.get("person_id")]
+
+
+def _first_email(person_ids) -> tuple:
+    from . import contacts
+    for pid in person_ids:
+        info = contacts.get_contact(pid) or {}
+        if info.get("email"):
+            return pid, info["email"], info.get("name") or info["email"]
+    return None, "", ""
+
+
+def _has_draft(conn, ref: str) -> bool:
+    return bool(conn.execute("SELECT 1 FROM autopilot_drafts WHERE ref = ?", (ref,)).fetchone())
+
+
+# ------------------------------------------------------------------ what Claude should do on this run
+def queue() -> dict:
+    from . import calls, users
+    now = store.now_local()
+    admin = users.is_admin()
+    out = {"meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [], "needing_followup_draft": [],
+           "waiting_for_recording": [], "asked_what_happened": []}
+    with store._conn() as conn:
+        meeting_notes._ready(conn)
+        briefed = {r["meeting_key"] for r in conn.execute("SELECT meeting_key FROM meeting_private_notes WHERE who = ? AND text != ''", (_brief_who(),))}
+    for e in store.occurrences(now.date().isoformat(), (now + timedelta(hours=BRIEF_HOURS)).date().isoformat()):
+        if not _is_meeting(e) or e.get("untimed") or e.get("meeting_status") == "cancelled" or not access.can_event(e) or not _mine(e):
+            continue
+        start = datetime.fromisoformat(f"{e['date']}T{e['start_time']}")
+        if not (now < start <= now + timedelta(hours=BRIEF_HOURS)) or meeting_notes._key(e) in briefed:
+            continue
+        guests = _guests(e["id"])
+        if guests:
+            out["meetings_needing_brief"].append({"item_id": e["id"], "title": e["title"], "date": e["date"], "time": e["start_time"],
+                                                  "contacts": [{"contact_id": g["person_id"], "name": g["contact_name"] or g.get("name") or g["email"]} for g in guests]})
+    since = (now - timedelta(days=LOOK_BACK_DAYS)).strftime("%Y-%m-%dT%H:%M")
+    cond, args = calls._mine_sql()
+    with calls._crm() as c:
+        rows = c.execute(f"""SELECT call_id, title, started_at, summary, transcript FROM calls
+                             WHERE status = 'ready' AND transcript != '[]' AND started_at >= ? AND {cond} ORDER BY started_at""", (since, *args)).fetchall()
+        people = calls._people_on(c, [r["call_id"] for r in rows])
+        linked = {r["event_id"] for r in c.execute("SELECT event_id FROM calls WHERE event_id IS NOT NULL")}
+    with _conn() as conn:
+        for r in rows:
+            item = {"call_id": r["call_id"], "title": r["title"], "started_at": r["started_at"],
+                    "contacts": [{"contact_id": p["person_id"], "name": p["name"]} for p in people.get(r["call_id"], [])]}
+            if not r["summary"].strip():
+                text = calls.transcript_text({"transcript": json.loads(r["transcript"] or "[]")})
+                out["too_short_to_summarize" if len(text) < MIN_TRANSCRIPT_CHARS else "calls_needing_summary"].append(item)
+            elif admin and item["contacts"] and not _has_draft(conn, f"call:{r['call_id']}") and _first_email([p["contact_id"] for p in item["contacts"]])[1]:
+                out["needing_followup_draft"].append({**item, "kind": "call", "use": "the call summary (get_call)"})
+        for e in conn.execute("""SELECT * FROM events WHERE (has_call = 1 OR expect_recording = 1) AND start_date BETWEEN ? AND ?""",
+                              ((now - timedelta(days=LOOK_BACK_DAYS)).date().isoformat(), now.date().isoformat())).fetchall():
+            e = dict(e)
+            if not _mine(e) or e["id"] in linked:
+                continue
+            end = datetime.fromisoformat(f"{e['start_date']}T{e['start_time']}") + timedelta(minutes=e["duration_min"])
+            if end > now:
+                continue
+            brief = {"item_id": e["id"], "title": e["title"], "date": e["start_date"], "time": e["start_time"]}
+            if e["meeting_status"] == "":
+                key = "waiting_for_recording" if end > now - timedelta(hours=calls.NO_SHOW_AFTER_HOURS) else "asked_what_happened"
+                out[key].append(brief)
+            elif e["meeting_status"] in ("completed", "no_show") and admin and not _has_draft(conn, f"event:{e['id']}"):
+                guests = _guests(e["id"])
+                if guests and _first_email([g["person_id"] for g in guests])[1]:
+                    out["needing_followup_draft"].append({**brief, "kind": "happened" if e["meeting_status"] == "completed" else "no_show",
+                        "contacts": [{"contact_id": g["person_id"], "name": g["contact_name"]} for g in guests],
+                        "use": "your private notes and the brief (get_meeting_notes)" if e["meeting_status"] == "completed"
+                               else "nothing: a short, friendly 'sorry we missed each other, want to pick another time?'"})
+    return out
+
+
+# ------------------------------------------------------------------ saving what Claude wrote
+def save_brief(event_id: int, text: str) -> dict:
+    ev = meeting_notes._event(event_id)
+    if not (text or "").strip():
+        raise AutopilotError("The brief is empty.")
+    with store._conn() as conn:
+        meeting_notes._ready(conn)
+        conn.execute("INSERT OR REPLACE INTO meeting_private_notes (meeting_key, who, text, updated_at) VALUES (?, ?, ?, ?)",
+                     (meeting_notes._key(ev), _brief_who(), text.strip()[:meeting_notes.MAX], store.now_local().isoformat(timespec="minutes")))
+    return {"item_id": ev["id"], "title": ev["title"], "saved": True}
+
+
+def add_briefs(events: list) -> None:
+    """Put the viewer's brief on each meeting (next to their private notes)."""
+    if not events:
+        return
+    with store._conn() as conn:
+        meeting_notes._ready(conn)
+        mine = {r["meeting_key"]: r["text"] for r in conn.execute("SELECT meeting_key, text FROM meeting_private_notes WHERE who = ?", (_brief_who(),))}
+    for e in events:
+        if isinstance(e, dict) and e.get("id") is not None:
+            e["brief"] = mine.get(meeting_notes._key(e), "")
+
+
+def save_summary(call_id: int, summary: str) -> dict:
+    from . import calls
+    call = calls.get_call(call_id)
+    if not call:
+        raise AutopilotError("No such call.")
+    if not (summary or "").strip():
+        raise AutopilotError("The summary is empty.")
+    with calls._crm() as c:
+        c.execute("UPDATE calls SET summary = ? WHERE call_id = ?", (summary.strip(), call_id))
+    return {"call_id": call_id, "title": call["title"], "saved": True}
+
+
+def save_draft(subject: str, body: str, call_id=None, item_id=None) -> dict:
+    from . import calls, users
+    if not users.is_admin():
+        raise AutopilotError("Follow-up emails go out from the admin's Gmail, so only the admin's drafts are kept.")
+    if not (body or "").strip():
+        raise AutopilotError("The draft is empty.")
+    if call_id:
+        call = calls.get_call(int(call_id))
+        if not call:
+            raise AutopilotError("No such call.")
+        ref, kind, title, pids = f"call:{call['call_id']}", "call", call["title"], [p["person_id"] for p in call["contacts"]]
+    elif item_id:
+        ev = meeting_notes._event(int(item_id))
+        ref, kind, title = f"event:{ev['id']}", ("no_show" if ev.get("meeting_status") == "no_show" else "happened"), ev["title"]
+        pids = [g["person_id"] for g in _guests(ev["id"])]
+    else:
+        raise AutopilotError("Give call_id or item_id.")
+    pid, email, name = _first_email(pids)
+    if not email:
+        raise AutopilotError("No contact with an email address on that meeting.")
+    try:
+        from . import profile
+        subject, body = profile.sign(subject or ""), profile.sign(body)
+    except Exception:
+        pass
+    with _conn() as conn:
+        conn.execute("DELETE FROM autopilot_drafts WHERE ref = ? AND state = 'waiting'", (ref,))      # a newer draft replaces an unread one
+        did = conn.execute("""INSERT INTO autopilot_drafts (ref, kind, who, person_id, to_email, title, subject, body, created_at)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (ref, kind, meeting_notes._me(), pid, email, title, (subject or "").strip() or "Following up", body.strip(),
+                            store.now_local().isoformat(timespec="minutes"))).lastrowid
+    return {"draft_id": did, "to": f"{name} <{email}>", "saved": True, "sent": False}
+
+
+def drafts() -> list:
+    """The waiting drafts, for Home."""
+    from . import users
+    if not users.is_admin():
+        return []
+    with _conn() as conn:
+        return [dict(r) for r in conn.execute("SELECT * FROM autopilot_drafts WHERE state = 'waiting' ORDER BY created_at DESC")]
+
+
+def _admin_only():
+    from . import users
+    if not users.is_admin():
+        raise AutopilotError("Only the admin can open follow-up drafts.")
+
+
+def review(draft_id: int) -> dict:
+    """Open a draft in the usual send card (edit, then Send now). Nothing is sent here."""
+    from assistant import email_send_flow
+    _admin_only()
+    with _conn() as conn:
+        d = conn.execute("SELECT * FROM autopilot_drafts WHERE draft_id = ?", (draft_id,)).fetchone()
+    if not d:
+        raise AutopilotError("No such draft.")
+    result = email_send_flow.create_pending_send(person_name=d["to_email"], subject=d["subject"], body=d["body"])
+    if result.get("status") != "pending_confirmation":
+        raise AutopilotError(result.get("message") or "Could not open the draft.")
+    return result                                    # it stays on Home until Dismiss, so closing the card loses nothing
+
+
+def dismiss(draft_id: int) -> dict:
+    _admin_only()
+    with _conn() as conn:
+        conn.execute("UPDATE autopilot_drafts SET state = 'dismissed' WHERE draft_id = ?", (draft_id,))
+    return {"ok": True}
+
+
+def register(app):
+    from flask import jsonify, request
+
+    def run(fn, *a, **k):
+        try:
+            return jsonify(fn(*a, **k))
+        except (AutopilotError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+
+    def b():
+        return request.get_json(silent=True) or {}
+
+    @app.get("/api/calendar/autopilot/queue")
+    def autopilot_queue():
+        return run(queue)
+
+    @app.put("/api/calendar/events/<int:event_id>/brief")
+    def autopilot_brief(event_id):
+        return run(save_brief, event_id, b().get("text", ""))
+
+    @app.put("/api/calls/<int:call_id>/summary")
+    def autopilot_summary(call_id):
+        return run(save_summary, call_id, b().get("summary", ""))
+
+    @app.post("/api/calendar/autopilot/drafts")
+    def autopilot_draft_save():
+        x = b()
+        return run(save_draft, x.get("subject", ""), x.get("body", ""), call_id=x.get("call_id"), item_id=x.get("item_id"))
+
+    @app.get("/api/calendar/autopilot/drafts")
+    def autopilot_drafts():
+        return run(lambda: {"drafts": drafts()})
+
+    @app.post("/api/calendar/autopilot/drafts/<int:draft_id>/review")
+    def autopilot_draft_review(draft_id):
+        return run(review, draft_id)
+
+    @app.post("/api/calendar/autopilot/drafts/<int:draft_id>/dismiss")
+    def autopilot_draft_dismiss(draft_id):
+        return run(dismiss, draft_id)
