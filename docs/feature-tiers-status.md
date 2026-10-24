@@ -19,7 +19,7 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 |---|---|---|---|---|
 | 1 | Unified customer history | Client-requested | LinkedIn messages, emails, calls, notes and logged conversations are all in it. Team members only see messages if given access | 9 |
 | 2 | Customer information lookup | Client-requested | search_contacts, get_contact, full history | 9 |
-| 3 | Search across communications | Client-requested | Messages, notes and docs are searchable. Email search works by a contact's address, not free text across the whole Gmail | 8 |
+| 3 | Search across communications | Client-requested | Messages, notes, docs, and emails by words (subject, preview, sender; in_body for the full text), with or without a contact. Added 2026-10-24: the admin's search also covers Primary-inbox emails from people who are not contacts yet | 9 |
 | 4 | CRM updates through Claude | Client-requested | Update contact, notes, stage moves, opportunities, tasks, follow-up dates | 9 |
 | 5 | Email and follow-up drafting | Client-requested | LinkedIn drafts, email send/reply (the text is approved first) | 9 |
 | 6 | Conversation and transcript summaries | Client-requested | Calls, email threads, meeting notes | 9 |
@@ -54,6 +54,6 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 5. **Tier gating.** Free vs paid per workspace; the queue and the tools respect it.
 6. **Capture test (P8).** Test in the Claude app: a voice note and a business-card photo become a contact and a note. Fix anything the test shows.
 7. **Done 2026-10-24: Company records (#9, #10).** The company record already existed; added the company view (people, opportunities, recent history, notes) and Claude tools.
-8. **Free-text email search (#3).** Search all synced Gmail by words, not only by a contact's address.
+8. **Done 2026-10-24: Email search (#3).** Word search already worked over saved emails; it now also covers new senders' emails waiting for review (admin only).
 
 Update a row whenever a feature is built.

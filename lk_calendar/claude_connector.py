@@ -500,7 +500,8 @@ TOOLS = [
     {"name": "email_lookup", "title": "Look up emails",
      "description": ("Quick: find saved emails by contact (name, id or address), words in subject/preview/sender, and since (YYYY-MM-DD). Returns who, when, subject, "
                      "a short preview and whether it was from the user or to them, newest first. Enough for 'did he reply?'. in_body=true also searches "
-                     "inside the full text (slower). Only emails saved in LyteKeepr, not the whole inbox."),
+                     "inside the full text (slower). Searches the emails saved in LyteKeepr and, for the admin, the Primary-inbox emails from people who are not "
+                     "contacts yet (not_saved: true). Promotions, social and automated mail are not kept, so they never show."),
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "query": {"type": "string"}, "since": {"type": "string"},
                                                       "in_body": {"type": "boolean"}, "limit": {"type": "integer"}}}, "read": True},
     {"name": "reply_email", "title": "Reply to an email", "destructive": True,

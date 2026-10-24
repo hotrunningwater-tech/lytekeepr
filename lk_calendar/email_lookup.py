@@ -80,13 +80,30 @@ def _addresses_of(contacts, ids):
 
 
 def _entries():
+    """The saved emails this person may see; for the admin also the Primary-inbox emails from people who are not contacts yet
+    (waiting for review in the Gmail tab), so a search finds a new prospect's email too (marked not_saved)."""
     from gmail import storage
     allowed = allowed_addresses()
     for account in _accounts():
-        for mid, e in storage.load_index(account).items():
+        index = storage.load_index(account)
+        for mid, e in index.items():
             if allowed is not None and _addr(e.get("from")) not in allowed and not ({_addr(t) for t in (e.get("to") or [])} & allowed):
                 continue                                  # an email with nobody this person may see
             yield account, mid, e
+        if allowed is None:
+            for mid in storage.get_pending_review_ids(account):
+                if mid in index:
+                    continue
+                m = storage.load_pending(account, mid)
+                if m:
+                    yield account, mid, {"from": m.get("from"), "to": m.get("to") or [], "subject": m.get("subject"), "snippet": m.get("snippet"),
+                                         "receivedAt": m.get("receivedAt"), "threadId": m.get("threadId"), "not_saved": True}
+
+
+def _load(account, mid) -> dict:
+    """A saved email, or one still waiting for review."""
+    from gmail import storage
+    return storage.load_message(account, mid) or storage.load_pending(account, mid) or {}
 
 
 def _row(account, mid, e, me) -> dict:
@@ -94,7 +111,8 @@ def _row(account, mid, e, me) -> dict:
     return {"email_id": mid, "thread_id": e.get("threadId"), "when": e.get("receivedAt"),
             "from": ((e.get("from") or {}).get("name") or sender) if isinstance(e.get("from"), dict) else sender, "from_email": sender,
             "to": [_addr(t) for t in (e.get("to") or [])], "subject": e.get("subject") or "(no subject)",
-            "preview": html.unescape(e.get("snippet") or ""), "direction": "from you" if sender in me else "to you"}
+            "preview": html.unescape(e.get("snippet") or ""), "direction": "from you" if sender in me else "to you",
+            **({"not_saved": True} if e.get("not_saved") else {})}
 
 
 def lookup(contact=None, query=None, since=None, in_body: bool = False, limit: int = 20) -> dict:
@@ -114,7 +132,7 @@ def lookup(contact=None, query=None, since=None, in_body: bool = False, limit: i
             if not all(w in hay for w in words):
                 if not in_body:
                     continue
-                full = storage.load_message(account, mid) or {}
+                full = _load(account, mid)
                 if not all(w in (hay + " " + _body(full).lower()) for w in words):
                     continue
         out.append(_row(account, mid, e, me))
@@ -138,7 +156,7 @@ def latest(contact) -> dict:
     def full(x):
         if not x:
             return None
-        return {**_row(x[0], x[1], x[3], me), "text": _body(storage.load_message(x[0], x[1]) or {})}
+        return {**_row(x[0], x[1], x[3], me), "text": _body(_load(x[0], x[1]))}
     t, m = full(theirs), full(mine)
     replied = bool(t and m and t["when"] > m["when"])
     return {"contact": name, "last_from_them": t, "last_from_you": m,
@@ -154,7 +172,7 @@ def thread(email_id=None, thread_id=None) -> dict:
         tid = next((e.get("threadId") for _, mid, e in _entries() if mid == email_id), None)
     if not tid:
         raise ValueError("No such email or thread among the saved emails.")
-    rows = [{**_row(a, mid, e, me), "text": _body(storage.load_message(a, mid) or {})} for a, mid, e in _entries() if e.get("threadId") == tid]
+    rows = [{**_row(a, mid, e, me), "text": _body(_load(a, mid))} for a, mid, e in _entries() if e.get("threadId") == tid]
     rows.sort(key=lambda r: r["when"] or "")
     return {"thread_id": tid, "subject": rows[0]["subject"] if rows else "", "count": len(rows), "emails": rows}
 
@@ -165,7 +183,7 @@ def message(email_id) -> dict:
     me = _me()
     for a, mid, e in _entries():
         if mid == email_id:
-            return {**_row(a, mid, e, me), "text": _body(storage.load_message(a, mid) or {})}
+            return {**_row(a, mid, e, me), "text": _body(_load(a, mid))}
     raise ValueError("No such email among the ones you can see.")
 
 
