@@ -227,12 +227,8 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"start_date": {"type": "string", "description": "YYYY-MM-DD"}, "end_date": {"type": "string", "description": "YYYY-MM-DD"}},
                      "required": ["start_date", "end_date"]}, "read": True},
     {"name": "autopilot_queue", "title": "Autopilot: work to do",
-     "description": "For the scheduled autopilot run (every 2 hours): what needs doing now. Do each item, saving with the tools named, then stop; do not ask the user anything, nothing here is ever sent. "
-                    "meetings_needing_brief -> read get_contact / get_contact_history for each contact (and get_meeting_notes), write a short brief (who they are, where things stand, "
-                    "last conversations, open questions, what to aim for in this meeting), save with save_meeting_brief. "
-                    "calls_needing_summary -> get_call, summarize (what was discussed, decisions, next steps with owners), save with save_call_summary. "
-                    "needing_followup_draft -> write a short follow-up email from what `use` says (never invent facts), save with save_followup_draft. "
-                    "too_short_to_summarize, waiting_for_recording, asked_what_happened -> nothing to do (the recording may still come; the user answers on Home).",
+     "description": "The scheduled autopilot run's work list (every 2 hours). `instructions` says what to do with each section: follow it for every item, "
+                    "save with the tools it names, then stop. Do not ask the user anything; nothing here is ever sent.",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "save_meeting_brief", "title": "Save meeting brief",
      "description": "Save the brief for an upcoming meeting (autopilot). Replaces an earlier brief; never touches the user's own notes; never sent to Google or guests.",

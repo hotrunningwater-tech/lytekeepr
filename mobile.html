@@ -768,12 +768,13 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
   $('apBtn').addEventListener('click', function () {
     push({ label: 'Autopilot', render: function (b) {
       b.appendChild(el('h2', '', 'Autopilot'));
-      b.appendChild(el('div', 'hint', 'Claude prepares your meetings on its own: a brief before each meeting with a contact, and after a recorded call the summary and a follow-up email draft. Nothing is ever sent; drafts wait in LyteKeepr.'));
+      var about = el('div', 'hint', ''); b.appendChild(about);
+      about.textContent = 'Claude does LyteKeepr\'s scheduled work on its own, using your Claude plan. Nothing is ever sent; whatever needs you waits in LyteKeepr. Paste once: new features join the same prompt.';
       var box = el('div', 'prompt', 'Loading…'); b.appendChild(box);
       var copy = el('button', 'btn ink', 'Copy prompt'); b.appendChild(copy);
       b.appendChild(el('div', 'hint', 'In the Claude app, create a scheduled task that runs every 2 hours, paste this prompt, and keep the LyteKeepr connector on for it.'));
       var text = '';
-      api('GET', '/api/calendar/autopilot/prompt').then(function (r) { text = r.prompt; box.textContent = r.prompt; }).catch(function (e) { box.textContent = e.message; });
+      api('GET', '/api/calendar/autopilot/prompt').then(function (r) { text = r.prompt; box.textContent = r.prompt; about.textContent += ' ' + r.does; }).catch(function (e) { box.textContent = e.message; });
       copy.addEventListener('click', function () {
         function done() { copy.textContent = 'Copied ✓'; setTimeout(function () { copy.textContent = 'Copy prompt'; }, 1800); }
         function pick() { var r = document.createRange(); r.selectNodeContents(box); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); copy.textContent = 'Selected — tap Copy'; }

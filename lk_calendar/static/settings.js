@@ -924,9 +924,11 @@
   function autopilotCard() {                         // the prompt itself comes from the server (the phone shows the same one)
     var prompt = '';
     var text = h('textarea', { class: 'lks-prompt', readonly: true, rows: 4 }, 'Loading…');
-    api('GET', '/api/calendar/autopilot/prompt').then(function (r) { prompt = r.prompt; text.value = r.prompt; }).catch(function (e) { text.value = e.message; });
+    var does = h('p', { class: 'lks-note' }, '');
+    api('GET', '/api/calendar/autopilot/prompt').then(function (r) { prompt = r.prompt; text.value = r.prompt; does.textContent = r.does; }).catch(function (e) { text.value = e.message; });
     return h('div', { class: 'lks-card' }, [h('h2', {}, 'Autopilot (scheduled)'),
-      h('p', {}, 'Claude can prepare your meetings on its own: a brief before each meeting with a contact, and after a recorded call the summary and a follow-up email draft (a "want to reschedule?" draft after a no-show). Nothing is ever sent; drafts wait on Home under Calls to review.'),
+      h('p', {}, 'Claude does LyteKeepr\'s scheduled work on its own, using your Claude plan. Nothing is ever sent; whatever needs you waits on Home. New scheduled features join the same prompt by themselves, so you paste it once.'),
+      does,
       h('div', { class: 'lks-opt' }, [h('label', {}, 'Prompt for the scheduled task'), h('div', { class: 'lks-row' }, [text, window.lkContacts.copyPill(function () { return prompt; })])]),
       h('div', { class: 'lks-hint' }, [h('b', {}, 'One-time setup: '), 'in Claude, create a scheduled task that runs every 2 hours, paste this prompt, and keep the LyteKeepr connector on for it.'])]);
   }

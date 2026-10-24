@@ -16,9 +16,22 @@ from datetime import datetime, timedelta
 
 from . import access, meeting_notes, store
 
-PROMPT = ("Run the LyteKeepr autopilot: call autopilot_queue and do everything it lists (meeting briefs, call summaries, follow-up drafts), "
-          "saving each result with the tool it names. Do not ask me anything and do not send any email; the drafts wait for me in LyteKeepr. "
-          "If the queue is empty, stop.")                 # pasted into a scheduled task in Claude (every 2 hours); shown in Settings and on the phone
+# The one prompt a customer pastes into a scheduled task in Claude (every 2 hours), shown in Settings and on the phone. It names no
+# feature: the queue carries the instructions, so a new scheduled feature starts working without anyone pasting again.
+PROMPT = ("Run the LyteKeepr autopilot: call autopilot_queue and follow the instructions it gives for each item, saving the results "
+          "with the tools it names. Do not ask me anything and do not send any email; whatever needs me waits in LyteKeepr. "
+          "If there is nothing to do, stop.")
+DOES = "Today: a brief before each meeting with a contact, and after a recorded call the summary and a follow-up email draft (a \"want to reschedule?\" draft after a no-show)."
+INSTRUCTIONS = {
+    "meetings_needing_brief": "For each meeting: read get_contact and get_contact_history for its contacts (and get_meeting_notes), then write a short brief "
+                              "(who they are, where things stand, the last conversations, open questions, what to aim for in this meeting). Save with save_meeting_brief.",
+    "calls_needing_summary": "For each call: read it with get_call and summarize what was discussed, the decisions, and the next steps with who owns them. Save with save_call_summary.",
+    "needing_followup_draft": "For each item: write a short follow-up email from what its `use` says, never inventing facts. Body without a subject line, "
+                              "signed 'Best,' and [Your Name]. Save with save_followup_draft (call_id for a call, item_id for a meeting). It is not sent.",
+    "too_short_to_summarize": "Nothing to do: too short to mean anything.",
+    "waiting_for_recording": "Nothing to do yet: the recording may still arrive; the next run picks it up.",
+    "asked_what_happened": "Nothing to do: the user tells LyteKeepr whether it happened.",
+}
 BRIEF_HOURS = 26                # a 2-hourly run briefs every meeting well ahead of time
 LOOK_BACK_DAYS = 7
 MIN_TRANSCRIPT_CHARS = 300      # less than this is a test call or a dropped line
@@ -87,8 +100,8 @@ def queue() -> dict:
     from . import calls, users
     now = store.now_local()
     admin = users.is_admin()
-    out = {"meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [], "needing_followup_draft": [],
-           "waiting_for_recording": [], "asked_what_happened": []}
+    out = {"instructions": INSTRUCTIONS, "meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [],
+           "needing_followup_draft": [], "waiting_for_recording": [], "asked_what_happened": []}
     with store._conn() as conn:
         meeting_notes._ready(conn)
         briefed = {r["meeting_key"] for r in conn.execute("SELECT meeting_key FROM meeting_private_notes WHERE who = ? AND text != ''", (_brief_who(),))}
@@ -260,7 +273,7 @@ def register(app):
 
     @app.get("/api/calendar/autopilot/prompt")
     def autopilot_prompt():
-        return jsonify({"prompt": PROMPT, "every_hours": 2})
+        return jsonify({"prompt": PROMPT, "every_hours": 2, "does": DOES})
 
     @app.get("/api/calendar/autopilot/queue")
     def autopilot_queue():
