@@ -16,6 +16,9 @@ from datetime import datetime, timedelta
 
 from . import access, meeting_notes, store
 
+PROMPT = ("Run the LyteKeepr autopilot: call autopilot_queue and do everything it lists (meeting briefs, call summaries, follow-up drafts), "
+          "saving each result with the tool it names. Do not ask me anything and do not send any email; the drafts wait for me in LyteKeepr. "
+          "If the queue is empty, stop.")                 # pasted into a scheduled task in Claude (every 2 hours); shown in Settings and on the phone
 BRIEF_HOURS = 26                # a 2-hourly run briefs every meeting well ahead of time
 LOOK_BACK_DAYS = 7
 MIN_TRANSCRIPT_CHARS = 300      # less than this is a test call or a dropped line
@@ -254,6 +257,10 @@ def register(app):
 
     def b():
         return request.get_json(silent=True) or {}
+
+    @app.get("/api/calendar/autopilot/prompt")
+    def autopilot_prompt():
+        return jsonify({"prompt": PROMPT, "every_hours": 2})
 
     @app.get("/api/calendar/autopilot/queue")
     def autopilot_queue():

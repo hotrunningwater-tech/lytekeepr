@@ -921,15 +921,13 @@
   }
 
   /* The scheduled Claude run (meetings on autopilot): the same prompt for everyone, to paste into a scheduled task in Claude */
-  var AUTOPILOT_PROMPT = 'Run the LyteKeepr autopilot: call autopilot_queue and do everything it lists ' +
-    '(meeting briefs, call summaries, follow-up drafts), saving each result with the tool it names. ' +
-    'Do not ask me anything and do not send any email; the drafts wait for me in LyteKeepr. ' +
-    'If the queue is empty, stop.';
-  function autopilotCard() {
-    var text = h('textarea', { class: 'lks-prompt', readonly: true, rows: 4 }, AUTOPILOT_PROMPT);
+  function autopilotCard() {                         // the prompt itself comes from the server (the phone shows the same one)
+    var prompt = '';
+    var text = h('textarea', { class: 'lks-prompt', readonly: true, rows: 4 }, 'Loading…');
+    api('GET', '/api/calendar/autopilot/prompt').then(function (r) { prompt = r.prompt; text.value = r.prompt; }).catch(function (e) { text.value = e.message; });
     return h('div', { class: 'lks-card' }, [h('h2', {}, 'Autopilot (scheduled)'),
       h('p', {}, 'Claude can prepare your meetings on its own: a brief before each meeting with a contact, and after a recorded call the summary and a follow-up email draft (a "want to reschedule?" draft after a no-show). Nothing is ever sent; drafts wait on Home under Calls to review.'),
-      h('div', { class: 'lks-opt' }, [h('label', {}, 'Prompt for the scheduled task'), h('div', { class: 'lks-row' }, [text, window.lkContacts.copyPill(function () { return AUTOPILOT_PROMPT; })])]),
+      h('div', { class: 'lks-opt' }, [h('label', {}, 'Prompt for the scheduled task'), h('div', { class: 'lks-row' }, [text, window.lkContacts.copyPill(function () { return prompt; })])]),
       h('div', { class: 'lks-hint' }, [h('b', {}, 'One-time setup: '), 'in Claude, create a scheduled task that runs every 2 hours, paste this prompt, and keep the LyteKeepr connector on for it.'])]);
   }
 

@@ -37,9 +37,11 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; }
 .brand { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
 .brand i { width: 9px; height: 9px; border-radius: 50%; background: var(--coral); }
 .iconbtn { width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--field); display: grid; place-items: center; }
-.iconbtn:first-of-type { margin-left: auto; }
+#searchBtn { margin-left: auto; }
+.apbtn { width: 30px; height: 30px; border-radius: 50%; border: none; background: var(--field); color: var(--ink); display: grid; place-items: center; flex: none; }
+.prompt { font-size: 14px; line-height: 1.5; background: var(--card); border-radius: 14px; padding: 12px 14px; white-space: pre-wrap; user-select: text; -webkit-user-select: text; box-shadow: 0 1px 3px rgba(41,67,78,.08); }
 .me { width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--ink); color: var(--on-ink); font-family: var(--font-display); font-weight: 700; font-size: 14px; }
-.tabs { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--field); border-radius: 999px; padding: 4px; }
+.tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--field); border-radius: 999px; padding: 4px; }
 .tab { border: none; background: none; border-radius: 999px; padding: 8px 4px; font-family: var(--font-display); font-weight: 600; font-size: 13.5px; color: var(--ink-soft); display: flex; justify-content: center; align-items: center; gap: 6px; }
 .tab.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 4px rgba(41,67,78,.12); }
 .count { min-width: 18px; height: 18px; border-radius: 999px; background: var(--coral); color: #fff; font-size: 11px; display: inline-grid; place-items: center; padding: 0 5px; font-family: var(--font-body); font-weight: 600; }
@@ -178,6 +180,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
 <div class="phone">
   <header class="top">
     <div class="brandrow">
+      <button class="apbtn" id="apBtn" aria-label="Autopilot prompt for a scheduled task in Claude"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></button>
       <span class="brand"><i></i>LyteKeepr</span>
       <button class="iconbtn" id="searchBtn" aria-label="Search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
       <button class="me" id="meBtn" aria-label="Account">·</button>
@@ -758,6 +761,24 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
       b.appendChild(el('div', 'hero', '<span class="avatar">' + esc(initials(m.name || m.email)) + '</span><div style="min-width:0"><h2>' + esc(m.name || m.email || 'You') + '</h2><p>' + esc(m.email || '') + '</p></div>'));
       var out = el('a', 'btn soft', 'Sign out'); out.href = PREFIX + '/logout'; b.appendChild(out);
       b.appendChild(el('div', 'hint', 'Tip: add LyteKeepr to your home screen to open it like an app. iPhone: Share → Add to Home Screen. Android: ⋮ → Add to Home screen.'));
+    } });
+  });
+
+  /* ---------- the autopilot prompt (top left): copy it into a scheduled task in the Claude app ---------- */
+  $('apBtn').addEventListener('click', function () {
+    push({ label: 'Autopilot', render: function (b) {
+      b.appendChild(el('h2', '', 'Autopilot'));
+      b.appendChild(el('div', 'hint', 'Claude prepares your meetings on its own: a brief before each meeting with a contact, and after a recorded call the summary and a follow-up email draft. Nothing is ever sent; drafts wait in LyteKeepr.'));
+      var box = el('div', 'prompt', 'Loading…'); b.appendChild(box);
+      var copy = el('button', 'btn ink', 'Copy prompt'); b.appendChild(copy);
+      b.appendChild(el('div', 'hint', 'In the Claude app, create a scheduled task that runs every 2 hours, paste this prompt, and keep the LyteKeepr connector on for it.'));
+      var text = '';
+      api('GET', '/api/calendar/autopilot/prompt').then(function (r) { text = r.prompt; box.textContent = r.prompt; }).catch(function (e) { box.textContent = e.message; });
+      copy.addEventListener('click', function () {
+        function done() { copy.textContent = 'Copied ✓'; setTimeout(function () { copy.textContent = 'Copy prompt'; }, 1800); }
+        function pick() { var r = document.createRange(); r.selectNodeContents(box); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); copy.textContent = 'Selected — tap Copy'; }
+        if (navigator.clipboard && text) navigator.clipboard.writeText(text).then(done, pick); else pick();
+      });
     } });
   });
 
