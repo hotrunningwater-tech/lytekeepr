@@ -207,6 +207,16 @@ TOOLS = [
     {"name": "get_contact", "title": "Contact details",
      "description": "Everything about one contact: profile, notes, funnel and stage, LinkedIn/Instagram messages, follow-ups and their recorded calls (with summaries). Use search_contacts first to get the id.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
+    {"name": "contacts_gone_quiet", "title": "Contacts gone quiet",
+     "description": "Contacts in a funnel nobody has been in touch with for a while (no email, LinkedIn/Instagram message, call, logged conversation or outreach step in `days` days). "
+                    "Leaves out contacts that already have an open follow-up reminder and ones put off with 'Not now'. Longest silence first; days_quiet and last_contact_how per contact.",
+     "inputSchema": {"type": "object", "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 14, "description": "Quiet for at least this many days"},
+                                                      "funnel_id": {"type": "integer", "description": "Only this funnel (see list_funnels)"},
+                                                      "limit": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}}}, "read": True},
+    {"name": "snooze_quiet_contact", "title": "Not now (gone quiet)",
+     "description": "Take a contact off the gone-quiet list for some days (they come back after that if nobody got in touch).",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 14}},
+                     "required": ["contact_id"]}},
     {"name": "list_funnels", "title": "List funnels", "description": "The sales funnels with their stages and how many people are in each.",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "get_funnel", "title": "Funnel board", "description": "One funnel: every stage with its contact entries (people, with their status) and its opportunity entries (shared deals with several people).",
@@ -562,6 +572,12 @@ def _run_tool(call, name: str, args: dict):
         detail["calls"] = [{"call_id": c.get("call_id"), "title": c.get("title"), "date": c.get("started_at"), "status": c.get("status"),
                             "summary": c.get("summary"), "has_transcript": c.get("has_transcript")} for c in (calls or {}).get("calls", [])] if status < 400 else []
         return detail
+    if name == "contacts_gone_quiet":
+        q = {k: int(args[k]) for k in ("days", "funnel_id") if args.get(k) not in (None, "")}
+        q["limit"] = int(args.get("limit") or 50)
+        return need(*call("GET", "/api/crm/quiet?" + urllib.parse.urlencode(q)))
+    if name == "snooze_quiet_contact":
+        return need(*call("POST", f"/api/crm/quiet/{int(args['contact_id'])}/snooze", {"days": int(args.get("days") or 14)}))
     if name == "list_funnels":
         return need(*call("GET", "/api/crm/funnels"))
     if name == "get_funnel":

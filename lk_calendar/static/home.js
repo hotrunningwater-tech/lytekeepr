@@ -23,7 +23,7 @@
   if (!$('homeActions')) return;
   function fail(e) { if (window.lkContacts && window.lkContacts.notice) window.lkContacts.notice(e.message); else alert(e.message); }
 
-  var state = { agenda: null, goals: null, brands: {}, open: {} };
+  var state = { agenda: null, goals: null, brands: {}, open: {}, quiet: null, quietDays: 14 };
   function isMeeting(e) { return e.kind === 'meeting' || e.source === 'google' || !!e.has_call || !!e.expect_recording; }
   function toUTC(iso) { var p = iso.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
   function dayLabel(iso, today) {
@@ -45,9 +45,10 @@
 
   function load() {
     return Promise.all([api('GET', '/api/calendar/agenda'), api('GET', '/api/calendar/goals'),
-                        api('GET', '/api/crm/brands').catch(function () { return { brands: [] }; })])
+                        api('GET', '/api/crm/brands').catch(function () { return { brands: [] }; }),
+                        api('GET', '/api/crm/quiet?days=' + state.quietDays).catch(function () { return null; })])
       .then(function (r) {
-        state.agenda = r[0]; state.goals = r[1];
+        state.agenda = r[0]; state.goals = r[1]; state.quiet = r[3];
         state.brands = {}; (r[2].brands || []).forEach(function (b) { state.brands[b.key] = b; });
         render();
       }).catch(function () {});
@@ -60,6 +61,7 @@
     var overdue = (a.overdue || []).filter(function (e) { return !isMeeting(e); });
     var todays = (a.today || []).filter(function (e) { return !isMeeting(e) && !e.done; });
     renderActions(overdue, todays, today);
+    renderQuiet();
     countRows();
     renderGoals();
     renderMeetings(a, today);
@@ -127,6 +129,28 @@
     fill($('homeActions'), [late.length ? h('div', { class: 'hm-day hm-late' }, 'Overdue') : null].concat(late.map(function (e) { return itemRow(e, today, true); }),
       [h('div', { class: 'hm-day' }, 'Today')], now.length ? now.map(function (e) { return itemRow(e, today, false); }) : [h('p', { class: 'hm-empty' }, 'Nothing due today.')]));
     fill($('homeFollowups'), fold(leads).map(function (it) { return it.group ? groupRow(it, today) : itemRow(it, today, it.date < today); }));
+  }
+
+  /* ---------- gone quiet: funnel contacts nobody has been in touch with for N days ---------- */
+  var HOW = { email: 'email', linkedin: 'LinkedIn', instagram: 'Instagram', call: 'call', logged: 'logged conversation', outreach: 'outreach step' };
+  function renderQuiet() {
+    var q = state.quiet;
+    state.counts.Quiet = q ? q.count : 0;
+    if (!q) { fill($('homeQuiet'), []); return; }
+    var pick = h('select', { class: 'hm-input hm-days', onchange: function () { state.quietDays = +pick.value; load(); } }, [14, 30, 60, 90].map(function (d) {
+      return h('option', { value: d, selected: d === q.days }, 'No contact for ' + d + '+ days');
+    }));
+    var rows = q.contacts.map(function (c) {
+      return h('div', { class: 'hm-row' }, [
+        h('div', { class: 'hm-main' }, [h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { if (window.openCrmPersonDetail) window.openCrmPersonDetail(c.person_id); } }, c.name),
+          h('div', { class: 'hm-meta' }, [h('span', { class: 'hm-late' }, c.days_quiet + ' days quiet'), h('span', {}, 'Last: ' + (HOW[c.last_contact_how] || c.last_contact_how)),
+            h('span', {}, c.funnel_name + (c.stage_name ? ' · ' + c.stage_name : '')), c.company_name ? h('span', {}, c.company_name) : null].filter(Boolean))]),
+        h('button', { class: 'hm-mini', type: 'button', title: 'Off this list for 14 days', onclick: function () {
+          api('POST', '/api/crm/quiet/' + c.person_id + '/snooze', { days: 14 }).then(load).catch(fail);
+        } }, 'Not now')]);
+    });
+    fill($('homeQuiet'), [h('div', { class: 'hm-quiet-head' }, [pick, h('span', { class: 'hm-empty' }, 'In a funnel, contacted before, nothing since.')])]
+      .concat(rows.length ? rows : [h('p', { class: 'hm-empty' }, 'Nobody has gone quiet.')]));
   }
 
   /* ---------- the automatic bar: one chip per type with its count; a chip opens its list below the bar ---------- */

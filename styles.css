@@ -2911,3 +2911,5 @@ body.no-linkedin #linkedinTab { display: none !important; }
 #homeMeetingsSection .home-section-head .block-label { color: var(--ink-soft); }
 .home-hide { margin-left: auto; border: none; background: none; font-family: var(--font-heading); font-size: 12.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; padding: 6px 10px; border-radius: 999px; }
 .home-hide:hover { color: var(--ink); background: rgba(41, 67, 78, 0.06); }
+.hm-quiet-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hm-quiet-head .hm-days { width: auto; padding: 7px 12px; }
