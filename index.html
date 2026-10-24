@@ -33,7 +33,7 @@
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
 <link rel="stylesheet" href="styles.css?v=49">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
-<link rel="stylesheet" href="lk-calendar/settings.css?v=team7">
+<link rel="stylesheet" href="lk-calendar/settings.css?v=team9">
 </head>
 <body>
 
@@ -1531,6 +1531,14 @@
               btn.addEventListener('click', function () { post('/api/crm/funnels/stages/' + st.stage_id + '/move-position', { direction: b[1] }).then(function () { load(); refresh(); }); });
               row.appendChild(btn);
             });
+            var won = document.createElement('button');                 // reaching this stage = a won deal: onboarding starts (people already here don't count)
+            won.type = 'button';
+            won.className = 'btn btn-small ' + (st.is_won ? 'btn-primary' : 'btn-secondary');
+            won.textContent = st.is_won ? 'Won ✓' : 'Won?';
+            won.title = st.is_won ? 'This stage means a won deal: newcomers get a welcome email draft and onboarding reminders. Click to unmark.'
+                                  : 'Mark as the won-deal stage: newcomers get a welcome email draft and onboarding reminders (people already here don\'t)';
+            won.addEventListener('click', function () { post('/api/crm/funnels/stages/' + st.stage_id + '/won', { won: !st.is_won }).then(function () { load(); refresh(); }); });
+            row.appendChild(won);
             var del = document.createElement('button');
             del.type = 'button';
             del.className = 'btn btn-remove btn-small';
@@ -2023,7 +2031,7 @@
           callsAttentionList.appendChild(card);
         });
         (data.drafts || []).forEach(function (d) {          // a follow-up for a meeting with no recording (you said it happened, or it was a no-show)
-          callsAttentionList.appendChild(callRow(d.kind === 'no_show' ? 'No-show — reschedule email ready' : 'Follow-up email ready',
+          callsAttentionList.appendChild(callRow(d.kind === 'no_show' ? 'No-show — reschedule email ready' : d.kind === 'welcome' ? 'Deal won — welcome email ready' : 'Follow-up email ready',
             d.title + ' · to ' + d.to, [
               ['Review draft', 'btn btn-primary btn-small', function (el) { reviewDraft(d.draft_id, el); }],
               ['Dismiss', 'subtle-link-btn', function (el) { callPost('/api/calendar/autopilot/drafts/' + d.draft_id + '/dismiss', {}, el, 'Dismissing…').then(loadCallsAttention); }]

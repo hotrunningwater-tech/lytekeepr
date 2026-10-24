@@ -272,6 +272,7 @@ def init_db() -> None:
                         "brand": "TEXT NOT NULL DEFAULT ''"}),   # the brand (key) the contact belongs to; '' = none yet
             ("channel_accounts", {"url": "TEXT"}),
             ("funnels", {"brand": "TEXT NOT NULL DEFAULT ''"}),     # a funnel's people take its brand
+            ("funnel_stages", {"is_won": "INTEGER NOT NULL DEFAULT 0"}),   # reaching this stage = a won deal (onboarding starts)
         ):
             have = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
             for col, ddl in cols.items():
@@ -342,7 +343,7 @@ def list_funnels(conn: sqlite3.Connection) -> list[dict]:
 def list_funnel_stages(conn: sqlite3.Connection, funnel_id: int) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT s.stage_id, s.name, s.position, COUNT(p.person_id) AS people_count
+        SELECT s.stage_id, s.name, s.position, s.is_won, COUNT(p.person_id) AS people_count
         FROM funnel_stages s
         LEFT JOIN people p ON p.funnel_stage_id = s.stage_id
         WHERE s.funnel_id = ?
@@ -359,7 +360,7 @@ def get_funnel_board(conn: sqlite3.Connection, funnel_id: int) -> dict | None:
     if funnel_row is None:
         return None
     stages = conn.execute(
-        "SELECT stage_id, name, position FROM funnel_stages WHERE funnel_id = ? ORDER BY position",
+        "SELECT stage_id, name, position, is_won FROM funnel_stages WHERE funnel_id = ? ORDER BY position",
         (funnel_id,),
     ).fetchall()
     people_rows = conn.execute(
@@ -386,6 +387,7 @@ def get_funnel_board(conn: sqlite3.Connection, funnel_id: int) -> dict | None:
                 "stage_id": s["stage_id"],
                 "name": s["name"],
                 "position": s["position"],
+                "is_won": bool(s["is_won"]),
                 "people": people_by_stage.get(s["stage_id"], []),
             }
             for s in stages

@@ -22,7 +22,7 @@ PROMPT = ("Run the LyteKeepr autopilot: call autopilot_queue and follow the inst
           "with the tools it names. Do not ask me anything and do not send any email; whatever needs me waits in LyteKeepr. "
           "If there is nothing to do, stop.")
 DOES = ("Today: new emails and messages are read for interested people, messages waiting for your answer, and promises with deadlines; "
-        "a brief before each meeting with a contact; and after a recorded call the summary and a follow-up email draft (a \"want to reschedule?\" draft after a no-show).")
+        "a welcome email draft and onboarding reminders when a deal is won; a brief before each meeting with a contact; and after a recorded call the summary and a follow-up email draft (a \"want to reschedule?\" draft after a no-show).")
 INSTRUCTIONS = {
     "meetings_needing_brief": "For each meeting: read get_contact and get_contact_history for its contacts (and get_meeting_notes), then write a short brief "
                               "(who they are, where things stand, the last conversations, open questions, what to aim for in this meeting). Save with save_meeting_brief.",
@@ -101,8 +101,9 @@ def queue() -> dict:
     from . import calls, users
     now = store.now_local()
     admin = users.is_admin()
-    from . import inbox_watch
-    out = {"instructions": {**INSTRUCTIONS, "new_messages": inbox_watch.INSTRUCTIONS}, "new_messages": inbox_watch.feed(), "meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [],
+    from . import inbox_watch, onboarding
+    out = {"instructions": {**INSTRUCTIONS, "new_messages": inbox_watch.INSTRUCTIONS, "newly_won": onboarding.INSTRUCTIONS},
+           "new_messages": inbox_watch.feed(), "newly_won": onboarding.newly_won(), "meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [],
            "needing_followup_draft": [], "waiting_for_recording": [], "asked_what_happened": []}
     with store._conn() as conn:
         meeting_notes._ready(conn)
@@ -211,13 +212,18 @@ def save_draft(subject: str, body: str, call_id=None, item_id=None) -> dict:
     pid, email, name = _first_email(pids)
     if not email:
         raise AutopilotError("No contact with an email address on that meeting.")
+    return store_draft(ref, kind, pid, email, name, title, subject, body)
+
+
+def store_draft(ref: str, kind: str, pid, email: str, name: str, title: str, subject: str, body: str) -> dict:
+    """Keep a draft for Home (never sent). A newer draft for the same thing replaces an unread one."""
     try:
         from . import profile
         subject, body = profile.sign(subject or ""), profile.sign(body)
     except Exception:
         pass
     with _conn() as conn:
-        conn.execute("DELETE FROM autopilot_drafts WHERE ref = ? AND state = 'waiting'", (ref,))      # a newer draft replaces an unread one
+        conn.execute("DELETE FROM autopilot_drafts WHERE ref = ? AND state = 'waiting'", (ref,))
         did = conn.execute("""INSERT INTO autopilot_drafts (ref, kind, who, person_id, to_email, title, subject, body, created_at)
                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                            (ref, kind, meeting_notes._me(), pid, email, title, (subject or "").strip() or "Following up", body.strip(),

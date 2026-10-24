@@ -131,7 +131,7 @@ import re
 
 _PERSON_PATHS = (re.compile(r"^/api/crm/people/(\d+)(/.*)?$"), re.compile(r"^/api/calendar/contacts/(\d+)(/.*)?$"), re.compile(r"^/api/calendar/people/(\d+)(/.*)?$"))
 _FUNNEL_PATH = re.compile(r"^/api/crm/funnels/(\d+)/(board|delete|stages)$")
-_STRUCTURE_PATHS = (re.compile(r"^/api/crm/funnels/\d+/stages$"), re.compile(r"^/api/crm/funnels/stages/\d+/(rename|move-position|delete)$"))
+_STRUCTURE_PATHS = (re.compile(r"^/api/crm/funnels/\d+/stages$"), re.compile(r"^/api/crm/funnels/stages/\d+/(rename|move-position|delete|won)$"))
 _FUNNEL_BRAND_PATH = re.compile(r"^/api/crm/funnels/\d+/brand$")
 _LEAD_PATH = re.compile(r"^/api/calendar/leads/(\d+)$")
 _EVENT_PATH = re.compile(r"^/api/calendar/events/(\d+)(/.*)?$")

@@ -35,7 +35,7 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 | # | Feature | Need | Type | Status | Rating |
 |---|---|---|---|---|---|
 | P1 | Neglected lead detection | 9/10 | Plain code (always on) | Gone quiet on Home: funnel contacts with no contact for 14/30/60/90 days, with Not now; Claude tools contacts_gone_quiet and snooze_quiet_contact. Lead follow-up tasks are automatic too | 9 |
-| P2 | New-customer onboarding | 7/10 | Scheduled (Claude) | Not built. Funnels have no "won / closed" stage yet, which it needs first | 1 |
+| P2 | New-customer onboarding | 7/10 | Scheduled (Claude) | Built 2026-10-24: a funnel stage can be marked Won (Edit stages → Won?, or Claude's set_stage_won). Each autopilot run notices contacts who arrived in a Won stage (people already there when it was marked don't count) and Claude saves a welcome email draft (waits on Home, never sent) plus onboarding reminders (tasks) through save_onboarding | 8 |
 | P5 | Post-meeting processing | 8/10 | Scheduled (Claude) | Fathom pulls the recording. The scheduled run writes the call summary (shown on the call and in the contact's history) and a follow-up draft, plus a reschedule draft after a no-show. Drafts wait on Home and are never sent on their own | 9 |
 | P7 | Automatic meeting preparation | 8/10 | Scheduled (Claude) | The scheduled run writes a brief for each meeting with a contact in the next 26 hours, shown on Home and on the meeting | 9 |
 | P8 | Customer information capture | 7/10 | Client-requested | The Claude app takes the voice note or business-card photo itself and calls create_contact / add_contact_note, which exist. Not tested end to end yet | 6 |
@@ -50,7 +50,7 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 1. **Done 2026-10-24: Gone quiet (P1 + #8).** A "last contact" date per contact from every source. Home chip, Not now, and Claude tools.
 2. **Done 2026-10-24: Meetings on autopilot (P7 + P5).** The scheduled queue, briefs, call summaries, follow-up and no-show drafts, and the single setup prompt (Settings, plus the phone's clock circle).
 3. **Done 2026-10-24: New messages on autopilot (#11 + #12).** Both read the same feed: new incoming emails and messages (and new transcripts) since the last run. The queue hands Claude the new items; Claude saves only clear flags (interested, waiting for an answer, a commitment with its deadline) through save tools; Home shows a short list with Dismiss. This replaces our AI in promises.py. Precision first: no newsletters, spam or casual remarks, and no duplicates.
-4. **Won deals and onboarding (P2).** A "won" mark on funnel stages, then the scheduled run finds newly won contacts and saves a welcome email draft and onboarding reminders.
+4. **Done 2026-10-24: Won deals and onboarding (P2).** A "won" mark on funnel stages, then the scheduled run finds newly won contacts and saves a welcome email draft and onboarding reminders.
 5. **Tier gating.** Free vs paid per workspace; the queue and the tools respect it.
 6. **Capture test (P8).** Test in the Claude app: a voice note and a business-card photo become a contact and a note. Fix anything the test shows.
 7. **Company records (#9, #10).** A company record and page with its people, opportunities and history, plus Claude tools.

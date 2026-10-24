@@ -119,8 +119,8 @@
 .crm-msg-view.on { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(17,25,35,.12); }
 .crm-msg-chan { border: none; cursor: pointer; margin-right: 0; font-size: 11px; padding: 5px 9px; } .crm-msg-chan.off { opacity: .45; text-decoration: line-through; }
 .crm-msg-group-head { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; font-size: 12px; color: var(--ink-soft); }
-.lks-stages-modal { width: min(560px, 94vw); }
-.lks-stage-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; } .lks-stage-row input { flex: 1; min-width: 0; }
+.lks-stages-modal { width: min(660px, 96vw); max-width: 660px; box-sizing: border-box; } .lks-stages-modal #crmStagesList { width: 100%; }
+.lks-stage-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; } .lks-stage-row button { flex: none; } .lks-stage-row input { flex: 1; min-width: 0; }
 .lks-stage-add { display: flex; gap: 8px; margin: 12px 0; } .lks-stage-add input { flex: 1; }
 /* funnel header: the buttons sit together on the right */
 .crm-funnel-board-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

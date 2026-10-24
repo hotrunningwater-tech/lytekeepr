@@ -40,6 +40,8 @@ def register(app):
     autopilot.register(app)
     from . import inbox_watch
     inbox_watch.register(app)
+    from . import onboarding
+    onboarding.register(app)
     from . import quiet
     quiet.register(app)
     from . import goals

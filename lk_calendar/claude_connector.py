@@ -242,6 +242,16 @@ TOOLS = [
          "follow_ups": {"type": "array", "items": {"type": "object", "properties": {
              "contact_id": {"type": "integer"}, "date": {"type": "string"}, "quote": {"type": "string"}}, "required": ["contact_id", "date"]}}},
          "required": ["reviewed"]}},
+    {"name": "save_onboarding", "title": "Save onboarding",
+     "description": "For a newly won contact (autopilot_queue newly_won): a welcome email draft (NOT sent; it waits on Home) and onboarding reminders for the user. "
+                    "Body without a subject line, signed 'Best,' and [Your Name]. Leave subject/body empty when the contact has no email.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"},
+                                                      "reminders": {"type": "array", "items": {"type": "object", "properties": {
+                                                          "title": {"type": "string"}, "days_from_now": {"type": "integer", "minimum": 0, "maximum": 180}},
+                                                          "required": ["title"]}}}, "required": ["contact_id"]}},
+    {"name": "set_stage_won", "title": "Mark a funnel stage as Won",
+     "description": "Mark (or unmark) a funnel stage as the won-deal stage; reaching it starts onboarding on the next autopilot run. People already in it are treated as existing customers. Admin only. stage_id from get_funnel.",
+     "inputSchema": {"type": "object", "properties": {"stage_id": {"type": "integer"}, "won": {"type": "boolean", "default": True}}, "required": ["stage_id"]}},
     {"name": "save_meeting_brief", "title": "Save meeting brief",
      "description": "Save the brief for an upcoming meeting (autopilot). Replaces an earlier brief; never touches the user's own notes; never sent to Google or guests.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["item_id", "text"]}},
@@ -621,6 +631,10 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", "/api/calendar/autopilot/queue"))
     if name == "save_message_review":
         return need(*call("POST", "/api/calendar/inbox/review", {k: args.get(k) or [] for k in ("reviewed", "flags", "follow_ups")}))
+    if name == "save_onboarding":
+        return need(*call("POST", "/api/calendar/autopilot/onboarding", {k: args.get(k) for k in ("contact_id", "subject", "body", "reminders")}))
+    if name == "set_stage_won":
+        return need(*call("POST", f"/api/crm/funnels/stages/{int(args['stage_id'])}/won", {"won": args.get("won", True) is not False}))
     if name == "save_meeting_brief":
         return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/brief", {"text": args.get("text", "")}))
     if name == "save_call_summary":
