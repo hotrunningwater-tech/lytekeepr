@@ -557,6 +557,17 @@ TOOLS = [
 ]
 
 
+for _t in TOOLS:                                       # a tool that changes something says so by leaving "read" out
+    _t.setdefault("read", False)
+
+
+def tool_list() -> list:
+    """What Claude gets for tools/list (one bad tool here hides every tool, so tests build it too)."""
+    return [{"name": t["name"], "title": t["title"], "description": t["description"], "inputSchema": t["inputSchema"],
+             "annotations": {"title": t["title"], "readOnlyHint": bool(t.get("read")), "destructiveHint": bool(t.get("destructive")), "openWorldHint": False}}
+            for t in TOOLS]
+
+
 def _run_tool(call, name: str, args: dict):
     """call(method, path, body) -> (status, json). Returns what Claude gets back."""
     def need(status, data):
@@ -1166,9 +1177,7 @@ def register(app):
         if method == "ping":
             return ok({})
         if method == "tools/list":
-            return ok({"tools": [{"name": t["name"], "title": t["title"], "description": t["description"], "inputSchema": t["inputSchema"],
-                                  "annotations": {"title": t["title"], "readOnlyHint": t["read"], "destructiveHint": bool(t.get("destructive")), "openWorldHint": False}}
-                                 for t in TOOLS]})
+            return ok({"tools": tool_list()})
         if method == "tools/call":
             name, args = params.get("name", ""), params.get("arguments") or {}
             if name not in {t["name"] for t in TOOLS}:
@@ -1176,7 +1185,7 @@ def register(app):
             try:
                 result = _run_tool(_caller(owner), name, args)
                 text = json.dumps(result, ensure_ascii=False, default=str)
-                if not next(t for t in TOOLS if t["name"] == name)["read"]:
+                if not next(t for t in TOOLS if t["name"] == name).get("read"):
                     _log_change(owner, name, args)
                 return ok({"content": [{"type": "text", "text": text[:200000]}], "isError": False})
             except (ValueError, KeyError, TypeError) as exc:
