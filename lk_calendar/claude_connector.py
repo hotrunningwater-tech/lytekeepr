@@ -281,7 +281,9 @@ TOOLS = [
                                                       "done": {"type": "boolean", "default": True}}, "required": ["task_id", "date"]}, "read": False},
     # --- added for everyday phone use: the same actions the three LyteKeepr AI chats have ---
     {"name": "create_contact", "title": "Add a contact",
-     "description": "Add a new contact (someone you just met or talked to). An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'.",
+     "description": "Add a new contact (someone you just met or talked to). An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'. "
+                    "From a business card photo or a voice note: read name, job title, company, email, phone and links, call search_contacts first (no duplicates; "
+                    "update_contact if they exist), show the user what you read, and save after they confirm. Anything else said goes in notes.",
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string", "description": "The person's name; leave empty if only a handle is known"},
                                                       "company": {"type": "string"}, "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
                                                       "instagram": {"type": "string", "description": "Instagram handle like @name (or the instagram.com link)"},
