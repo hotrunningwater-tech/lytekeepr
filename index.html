@@ -33,7 +33,7 @@
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
 <link rel="stylesheet" href="styles.css?v=49">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
-<link rel="stylesheet" href="lk-calendar/settings.css?v=team9">
+<link rel="stylesheet" href="lk-calendar/settings.css?v=team10">
 </head>
 <body>
 
@@ -1277,6 +1277,13 @@
         anotherBtn.textContent = '+ Another contact';
         anotherBtn.addEventListener('click', function () { window.lkContacts.anotherContact(co.company_id); });
         card.appendChild(anotherBtn);
+        var openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'subtle-link-btn';
+        openBtn.textContent = 'Open company';
+        openBtn.style.marginLeft = '14px';
+        openBtn.addEventListener('click', function () { openCompanyOverview(co.company_id); });
+        card.appendChild(openBtn);
 
         toggle.addEventListener('click', function () {
           peopleList.hidden = !peopleList.hidden;
@@ -1284,6 +1291,49 @@
 
         container.appendChild(card);
       });
+    }
+
+    // One company at a glance: its notes, people, opportunities and the recent history of everyone there (the same data Claude's get_company reads)
+    function openCompanyOverview(companyId) {
+      var back = document.createElement('div'); back.className = 'confirm-backdrop';
+      var box = document.createElement('div'); box.className = 'confirm-modal lks-company-modal'; box.setAttribute('role', 'dialog');
+      box.innerHTML = '<p class="crm-empty">Loading…</p>';
+      back.appendChild(box); document.body.appendChild(back);
+      function close() { back.remove(); document.removeEventListener('keydown', esc); }
+      function esc(ev) { if (ev.key === 'Escape') close(); }
+      document.addEventListener('keydown', esc);
+      back.addEventListener('click', function (ev) { if (ev.target === back) close(); });
+      function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+      function section(title, kids) { var sct = el('div', 'lks-co-section'); sct.appendChild(el('span', 'block-label', title)); kids.forEach(function (k) { sct.appendChild(k); }); return sct; }
+      fetch('/api/calendar/companies/' + companyId + '/overview').then(function (r) { return r.json(); }).then(function (co) {
+        box.innerHTML = '';
+        if (co.error) { box.appendChild(el('p', 'crm-empty', co.error)); return; }
+        var head = el('div', 'lks-co-head'); head.appendChild(el('h2', '', co.name));
+        var x = el('button', 'btn btn-secondary btn-small', 'Close'); x.type = 'button'; x.addEventListener('click', close); head.appendChild(x);
+        box.appendChild(head);
+        if (co.website) { var a = el('a', 'lks-co-site', co.website); a.href = /^https?:/.test(co.website) ? co.website : 'https://' + co.website; a.target = '_blank'; a.rel = 'noopener'; box.appendChild(a); }
+        var notes = el('textarea', 'demo-reset-input lks-co-notes'); notes.value = co.notes || ''; notes.placeholder = 'Notes about this company';
+        var saveNotes = el('button', 'btn btn-secondary btn-small', 'Save notes'); saveNotes.type = 'button';
+        saveNotes.addEventListener('click', function () {
+          saveNotes.textContent = 'Saving…';
+          fetch('/api/calendar/companies/' + companyId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: co.name, website: co.website || '', notes: notes.value }) })
+            .then(function (r) { return r.json(); }).then(function (d) { saveNotes.textContent = d.error ? d.error : 'Saved'; });
+        });
+        box.appendChild(section('Notes', [notes, saveNotes]));
+        box.appendChild(section('People · ' + co.people.length, co.people.length ? co.people.map(function (p) {
+          var b = el('button', 'subtle-link-btn lks-co-person', p.name + (p.title ? ' · ' + p.title : '') + (p.stage ? ' · ' + p.funnel + ' — ' + p.stage : ''));
+          b.type = 'button'; b.addEventListener('click', function () { close(); openCrmPersonDetail(p.contact_id); }); return b;
+        }) : [el('p', 'crm-empty', 'Nobody you can see.')]));
+        box.appendChild(section('Opportunities · ' + co.opportunities.length, co.opportunities.length ? co.opportunities.map(function (o) {
+          return el('div', 'lks-co-line', o.name + ' · ' + o.funnel + ' — ' + o.stage + (o.people.length ? ' · ' + o.people.join(', ') : ''));
+        }) : [el('p', 'crm-empty', 'None yet.')]));
+        box.appendChild(section('Recent history', co.history.length ? co.history.map(function (m) {
+          var line = el('div', 'lks-co-hist');
+          line.appendChild(el('span', 'lks-co-when', formatCrmTimestamp(m.when) + ' · ' + m.channel + (m.contacts.length ? ' · ' + m.contacts.join(', ') : '')));
+          if (m.text) line.appendChild(el('span', 'lks-co-text', m.text));
+          return line;
+        }) : [el('p', 'crm-empty', 'Nothing yet.')]));
+      }).catch(function () { box.innerHTML = '<p class="crm-empty">Could not load the company.</p>'; });
     }
 
     function renderCrmPeople(container, noAlso) {

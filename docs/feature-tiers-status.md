@@ -25,8 +25,8 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 | 6 | Conversation and transcript summaries | Client-requested | Calls, email threads, meeting notes | 9 |
 | 7 | Meeting preparation | Client-requested | Agenda with guests, contact history, private notes, agenda into the Google event | 9 |
 | 8 | Customer and deal analysis | Client-requested | Claude analyzes on request. "Not contacted recently" is built: the contacts_gone_quiet tool (by days and funnel) | 8 |
-| 9 | Contact creation and organization | Client-requested | Contacts, company as a field, brands, funnels. Missing: a company record or page | 8 |
-| 10 | Basic CRM management | Client-requested | Contacts, funnels, notes, tasks, reminders. Companies have the same gap as #9 | 9 |
+| 9 | Contact creation and organization | Client-requested | Contacts, companies (record with name, website, notes), brands, funnels. Added 2026-10-24: Claude tools find_companies, get_company, update_company (notes need approval), and Open company in the CRM (people, opportunities, recent history, notes) | 9 |
+| 10 | Basic CRM management | Client-requested | Contacts, companies, funnels, notes, tasks, reminders | 9 |
 | 11 | Unanswered emails and potential customers | Scheduled (Claude) | Built 2026-10-24: the queue's new_messages feed (emails and messages from contacts, Primary-inbox emails from new senders minus automated ones, new transcripts; last 3 days, 40 a run). Claude saves only clear flags (interested, waiting for your answer) through save_message_review. Home: "From messages", with Add contact and Dismiss. A waiting flag closes itself once you reply. Admin's mailbox only. Needs tuning on real mail | 8 |
 | 12 | Business commitments and promises | Scheduled (Claude) | Built 2026-10-24: the same run flags clear promises and deadlines (ours or theirs, with the due date) from messages and call transcripts, and moves a lead's follow-up to a time they gave. promises.py no longer calls our AI. Home: Done / Dismiss. Needs tuning on real mail | 8 |
 
@@ -53,7 +53,7 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 4. **Done 2026-10-24: Won deals and onboarding (P2).** A "won" mark on funnel stages, then the scheduled run finds newly won contacts and saves a welcome email draft and onboarding reminders.
 5. **Tier gating.** Free vs paid per workspace; the queue and the tools respect it.
 6. **Capture test (P8).** Test in the Claude app: a voice note and a business-card photo become a contact and a note. Fix anything the test shows.
-7. **Company records (#9, #10).** A company record and page with its people, opportunities and history, plus Claude tools.
+7. **Done 2026-10-24: Company records (#9, #10).** The company record already existed; added the company view (people, opportunities, recent history, notes) and Claude tools.
 8. **Free-text email search (#3).** Search all synced Gmail by words, not only by a contact's address.
 
 Update a row whenever a feature is built.

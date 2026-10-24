@@ -306,3 +306,9 @@ input.email-draft-subject { flex: 1; min-width: 0; border: 1px solid rgba(127,16
 .lks-chipbtn { border: none; background: rgba(230,237,240,.9); color: var(--ink-soft); border-radius: 999px; padding: 5px 12px; font-family: var(--font-heading); font-size: 12px; font-weight: 600; cursor: pointer; }
 .lks-chipbtn.on { background: var(--teal); color: #fff; }
 .lks-prompt { flex: 1; min-width: 0; resize: vertical; font: inherit; font-size: 13px; line-height: 1.45; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(127, 168, 184, 0.35); background: rgba(127, 168, 184, 0.08); color: var(--ink, #29434E); }
+.lks-company-modal { max-width: 720px; width: min(720px, 96vw); max-height: 86vh; overflow-y: auto; text-align: left; align-items: stretch; box-sizing: border-box; gap: 14px; }
+.lks-co-head { display: flex; align-items: center; gap: 12px; } .lks-co-head h2 { margin: 0; flex: 1; }
+.lks-co-section { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; } .lks-co-section > .block-label { margin: 0; }
+.lks-co-notes { width: 100%; min-height: 70px; resize: vertical; box-sizing: border-box; font: inherit; }
+.lks-co-line, .lks-co-hist { font-size: 13.5px; color: var(--ink); } .lks-co-hist { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px solid rgba(41, 67, 78, 0.08); width: 100%; }
+.lks-co-when { font-size: 11.5px; color: var(--ink-soft); } .lks-co-text { white-space: pre-wrap; overflow-wrap: anywhere; } .lks-co-site { font-size: 13px; }

@@ -135,7 +135,7 @@ _STRUCTURE_PATHS = (re.compile(r"^/api/crm/funnels/\d+/stages$"), re.compile(r"^
 _FUNNEL_BRAND_PATH = re.compile(r"^/api/crm/funnels/\d+/brand$")
 _LEAD_PATH = re.compile(r"^/api/calendar/leads/(\d+)$")
 _EVENT_PATH = re.compile(r"^/api/calendar/events/(\d+)(/.*)?$")
-_COMPANY_PATH = re.compile(r"^/api/calendar/companies/(\d+)$")
+_COMPANY_PATH = re.compile(r"^/api/calendar/companies/(\d+)(/overview)?$")
 
 
 def lead_person(lead_id):

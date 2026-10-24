@@ -174,7 +174,7 @@ def _strip_google(items: list) -> list:
 
 
 # Tools that save text the user dictated (speech-to-text: typos, repeats, corrections on the fly). The text must be cleaned up, shown and approved first.
-CONFIRM_TEXT_TOOLS = {"doc_create": "content", "doc_write": "text", "tab_create": "content", "add_contact_note": "text", "log_conversation": "text",
+CONFIRM_TEXT_TOOLS = {"update_company": "add_note", "doc_create": "content", "doc_write": "text", "tab_create": "content", "add_contact_note": "text", "log_conversation": "text",
                       "write_meeting_notes": "text", "edit_contact_record": "text", "set_meeting_agenda": "text", "update_contact": "add_note", "reply_email": "text"}
 CONFIRM_RULE = ("BEFORE SAVING: the user dictates by voice, with typos, repeated words and corrections on the fly. First write the cleaned-up text "
                 "(typos fixed, repeats removed, their corrections applied, their meaning and wording kept, nothing invented), show it in the chat, "
@@ -449,6 +449,18 @@ TOOLS = [
      "description": "Delete a folder. One with folders or documents inside is refused unless with_contents=true, which the user must confirm first.",
      "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "with_contents": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
     # --- notes and the communication history (calls, meetings and conversations logged by hand next to messages, emails and recordings) ---
+    {"name": "find_companies", "title": "Find companies",
+     "description": "Companies in LyteKeepr by name (empty lists them). Returns company_id, name, website and how many contacts.",
+     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}, "read": True},
+    {"name": "get_company", "title": "Company overview",
+     "description": "One company: name, website, notes, its people (with funnel and stage), its opportunities, and the recent history of everyone there (newest first).",
+     "inputSchema": {"type": "object", "properties": {"company_id": {"type": "integer"}}, "required": ["company_id"]}, "read": True},
+    {"name": "update_company", "title": "Update a company",
+     "description": CONFIRM_RULE + " (This applies to add_note.) " + "Change a company's name or website, or add a note to it (added at the end, nothing is replaced). To put a contact in a company, use update_contact with company.",
+     "inputSchema": {"type": "object", "properties": {"company_id": {"type": "integer"}, "name": {"type": "string"}, "website": {"type": "string"},
+                                                      "add_note": {"type": "string"},
+                                                      "user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}},
+                     "required": ["company_id"]}},
     {"name": "add_contact_note", "title": "Add a note to a contact",
      "description": (CONFIRM_RULE + " " + "A general note about a contact (not a conversation), dated and kept with them, e.g. 'prefers mornings', 'decides with her partner'. "
                      "For something that was said in a call, meeting or talk, use log_conversation instead."),
@@ -631,6 +643,19 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", "/api/calendar/autopilot/queue"))
     if name == "save_message_review":
         return need(*call("POST", "/api/calendar/inbox/review", {k: args.get(k) or [] for k in ("reviewed", "flags", "follow_ups")}))
+    if name == "find_companies":
+        rows = need(*call("GET", "/api/calendar/companies?q=" + urllib.parse.quote(str(args.get("query") or ""))))["companies"]
+        return [{"company_id": r["id"], "name": r["name"], "website": r.get("website") or "", "contacts": r.get("contacts", 0)} for r in rows[:50]]
+    if name == "get_company":
+        return need(*call("GET", f"/api/calendar/companies/{int(args['company_id'])}/overview"))
+    if name == "update_company":
+        cur = need(*call("GET", f"/api/calendar/companies/{int(args['company_id'])}"))
+        notes = cur.get("notes") or ""
+        if str(args.get("add_note") or "").strip():
+            notes = (notes.rstrip() + "\n\n" if notes.strip() else "") + str(args["add_note"]).strip()
+        body = {"name": args.get("name") or cur.get("name"), "website": args["website"] if args.get("website") is not None else (cur.get("website") or ""), "notes": notes}
+        out = need(*call("PUT", f"/api/calendar/companies/{int(args['company_id'])}", body))
+        return {"company_id": out.get("id"), "name": out.get("name"), "website": out.get("website"), "notes": out.get("notes")}
     if name == "save_onboarding":
         return need(*call("POST", "/api/calendar/autopilot/onboarding", {k: args.get(k) for k in ("contact_id", "subject", "body", "reminders")}))
     if name == "set_stage_won":
