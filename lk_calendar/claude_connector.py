@@ -304,9 +304,19 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "stage": {"type": "string"}, "funnel_id": {"type": "integer"}},
                      "required": ["contact_id", "stage"]}, "read": False},
     {"name": "set_outreach_status", "title": "Set outreach status",
-     "description": "Set where outreach to a contact stands on a channel (linkedin, instagram or email); this re-plans their follow-up and can move their funnel card forward (never back). Use one of the options get_contact lists for that channel under outreach (e.g. 'email sent', 'replied', 'call booked').",
+     "description": "Set where outreach to a contact stands on a channel (linkedin, instagram or email); it can move their funnel card forward (never back). Use one of the options get_contact lists for that channel under outreach (e.g. 'email sent', 'replied', 'call booked'). "
+                    "When the status is a send (a DM, message, email or connection request sent), ASK the user first: 'Follow up in 3 days, in another number of days, or no follow-up?' "
+                    "and pass their answer as follow_up_days (3, their number, or 0). Never decide it yourself. If the answer says asks_follow_up, ask and call again with the same status and follow_up_days.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "channel": {"type": "string", "enum": ["linkedin", "instagram", "email"]},
-                                                      "status": {"type": "string"}}, "required": ["contact_id", "channel", "status"]}, "read": False},
+                                                      "status": {"type": "string"},
+                                                      "follow_up_days": {"type": "integer", "minimum": 0, "maximum": 365, "description": "After a send: days until the follow-up, 0 = none"}},
+                     "required": ["contact_id", "channel", "status"]}, "read": False},
+    {"name": "clear_follow_ups", "title": "Clear follow-ups", "destructive": True,
+     "description": "Mark open outreach follow-ups done in bulk, to clean up a pile: filter by channel, brand, how overdue (older_than_days) or contact. "
+                    "ALWAYS call with preview=true first, tell the user how many and which, and clear (preview=false) only after they say yes. 'Reply to' tasks are left alone unless include_replies.",
+     "inputSchema": {"type": "object", "properties": {"channel": {"type": "string", "enum": ["linkedin", "instagram", "email"]}, "brand": {"type": "string"},
+                                                      "older_than_days": {"type": "integer", "minimum": 0}, "contact_id": {"type": "integer"},
+                                                      "include_replies": {"type": "boolean"}, "preview": {"type": "boolean", "default": True}}}},
     {"name": "set_follow_up_date", "title": "Set follow-up date", "description": "Move the outreach follow-up for a contact to a date. The lead_id per channel is in get_contact under outreach (set_outreach_status creates one if missing).",
      "inputSchema": {"type": "object", "properties": {"lead_ids": {"type": "array", "items": {"type": "integer"}}, "date": {"type": "string", "description": "YYYY-MM-DD"}},
                      "required": ["lead_ids", "date"]}, "read": False},
@@ -729,7 +739,16 @@ def _run_tool(call, name: str, args: dict):
         need(*call("POST", "/api/crm/funnels/stages/move", {"person_id": pid, "stage_id": match[0]["stage_id"]}))
         return {"ok": True, "contact_id": pid, "stage": match[0]["name"]}
     if name == "set_outreach_status":
-        return need(*call("POST", f"/api/calendar/people/{int(args['contact_id'])}/outreach", {"channel": args["channel"], "status": args["status"]}))
+        body = {"channel": args["channel"], "status": args["status"]}
+        if args.get("follow_up_days") is not None:
+            body["follow_up_days"] = int(args["follow_up_days"])
+        return need(*call("POST", f"/api/calendar/people/{int(args['contact_id'])}/outreach", body))
+    if name == "clear_follow_ups":
+        body = {k: args.get(k) for k in ("channel", "brand", "older_than_days", "contact_id", "include_replies")}
+        body["preview"] = args.get("preview", True) is not False
+        if body["brand"]:
+            body["brand"] = _brand_key(call, need, body["brand"])
+        return need(*call("POST", "/api/calendar/follow-ups/clear", body))
     if name == "set_follow_up_date":
         return [need(*call("PUT", f"/api/calendar/leads/{int(i)}", {"follow_up_date": args["date"]})) for i in args["lead_ids"]]
     if name == "update_calendar_item":

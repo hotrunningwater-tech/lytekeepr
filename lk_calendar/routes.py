@@ -151,8 +151,19 @@ def update_lead(lead_id):
     if data.get("follow_up_date") and not data.get("status"):          # only the next follow-up date (used by the Claude connector)
         lead = leads.set_follow_up(lead_id, str(data["follow_up_date"]))
         return (jsonify({"ok": True, "lead_id": lead_id, "follow_up_date": str(data["follow_up_date"])}), 200) if lead else (jsonify({"error": "not found"}), 404)
-    lead = leads.set_status(lead_id, str(data.get("status", "")))
+    if data.get("follow_up_days") is not None and not data.get("status"):      # the answer to "Follow up?" after a send
+        lead = leads.choose_follow_up(lead_id, int(data["follow_up_days"]))
+        return (jsonify({"ok": True, "lead_id": lead_id, "follow_up_days": int(data["follow_up_days"])}), 200) if lead else (jsonify({"error": "not found"}), 404)
+    lead = leads.set_status(lead_id, str(data.get("status", "")), follow_up_days=data.get("follow_up_days"))
     return (jsonify(lead), 200) if lead else (jsonify({"error": "not found"}), 404)
+
+
+@bp.post("/api/calendar/follow-ups/clear")
+def follow_ups_clear():
+    d = _payload()
+    return jsonify(leads.clear_follow_ups(d.get("channel") or None, d.get("brand") or None,
+                                          d.get("older_than_days") if d.get("older_than_days") not in (None, "") else None,
+                                          d.get("contact_id") or None, bool(d.get("include_replies")), d.get("preview", True) is not False))
 
 
 @bp.get("/api/calendar/people/<int:person_id>/outreach")
@@ -163,7 +174,7 @@ def person_outreach(person_id):
 @bp.post("/api/calendar/people/<int:person_id>/outreach")
 def person_outreach_set(person_id):
     data = _payload()
-    return jsonify(contacts.set_outreach(person_id, str(data.get("channel", "")), str(data.get("status", ""))))
+    return jsonify(contacts.set_outreach(person_id, str(data.get("channel", "")), str(data.get("status", "")), data.get("follow_up_days")))
 
 
 @bp.get("/api/calendar/profile")

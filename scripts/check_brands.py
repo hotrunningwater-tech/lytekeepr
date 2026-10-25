@@ -65,7 +65,7 @@ def main():
     for pid, f in ((n1, NF), (a1, AF), (p1, PF)):
         a.post("/api/crm/funnels/move", json={"person_ids": [pid], "funnel_id": f})
     for pid in (n1, a1):
-        a.post(f"/api/calendar/people/{pid}/outreach", json={"channel": "email", "status": "email sent"})
+        a.post(f"/api/calendar/people/{pid}/outreach", json={"channel": "email", "status": "email sent", "follow_up_days": 3})      # a send makes a follow-up only when asked
     opp = a.post("/api/crm/opportunities", json={"name": "Nexy deal", "funnel_id": NF}).get_json()["opportunity_id"]
     for pid in (n1, a1, u1):
         a.post(f"/api/crm/opportunities/{opp}/participants", json={"contact_id": pid})

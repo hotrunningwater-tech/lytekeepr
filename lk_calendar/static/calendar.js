@@ -575,12 +575,19 @@
     ])];
   }
 
+  function setLeadStatus(leadId, status) {          // a send asks "Follow up?" before any follow-up is made
+    api('PUT', '/api/calendar/leads/' + leadId, { status: status }).then(function (r) {
+      load();
+      if (r && r.asks_follow_up && window.lkContacts && window.lkContacts.askFollowUp) window.lkContacts.askFollowUp(leadId, load);
+    });
+  }
+
   function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : ''; }
 
   function memberRow(m) {
     var lead = m.lead, next = (NEXT_STEPS[lead.channel] || {})[lead.status] || [], url = safeUrl(lead.url);
     var buttons = next.map(function (step) {
-      return h('button', { class: 'btn', type: 'button', onclick: function () { api('PUT', '/api/calendar/leads/' + lead.id, { status: step[0] }).then(load); } }, step[1]);
+      return h('button', { class: 'btn', type: 'button', onclick: function () { setLeadStatus(lead.id, step[0]); } }, step[1]);
     });
     buttons.push(h('button', { class: 'btn', type: 'button', onclick: function () {
       api('POST', '/api/calendar/events/' + m.id + '/done', { date: m.date, done: true }).then(load);
@@ -647,9 +654,7 @@
       lead.notes ? h('span', { class: 'lkc-leadmeta' }, lead.notes) : null,
       safeUrl ? h('a', { href: safeUrl, target: '_blank', rel: 'noopener noreferrer', class: 'lkc-leadlink' }, 'Open profile') : null,
       next.length ? h('div', { class: 'lkc-actions', style: 'margin-top:8px' }, next.map(function (step) {
-        return h('button', { class: 'btn', type: 'button', onclick: function () {
-          api('PUT', '/api/calendar/leads/' + lead.id, { status: step[0] }).then(load);
-        } }, step[1]);
+        return h('button', { class: 'btn', type: 'button', onclick: function () { setLeadStatus(lead.id, step[0]); } }, step[1]);
       })) : null
     ]);
   }

@@ -216,6 +216,10 @@ def apply_rules(conn, lead: dict) -> str | None:
     ref = f"lead:{lead['id']}"
     existing = conn.execute("SELECT * FROM events WHERE lead_ref = ? AND source = 'auto'", (ref,)).fetchone()
     bucket = store.bucket_for(conn, lead["channel"], lead["status"])
+    if bucket == "cold" and not lead.get("follow_up_date"):
+        # a follow-up after a send is made only when the user asks for one (set_status follow_up_days, or choose_follow_up),
+        # so they don't pile up on their own; one already there stays as it is until it is done or cleared
+        return None
     if bucket in ("cold", "warm", "task"):
         fields = store.clean(_reminder_fields(lead, bucket, conn))
         if not existing:
@@ -339,8 +343,10 @@ def _log(conn, batch: str, lead: dict, new_status: str, kind: str, old_event_dat
                   store.now_local().isoformat(), kind, old_event_date))
 
 
-def set_status(lead_id: int, status_text: str, batch: str | None = None) -> dict | None:
-    """Set a lead's status (any status, any time), dated today. Logged so it can be undone."""
+def set_status(lead_id: int, status_text: str, batch: str | None = None, follow_up_days=None) -> dict | None:
+    """Set a lead's status (any status, any time), dated today. Logged so it can be undone.
+    A "sent" status (cold) gets a follow-up only when asked: follow_up_days N > 0 = in N days, 0 = none (an old one is removed),
+    None = not asked here (asks_follow_up tells the screen to ask)."""
     batch = batch or secrets.token_hex(4)
     with store._conn() as conn:
         row = conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
@@ -356,8 +362,64 @@ def set_status(lead_id: int, status_text: str, batch: str | None = None) -> dict
                          (status, lead["status_date"], store.now_local().isoformat(), lead_id))
             apply_rules(conn, lead)
             _after_change(conn, lead)
-        lead["status_label"] = label_for(lead["channel"], lead["status"])
-        return lead
+        cold = store.bucket_for(conn, lead["channel"], lead["status"]) == "cold"
+        lead["asks_follow_up"] = cold and follow_up_days is None
+    if cold and follow_up_days is not None:
+        choose_follow_up(lead_id, int(follow_up_days), batch)
+        lead["asks_follow_up"] = False
+    lead["status_label"] = label_for(lead["channel"], lead["status"])
+    return lead
+
+
+def clear_follow_ups(channel=None, brand=None, older_than_days=None, contact_id=None, include_replies=False, preview=True) -> dict:
+    """Clean up a pile of open outreach follow-ups: mark them done (the leads and contacts stay). preview=True only counts.
+    Only the follow-ups this person may see. 'Reply to' tasks stay unless include_replies."""
+    from . import access
+    today = store.now_local().date()
+    with store._conn() as conn:
+        rows = conn.execute("""SELECT e.*, l.channel AS lead_channel, l.person_id, l.contact FROM events e JOIN leads l ON e.lead_ref = 'lead:' || l.id
+                               WHERE e.source = 'auto' AND NOT EXISTS (SELECT 1 FROM completions c WHERE c.event_id = e.id AND c.occ_date = e.start_date)""").fetchall()
+        picked = []
+        for r in rows:
+            e = dict(r)
+            if channel and e["lead_channel"] != channel:
+                continue
+            if brand and e["project"] != brand:
+                continue
+            if contact_id and e["person_id"] != int(contact_id):
+                continue
+            if older_than_days is not None and e["start_date"] > (today - timedelta(days=int(older_than_days))).isoformat():
+                continue
+            if not include_replies and e["title"].lower().startswith("reply to"):
+                continue
+            e["lead"] = {"channel": e["lead_channel"], "person_id": e["person_id"]}
+            if not access.can_event(e):
+                continue
+            picked.append(e)
+        if not preview:
+            for e in picked:
+                conn.execute("INSERT OR IGNORE INTO completions VALUES (?, ?)", (e["id"], e["start_date"]))
+    by_channel: dict = {}
+    for e in picked:
+        by_channel[e["lead_channel"]] = by_channel.get(e["lead_channel"], 0) + 1
+    return {"preview": bool(preview), "count": len(picked), "cleared": 0 if preview else len(picked), "by_channel": by_channel,
+            "examples": [e["title"] for e in picked[:10]]}
+
+
+def choose_follow_up(lead_id: int, days: int, batch: str | None = None) -> dict | None:
+    """The answer to "Follow up?" after a send: in `days` days (from today), or 0 = no follow-up (an open one is removed)."""
+    days = max(0, min(int(days), 365))
+    if days:
+        return set_follow_up(lead_id, (store.now_local().date() + timedelta(days=days)).isoformat(), batch)
+    with store._conn() as conn:
+        row = conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        if not row:
+            return None
+        for ev in conn.execute("SELECT id FROM events WHERE lead_ref = ? AND source = 'auto'", (f"lead:{lead_id}",)).fetchall():
+            conn.execute("DELETE FROM completions WHERE event_id = ?", (ev["id"],))
+            conn.execute("DELETE FROM events WHERE id = ?", (ev["id"],))
+        conn.execute("UPDATE leads SET follow_up_date = '', updated_at = ? WHERE id = ?", (store.now_local().isoformat(), lead_id))
+        return dict(row)
 
 
 def _set_follow_up(conn, lead: dict, day: str, batch: str) -> None:

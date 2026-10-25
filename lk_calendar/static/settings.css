@@ -312,3 +312,6 @@ input.email-draft-subject { flex: 1; min-width: 0; border: 1px solid rgba(127,16
 .lks-co-notes { width: 100%; min-height: 70px; resize: vertical; box-sizing: border-box; font: inherit; }
 .lks-co-line, .lks-co-hist { font-size: 13.5px; color: var(--ink); } .lks-co-hist { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px solid rgba(41, 67, 78, 0.08); width: 100%; }
 .lks-co-when { font-size: 11.5px; color: var(--ink-soft); } .lks-co-text { white-space: pre-wrap; overflow-wrap: anywhere; } .lks-co-site { font-size: 13px; }
+.lks-fu-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.lks-fu-custom { display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+.lks-fu-days { width: 64px; padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(127, 168, 184, 0.4); font: inherit; }

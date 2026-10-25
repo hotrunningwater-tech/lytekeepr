@@ -842,7 +842,8 @@ def outreach(person_id: int) -> dict:
             lead = by_channel.get(ch)
             out.append({"channel": ch, "label": leads.CHANNELS[ch]["label"], "lead_id": lead["id"] if lead else None,
                         "status": leads.label_for(ch, lead["status"]) if lead else "", "status_date": lead["status_date"] if lead else "",
-                        "follow_up_date": lead["follow_up_date"] if lead else "", "options": leads.valid_labels(ch, conn)})
+                        "follow_up_date": lead["follow_up_date"] if lead else "", "options": leads.valid_labels(ch, conn),
+                        "asks_follow_up": [o for o in leads.valid_labels(ch, conn) if store.bucket_for(conn, ch, leads.resolve_status(ch, o, conn)) == "cold"]})
         return {"channels": out}
 
 
@@ -884,10 +885,10 @@ def _ensure_lead(person_id: int, channel: str) -> int:
                              store.now_local().isoformat(), person_id)).lastrowid
 
 
-def set_outreach(person_id: int, channel: str, status: str) -> dict:
+def set_outreach(person_id: int, channel: str, status: str, follow_up_days=None) -> dict:
     lead_id = _ensure_lead(person_id, channel)
-    result = leads.set_status(lead_id, status)
-    return {"lead_id": lead_id, "status": result["status_label"], "changed": result["changed"]}
+    result = leads.set_status(lead_id, status, follow_up_days=follow_up_days)
+    return {"lead_id": lead_id, "status": result["status_label"], "changed": result["changed"], "asks_follow_up": result.get("asks_follow_up", False)}
 
 
 def ensure_leads(person_ids: list) -> None:

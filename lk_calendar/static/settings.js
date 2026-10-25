@@ -73,23 +73,52 @@
       if (c) outreachPopout(personId, c);
     }).catch(function (e) { alert(e.message); });
   };
+  /* "Follow up?" after a send: in 3 days, in N days, or no. Nothing is created unless the user picks a number. */
+  function followUpPicker(onPick) {
+    var days = h('input', { type: 'number', min: '1', max: '365', class: 'lks-fu-days', placeholder: 'days' });
+    var picked = null, wrap = h('div', { class: 'lks-choices lks-fu' });
+    function paint() {
+      wrap.replaceChildren(
+        h('button', { type: 'button', class: 'lks-choice' + (picked === 3 ? ' on' : ''), onclick: function () { picked = 3; days.value = ''; paint(); onPick(3); } }, 'In 3 days'),
+        h('span', { class: 'lks-choice lks-fu-custom' + (picked && picked !== 3 ? ' on' : '') }, ['In ', days, ' days']),
+        h('button', { type: 'button', class: 'lks-choice' + (picked === 0 ? ' on' : ''), onclick: function () { picked = 0; days.value = ''; paint(); onPick(0); } }, 'No follow-up'));
+    }
+    days.addEventListener('input', function () { var n = parseInt(days.value, 10); picked = n > 0 ? n : null; onPick(picked); wrap.querySelectorAll('.lks-choice').forEach(function (b, i) { b.classList.toggle('on', i === 1 && picked !== null); }); });
+    paint();
+    return wrap;
+  }
+  window.lkContacts.askFollowUp = function (leadId, done) {          // used after a quick status button (calendar) set a send
+    var fu = null, err = h('p', { class: 'lks-err', hidden: true });
+    modal(h('div', { class: 'lks-card' }, [h('h2', {}, 'Follow up?'), h('p', {}, 'A follow-up task goes on Home on that day. Nothing is made unless you choose.'),
+      followUpPicker(function (n) { fu = n; err.hidden = true; }), err,
+      h('div', { class: 'lks-row' }, [h('button', { class: 'btn btn-primary', type: 'button', onclick: function () {
+        if (fu === null) { err.textContent = 'Choose a number of days, or No follow-up.'; err.hidden = false; return; }
+        api('PUT', '/api/calendar/leads/' + leadId, { follow_up_days: fu }).then(function () { closeModal(true); if (done) done(); }).catch(function (e) { err.textContent = e.message; err.hidden = false; });
+      } }, 'Save')])]));
+  };
   function outreachPopout(personId, c, box) {
-    var choice = c.status || null, err = h('p', { class: 'lks-err', hidden: true });
+    var choice = c.status || null, fu = null, err = h('p', { class: 'lks-err', hidden: true });
     var pills = h('div', { class: 'lks-choices' });
+    var fuBox = h('div', { class: 'lks-fu-box', hidden: true }, [h('b', {}, 'Follow up?'), followUpPicker(function (n) { fu = n; err.hidden = true; })]);
+    function isSend(o) { return (c.asks_follow_up || []).indexOf(o) >= 0; }
     function paint() {
       pills.replaceChildren.apply(pills, c.options.map(function (o) {
         return h('button', { type: 'button', class: 'lks-choice' + (choice === o ? ' on' : ''), onclick: function () { choice = o; err.hidden = true; paint(); } }, o);
       }));
+      fuBox.hidden = !(choice && isSend(choice));
     }
     paint();
     modal(h('div', { class: 'lks-card' }, [
       h('h2', {}, c.label + ': what happened?'),
       h('p', {}, 'Pick the status. The calendar task and the funnel stage follow from it.'),
-      pills, err,
+      pills, fuBox, err,
       h('div', { class: 'lks-row' }, [
         h('button', { class: 'btn btn-primary', type: 'button', onclick: function () {
           if (!choice) { err.textContent = 'Pick a status.'; err.hidden = false; return; }
-          api('POST', '/api/calendar/people/' + personId + '/outreach', { channel: c.channel, status: choice }).then(function () {
+          if (isSend(choice) && fu === null) { err.textContent = 'Follow up? Choose a number of days, or No follow-up.'; err.hidden = false; return; }
+          var body = { channel: c.channel, status: choice };
+          if (isSend(choice)) body.follow_up_days = fu;
+          api('POST', '/api/calendar/people/' + personId + '/outreach', body).then(function () {
             closeModal(true); changed(); document.dispatchEvent(new Event('lk-outreach-saved'));
           }).catch(function (e) { err.textContent = e.message; err.hidden = false; });
         } }, 'Save'),
