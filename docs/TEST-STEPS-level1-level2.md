@@ -28,11 +28,14 @@ b. Ask Claude: *"Move Ernie to In conversation."*
 
 **5. (Phone) Summaries (#6)**
 Ask Claude: *"Summarize my call 'Nexy Pilot — Intro Call with Minnie'."*
-✅ Works if: you get what was discussed, the decisions and the next steps.
+✅ Works if: you get what was discussed, the decisions and the next steps, and Claude says it saved it on the call (it shows on Minnie's contact page).
+Ask again: ✅ Claude warns there is already a summary and replaces it only if you say yes.
 
 **6. (Phone) Meeting prep on demand (#7)**
 Ask Claude: *"Prepare me for my next meeting."*
-✅ Works if: you get who is coming, their history with you, and what to aim for.
+✅ Works if: you get who is coming, their history with you, and what to aim for, and it is saved in that meeting's **My private notes** as "Prep by Claude" (your own notes there untouched).
+Ask again: ✅ Claude says it is already prepped (and when) and redoes it only if you insist.
+Ask *"Prepare me for a meeting with someone I'm not meeting"*: ✅ Claude says there is no such meeting and prepares nothing.
 
 **7. (Phone + Mac) Gone quiet / not contacted recently (#8, P1)**
 a. Home → Automatic → **Gone quiet** (it only appears when someone qualifies). Switch it to 30 days.
@@ -79,7 +82,7 @@ Ask Claude: *"Write a short hello email to Test Me and send it."*
 
 **13. (Phone + Mac) Meeting brief before a meeting (P7)**
 Calendar → **+ New meeting** for tomorrow, invite Test Me. Then wait for the next autopilot run.
-✅ Works if: on Home under Meetings the meeting has a **Brief** button, and the meeting's panel in the calendar shows "Brief (prepared by Claude)".
+✅ Works if: on Home under Meetings the meeting has a **Prep** button, and the meeting's **My private notes** start with "Prep by Claude".
 
 **14. (Mac only) After-call summary and draft (P5)**
 Have a 3–5 minute Google Meet call recorded by Fathom with your second account or Sergiy, and talk about real next steps. When it ends, wait up to an hour for the recording and the next autopilot run.
