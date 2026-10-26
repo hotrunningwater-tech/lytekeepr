@@ -53,7 +53,7 @@ def main():
     a = app.test_client()
     a.post("/login", data={"password": "opps-test"})
     def contact(name, company, email):
-        r = a.post("/api/calendar/contacts", json={"name": name, "company": company, "email": email})
+        r = a.post("/api/calendar/contacts", json={"name": name, "company": company, "email": email, "brand": "lytekeepr"})
         return r.get_json()["id"]
     sarah, michael, anna, tester = (contact("Sarah Intro", "Alpha Co", "sarah@alpha.test"), contact("Michael Decide", "Beta Inc", "michael@beta.test"),
                                     contact("Anna Advise", "Gamma LLC", "anna@gamma.test"), contact("Tom Tester", "Alpha Co", "tom@alpha.test"))

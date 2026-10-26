@@ -357,7 +357,7 @@ def accept(sid: int) -> dict:
     pid = by_email.get(s["email"])
     if not pid:
         created = contacts.create_contact({"name": name or s["email"].split("@")[0], "email": s["email"],
-                                           "notes": "Added from LyteKeepr's relationship suggestions: " + s["reason"]})
+                                           "notes": "Added from LyteKeepr's relationship suggestions: " + s["reason"]}, require_brand=False)   # waits under "Needs a brand"
         pid = created["id"]
     result = {"contact_id": pid}
     if s["kind"] == "add_to_opportunity" and s["opportunity_id"]:

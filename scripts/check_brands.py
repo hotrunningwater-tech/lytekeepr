@@ -53,6 +53,9 @@ def main():
     a = app.test_client()
     a.post("/login", data={"password": "opps-test"})
     def contact(**k):
+        if "brand" not in k:                       # a contact with no brand (as old data, syncs and suggestions still make)
+            from lk_calendar import contacts as lk_contacts
+            return lk_contacts.create_contact(k, require_brand=False)["id"]
         return a.post("/api/calendar/contacts", json=k).get_json()["id"]
     def funnel(name, brand=""):
         f = a.post("/api/crm/funnels", json={"name": name}).get_json()["funnel_id"]

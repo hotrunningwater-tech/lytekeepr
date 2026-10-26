@@ -91,14 +91,14 @@ def seed(c, mark, owner_email, workspace, padding=0):
     ids = {}
     if padding:
         pad_funnel = c.post("/api/crm/funnels", json={"name": "filler funnel"}).get_json()["funnel_id"]
-        pad_people = [c.post("/api/calendar/contacts", json={"name": f"Filler {i}", "email": f"filler{i}@{mark}-filler.test"}).get_json()["id"] for i in range(padding)]
+        pad_people = [c.post("/api/calendar/contacts", json={"name": f"Filler {i}", "email": f"filler{i}@{mark}-filler.test", "brand": "lytekeepr"}).get_json()["id"] for i in range(padding)]
         c.post("/api/crm/funnels/move", json={"person_ids": pad_people, "funnel_id": pad_funnel})
         for i in range(padding):
             c.post("/api/calendar/events", json={"title": f"Filler {i}", "start_date": LATER, "start_time": "09:00", "project": "lytekeepr", "kind": "task"})
             c.post("/api/team", json={"email": f"filler{i}@{mark}-filler.test"})
             c.post("/api/calendar/companies", json={"name": f"Filler company {i}"})
     r = c.post("/api/calendar/contacts", json={"name": f"{mark} Person", "company": f"{mark} Company", "email": f"{mark}.person@example.com",
-                                              "phone": "+1 555 0101", "notes": f"{mark} private note"})
+                                              "phone": "+1 555 0101", "notes": f"{mark} private note", "brand": "lytekeepr"})
     assert r.status_code == 201, r.get_json()
     ids["person"] = r.get_json()["id"]
     ids["funnel"] = c.post("/api/crm/funnels", json={"name": f"{mark} Funnel"}).get_json()["funnel_id"]

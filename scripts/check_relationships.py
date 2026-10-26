@@ -63,7 +63,7 @@ def main():
     a = app.test_client()
     a.post("/login", data={"password": "rel-test"})
     def contact(name, email):
-        return a.post("/api/calendar/contacts", json={"name": name, "email": email}).get_json()["id"]
+        return a.post("/api/calendar/contacts", json={"name": name, "email": email, "brand": "lytekeepr"}).get_json()["id"]
     sarah = contact("Sarah Intro", "sarah@alpha.test")
     anna = contact("Anna Weber", "anna@gamma.test")
     fid = a.post("/api/crm/funnels", json={"name": "Partnerships"}).get_json()["funnel_id"]

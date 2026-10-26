@@ -47,9 +47,10 @@
     return Promise.all([api('GET', '/api/calendar/agenda'), api('GET', '/api/calendar/goals'),
                         api('GET', '/api/crm/brands').catch(function () { return { brands: [] }; }),
                         api('GET', '/api/crm/quiet?days=' + state.quietDays + '&you_days=' + state.quietYouDays + '&brand=' + encodeURIComponent(state.quietBrand || '')).catch(function () { return null; }),
-                        api('GET', '/api/calendar/inbox/flags').catch(function () { return { flags: [] }; })])
+                        api('GET', '/api/calendar/inbox/flags').catch(function () { return { flags: [] }; }),
+                        api('GET', '/api/crm/brands/unassigned').catch(function () { return { contacts: [] }; })])
       .then(function (r) {
-        state.agenda = r[0]; state.goals = r[1]; state.quiet = r[3]; state.flags = r[4].flags || [];
+        state.agenda = r[0]; state.goals = r[1]; state.quiet = r[3]; state.flags = r[4].flags || []; state.noBrand = r[5].contacts || [];
         state.brands = {}; (r[2].brands || []).forEach(function (b) { state.brands[b.key] = b; });
         render();
       }).catch(function () {});
@@ -64,6 +65,7 @@
     renderActions(overdue, todays, today);
     renderQuiet();
     renderFlags(today);
+    renderNoBrand();
     countRows();
     renderGoals();
     renderMeetings(a, today);
@@ -131,6 +133,27 @@
     fill($('homeActions'), [late.length ? h('div', { class: 'hm-day hm-late' }, 'Overdue') : null].concat(late.map(function (e) { return itemRow(e, today, true); }),
       [h('div', { class: 'hm-day' }, 'Today')], now.length ? now.map(function (e) { return itemRow(e, today, false); }) : [h('p', { class: 'hm-empty' }, 'Nothing due today.')]));
     fill($('homeFollowups'), fold(leads).map(function (it) { return it.group ? groupRow(it, today) : itemRow(it, today, it.date < today); }));
+  }
+
+  /* ---------- needs a brand: contacts a sync or a one-click suggestion created without one; every contact belongs to a brand ---------- */
+  function brandSelect(onPick, label) {
+    var sel = h('select', { class: 'hm-input hm-days', onchange: function () { if (sel.value) onPick(sel.value); } },
+      [h('option', { value: '' }, label || 'Choose a brand…')].concat(Object.keys(state.brands).map(function (k) { return h('option', { value: k }, state.brands[k].name); })));
+    return sel;
+  }
+  function assignBrand(ids, key) { api('POST', '/api/crm/brands/assign', { person_ids: ids, brand: key }).then(load).catch(fail); }
+  function renderNoBrand() {
+    var list = state.noBrand || [];
+    state.counts.Brands = list.length;
+    if (!list.length) { fill($('homeNoBrand'), []); return; }
+    var rows = list.map(function (c) {
+      return h('div', { class: 'hm-row' }, [
+        h('div', { class: 'hm-main' }, [h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { if (window.openCrmPersonDetail) window.openCrmPersonDetail(c.contact_id); } }, c.name || '(no name)'),
+          h('div', { class: 'hm-meta' }, [c.company_name ? h('span', {}, c.company_name) : null, c.source_file ? h('span', {}, c.source_file) : null].filter(Boolean))]),
+        brandSelect(function (key) { assignBrand([c.contact_id], key); })]);
+    });
+    fill($('homeNoBrand'), [h('div', { class: 'hm-quiet-head' }, [h('span', { class: 'hm-empty' }, 'Every contact belongs to a brand. Pick one for each, or for all at once:'),
+      brandSelect(function (key) { assignBrand(list.map(function (c) { return c.contact_id; }), key); }, 'All ' + list.length + ' to…')])].concat(rows));
   }
 
   /* ---------- from messages: the few flags the scheduled Claude run left (interested, waiting for you, commitments) ---------- */

@@ -137,6 +137,24 @@ def set_person_brand(person_id: int, brand) -> str:
     return key
 
 
+def needed_message() -> str:
+    """What to tell someone adding a contact without a brand."""
+    names_ = [b["name"] for b in all_brands()]
+    return ("Choose a brand for this contact: " + ", ".join(names_) + "." if names_
+            else "Create a brand first (Settings → Brands); every contact belongs to a brand.")
+
+
+def unassigned(limit: int = 300) -> list:
+    """Contacts with no brand (not given one, not in a branded funnel): created by a sync or a suggestion, waiting for a brand."""
+    from . import access
+    visible = access.person_ids()
+    with _crm() as c:
+        rows = [dict(r) for r in c.execute("""SELECT p.person_id AS contact_id, p.name, co.company_name, p.source_file FROM people p
+                                              LEFT JOIN funnels f ON f.funnel_id = p.funnel_id LEFT JOIN companies co ON co.company_id = p.company_id
+                                              WHERE COALESCE(NULLIF(f.brand, ''), p.brand, '') = '' ORDER BY p.person_id DESC""")]
+    return [r for r in rows if visible is None or r["contact_id"] in visible][:limit]
+
+
 def assign_many(person_ids: list, brand) -> dict:
     """Give many contacts one brand. Contacts in a funnel of another brand keep the funnel's brand (they are listed as skipped)."""
     key = resolve(brand)
@@ -282,6 +300,10 @@ def register(app):
             return jsonify({"ok": True, "brands": all_brands()})
         except store.ValidationError as exc:
             return fail(exc)
+
+    @app.get("/api/crm/brands/unassigned")
+    def brands_unassigned():
+        return jsonify({"contacts": unassigned()})
 
     @app.post("/api/crm/brands/assign")
     def brands_assign():

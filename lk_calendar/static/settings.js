@@ -442,7 +442,15 @@
         h('div', { class: 'lks-opt' }, [h('label', {}, 'Channel' + (scan.channel ? ' (detected: ' + CH[scan.channel] + ')' : '')),
           sel([['', scan.channel ? 'Auto (' + CH[scan.channel] + ')' : 'Auto-detect from links'], ['linkedin', 'LinkedIn'], ['instagram', 'Instagram']], o.channel, function (v) { o.channel = v; importRender(); })]),
         h('div', { class: 'lks-opt' }, [h('label', {}, 'If the person already exists'),
-          sel([['skip', 'Skip them (keep their history)'], ['fill', 'Fill in their blank fields only']], o.dup, function (v) { o.dup = v; })])
+          sel([['skip', 'Skip them (keep their history)'], ['fill', 'Fill in their blank fields only']], o.dup, function (v) { o.dup = v; })]),
+        h('div', { class: 'lks-opt' }, [h('label', {}, 'Brand of the new contacts (required)'), (function () {
+          var bs = sel([['', 'Choose a brand…']], o.brand || '', function (v) { o.brand = v; });
+          getBrands().then(function (list) {
+            if (!list.length) { bs.replaceChildren(h('option', { value: '' }, 'Create a brand first (Settings → Brands)')); return; }
+            list.forEach(function (b) { bs.appendChild(h('option', { value: b.key, selected: o.brand === b.key }, b.name)); });
+          });
+          return bs;
+        })()])
       ]),
       h('label', { class: 'lks-check' }, [h('input', { type: 'checkbox', checked: o.remember, onchange: function () { o.remember = this.checked; } }), 'Remember this mapping for files with the same columns']),
       im.error ? h('p', { class: 'lks-err' }, im.error) : null,
@@ -450,8 +458,9 @@
         h('button', { class: 'btn btn-primary', type: 'button', disabled: im.busy, onclick: function () {
           var mapped = Object.keys(im.mapping).map(function (k) { return im.mapping[k]; });
           if (!['url', 'name', 'business_name'].some(function (k) { return mapped.indexOf(k) >= 0; })) { im.error = 'Match at least one column to URL, Name or Business name, so each person can be identified.'; importRender(); return; }
+          if (!o.brand) { im.error = 'Choose the brand of the new contacts.'; importRender(); return; }
           im.busy = true; im.error = ''; importRender();
-          api('POST', '/api/calendar/import/run', { token: scan.token, mapping: im.mapping, options: { channel: o.channel, batch: o.batch, duplicates: o.dup, remember: o.remember } }).then(function (r) { im.result = r; im.step = 3; im.busy = false; changed(); importRender(); })
+          api('POST', '/api/calendar/import/run', { token: scan.token, mapping: im.mapping, options: { channel: o.channel, batch: o.batch, duplicates: o.dup, remember: o.remember, brand: o.brand } }).then(function (r) { im.result = r; im.step = 3; im.busy = false; changed(); importRender(); })
             .catch(function (e) { im.busy = false; im.error = e.message; importRender(); });
         } }, im.busy ? 'Importing…' : 'Import ' + scan.rows + ' rows'),
         h('button', { class: 'btn lks-soft', type: 'button', onclick: function () { im.step = 1; im.error = ''; importRender(); } }, 'Back')
@@ -487,8 +496,10 @@
   // A contact's brand: a <select> filled once the brands arrive. In a branded funnel the brand comes from the funnel and can't be changed here.
   function brandField(c) {
     var fromFunnel = !!c.funnel_brand;
-    var sel = h('select', { class: 'demo-reset-input', disabled: fromFunnel, 'aria-label': 'Brand' }, [h('option', { value: '' }, 'No brand yet')]);
+    var isNew = !c.id, has = c.funnel_brand || c.brand;
+    var sel = h('select', { class: 'demo-reset-input', disabled: fromFunnel, 'aria-label': 'Brand' }, [h('option', { value: '' }, isNew || !has ? 'Choose a brand…' : 'No brand yet')]);
     getBrands().then(function (list) {
+      if (!list.length) sel.replaceChildren(h('option', { value: '' }, 'Create a brand first (Settings → Brands)'));
       list.forEach(function (b) { sel.appendChild(h('option', { value: b.key, selected: (c.funnel_brand || c.brand) === b.key }, b.name)); });
       sel.lksStart = sel.value;
     });
@@ -539,6 +550,7 @@
       Object.keys(vals).forEach(function (k) { body[k] = vals[k].value; });
       body.raw_notes = rawField.value;
       if (!brandSel.lksFromFunnel && brandSel.value !== (brandSel.lksStart || '')) body.brand = brandSel.value;      // only a change is sent
+      if (isNew && !brandSel.lksFromFunnel && !brandSel.value) return Promise.reject(new Error('Choose a brand for this contact (or create one in Settings → Brands).'));
       if (isNew && body.company === '' && c.company_id && !c.company) body.company_id = c.company_id;      // only a company that never had a name; a name you cleared stays cleared
       if (!isNew) delete body.channel;
       err.hidden = true;

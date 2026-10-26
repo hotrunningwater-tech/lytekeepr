@@ -419,6 +419,9 @@ def import_rows(token: str, mapping: dict, options: dict) -> dict:
         raise store.ValidationError("channel must be linkedin or instagram")
     dup = options.get("duplicates", "skip")
     batch = (options.get("batch") or "").strip()[:100]
+    if not options.get("brand"):
+        raise store.ValidationError(brands.needed_message().replace("this contact", "the imported contacts"))
+    import_brand = brands.resolve(options["brand"])
     res = {"added": 0, "skipped": 0, "filled": 0, "merged_in_file": 0, "excluded": 0, "companies_created": 0, "errors": [], "batch": batch}
     created: set = set()
     with _crm() as conn:
@@ -452,6 +455,7 @@ def import_rows(token: str, mapping: dict, options: dict) -> dict:
                 pid = next((r["person_id"] for r in conn.execute("SELECT person_id, phone FROM people WHERE IFNULL(phone, '') != ''") if _phone_key(r["phone"]) == key), None)
             if pid is None:
                 pid = _insert_person(conn, vals, channel=channel, company_id=company_id, company_name=company_name, extras=extras, source_file=up["name"], batch=batch)
+                conn.execute("UPDATE people SET brand = ? WHERE person_id = ?", (import_brand, pid))
                 created.add(pid)
                 res["added"] += 1
                 _ensure_email_account(conn, pid, vals.get("email", ""), vals.get("name", "") or company_name)
@@ -667,9 +671,13 @@ def _set_instagram(conn, person_id: int, handle: str, name: str) -> None:
                      (person_id, handle.lower(), name, url))
 
 
-def create_contact(data: dict) -> dict:
+def create_contact(data: dict, require_brand: bool = True) -> dict:
+    """A new contact. Someone adding a contact (the form, Claude, the API) must choose its brand; only automatic paths
+    (require_brand=False: a suggestion accepted in one click) may leave it empty, and it then waits under "Needs a brand"."""
     check_formats(data)
     brand = brands.resolve(data.get("brand")) if data.get("brand") else ""      # checked before anything is saved
+    if require_brand and not brand:
+        raise store.ValidationError(brands.needed_message())
     handle = instagram_handle(data.get("instagram"))
     if handle and not str(data.get("name", "")).strip() and not str(data.get("company", "")).strip():
         data = {**data, "name": "@" + handle}                        # known only by their handle (like imported Instagram leads)
@@ -774,6 +782,8 @@ def link_lead(conn, lead: dict):
         if pid is None:
             pid = _insert_person(c, {"name": name, "url": url, "notes": lead.get("notes", "")}, channel=lead["channel"], company_id=None,
                                  company_name="", extras={}, source_file="(existing leads)", batch="")
+            if lead.get("project") and lead["project"] in store.brand_keys():      # the lead's brand becomes the contact's
+                c.execute("UPDATE people SET brand = ? WHERE person_id = ? AND IFNULL(brand, '') = ''", (lead["project"], pid))
         if lead.get("updated_at"):       # "Added" is when the lead was added, not when its contact record was made
             c.execute("UPDATE people SET created_at = ? WHERE person_id = ?", (lead["updated_at"], pid))
     if lead.get("id"):
