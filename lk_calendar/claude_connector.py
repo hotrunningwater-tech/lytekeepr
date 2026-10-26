@@ -1232,8 +1232,7 @@ def register(app):
             wanted = params.get("protocolVersion")
             return ok({"protocolVersion": wanted if wanted in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0],
                        "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "LyteKeepr", "version": "1.0"},
-                       "instructions": ("LyteKeepr is the user's app: their contacts, funnels, calendar, emails, calls, documents, goals and tasks all live in it. "
-                                        "Everything the user asks about their work refers to LyteKeepr; use its tools to answer, without needing to be told. "
+                       "instructions": ("LyteKeepr is the user's app: their contacts, funnels, calendar, emails, calls, documents, goals and tasks live in it. "
                                         "Dates are YYYY-MM-DD and times HH:MM in the user's local time. Find a contact's id with search_contacts "
                                         "before get_contact; when the user names someone or something, use find first. Funnels hold two kinds of entries: contacts (one person) and opportunities (one shared "
                                         "deal or project with several participants). Never turn one into the other, and never assume everyone at a "
