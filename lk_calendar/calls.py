@@ -399,6 +399,21 @@ def parse_invitees(text: str) -> tuple[list, list]:
 
 
 # ------------------------------------------------------------------ actions
+def link_contact(call_id: int, person_id: int) -> dict:
+    """Put a contact on a call by hand: for a recording nobody was matched to by email (an impromptu Zoom, a call that moved to Telegram)."""
+    from . import access
+    call = get_call(call_id)
+    if not call:
+        raise CallsError("no such call")
+    if not access.can_person(person_id):
+        raise CallsError("no such contact")
+    with _crm() as conn:
+        if not conn.execute("SELECT 1 FROM people WHERE person_id = ?", (int(person_id),)).fetchone():
+            raise CallsError("no such contact")
+        conn.execute("INSERT OR IGNORE INTO call_people (call_id, person_id) VALUES (?, ?)", (int(call_id), int(person_id)))
+    return get_call(call_id)
+
+
 def set_status(call_id: int, status: str) -> dict:
     if status not in STATUSES:
         raise CallsError("status must be ready, done or no_show")
@@ -730,6 +745,12 @@ def register(app):
         if result.get("status") != "pending_confirmation":
             raise CallsError(result.get("message") or "could not write the follow-up")
         return jsonify(result)
+
+    @app.post("/api/calls/<int:call_id>/contacts")
+    @guarded
+    def calls_link_contact(call_id):
+        call = link_contact(call_id, int((request.get_json(silent=True) or {}).get("contact_id") or 0))
+        return jsonify({"call_id": call["call_id"], "title": call["title"], "contacts": call["contacts"]})
 
     @app.post("/api/calls/<int:call_id>/status")
     @guarded

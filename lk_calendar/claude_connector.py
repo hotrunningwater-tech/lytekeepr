@@ -268,8 +268,13 @@ TOOLS = [
      "description": "Save a call's summary on the call (shows on the contact and on Home under Calls to review). Whenever you summarize a recorded call for the user, "
                     "save it here too. If the answer says it already has a summary, warn the user and save again with replace=true only after they say yes.",
      "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}, "summary": {"type": "string"},
-                                                      "replace": {"type": "boolean", "description": "true only after the user agreed to replace the existing summary"}},
+                                                      "replace": {"type": "boolean", "description": "true only after the user agreed to replace the existing summary"},
+                                                      "no_contact": {"type": "boolean", "description": "true only if the user said the call was not with any contact (e.g. internal)"}},
                      "required": ["call_id", "summary"]}},
+    {"name": "link_call_to_contact", "title": "Link a call to a contact",
+     "description": "Put a contact on a recorded call that nobody was matched to (an impromptu Zoom, a call that moved to Telegram). Only after the user confirmed who it was. "
+                    "The call then shows in that contact's history.",
+     "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}, "contact_id": {"type": "integer"}}, "required": ["call_id", "contact_id"]}},
     {"name": "save_followup_draft", "title": "Save follow-up draft",
      "description": "Save a follow-up email draft after a meeting (autopilot): call_id for a recorded call, or item_id for a meeting with no recording. "
                     "Goes to the first contact on it with an email. NOT sent: the user reviews it on Home and sends it themselves. Body without a subject line; sign off with 'Best,' and [Your Name].",
@@ -277,7 +282,9 @@ TOOLS = [
                      "required": ["subject", "body"]}},
     {"name": "calls_to_review", "title": "Calls to review", "description": "Recorded calls with a transcript not summarized yet, and meetings that passed with no recording (possible no-shows).",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
-    {"name": "get_call", "title": "Call transcript", "description": "One recorded call (from Fathom): who was on it, the summary if any, and the full transcript. When you summarize it for the user, save the summary with save_call_summary.",
+    {"name": "get_call", "title": "Call transcript", "description": "One recorded call (from Fathom): who was on it (contacts), the summary if any, and the full transcript. Before summarizing: if contacts is empty, "
+                    "ask the user who the call was with (suggest from what they said or the names in the transcript), find them with search_contacts and link the call "
+                    "with link_call_to_contact after they confirm. Then summarize and save the summary with save_call_summary.",
      "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}}, "required": ["call_id"]}, "read": True},
     {"name": "create_task", "title": "Create a task",
      "description": "Add a task (shows on the user's Home, under Actions needed when due today, otherwise under Tasks; the calendar shows only meetings). Use for follow-ups too (e.g. 'Follow up with Sara about pricing'). Today or later only.",
@@ -700,7 +707,10 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/prep",
                           {"text": args.get("text", ""), "replace": name == "save_meeting_prep" and args.get("replace") is True}))
     if name == "save_call_summary":
-        return need(*call("PUT", f"/api/calls/{int(args['call_id'])}/summary", {"summary": args.get("summary", ""), "replace": args.get("replace") is True}))
+        return need(*call("PUT", f"/api/calls/{int(args['call_id'])}/summary", {"summary": args.get("summary", ""), "replace": args.get("replace") is True,
+                                                                               "no_contact": args.get("no_contact") is True}))
+    if name == "link_call_to_contact":
+        return need(*call("POST", f"/api/calls/{int(args['call_id'])}/contacts", {"contact_id": int(args["contact_id"])}))
     if name == "save_followup_draft":
         return need(*call("POST", "/api/calendar/autopilot/drafts", {k: args.get(k) for k in ("call_id", "item_id", "subject", "body")}))
     if name == "get_call":

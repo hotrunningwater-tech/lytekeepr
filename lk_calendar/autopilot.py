@@ -32,6 +32,7 @@ INSTRUCTIONS = {
     "too_short_to_summarize": "Nothing to do: too short to mean anything.",
     "waiting_for_recording": "Nothing to do yet: the recording may still arrive; the next run picks it up.",
     "asked_what_happened": "Nothing to do: the user tells LyteKeepr whether it happened.",
+    "calls_without_contact": "Nothing to do: these recordings are not linked to a contact yet; the user links them first (on Home, or when they ask you about the call).",
 }
 BRIEF_HOURS = 26                # a 2-hourly run briefs every meeting well ahead of time
 LOOK_BACK_DAYS = 7
@@ -100,7 +101,7 @@ def queue() -> dict:
     from . import inbox_watch, onboarding
     out = {"instructions": {**INSTRUCTIONS, "new_messages": inbox_watch.INSTRUCTIONS, "newly_won": onboarding.INSTRUCTIONS},
            "new_messages": inbox_watch.feed(), "newly_won": onboarding.newly_won(), "meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [],
-           "needing_followup_draft": [], "waiting_for_recording": [], "asked_what_happened": []}
+           "needing_followup_draft": [], "waiting_for_recording": [], "asked_what_happened": [], "calls_without_contact": []}
     with store._conn() as conn:
         meeting_notes._ready(conn)
         briefed = {r["meeting_key"] for r in conn.execute("SELECT meeting_key, text FROM meeting_private_notes WHERE who = ?", (meeting_notes._me(),))
@@ -126,7 +127,9 @@ def queue() -> dict:
         for r in rows:
             item = {"call_id": r["call_id"], "title": r["title"], "started_at": r["started_at"],
                     "contacts": [{"contact_id": p["person_id"], "name": p["name"]} for p in people.get(r["call_id"], [])]}
-            if not r["summary"].strip():
+            if not item["contacts"]:
+                out["calls_without_contact"].append(item)          # the user links it first (Home, or when they ask Claude)
+            elif not r["summary"].strip():
                 text = calls.transcript_text({"transcript": json.loads(r["transcript"] or "[]")})
                 out["too_short_to_summarize" if len(text) < MIN_TRANSCRIPT_CHARS else "calls_needing_summary"].append(item)
             elif admin and item["contacts"] and not _has_draft(conn, f"call:{r['call_id']}") and _first_email([p["contact_id"] for p in item["contacts"]])[1]:
@@ -154,7 +157,7 @@ def queue() -> dict:
 
 
 # ------------------------------------------------------------------ saving what Claude wrote
-def save_summary(call_id: int, summary: str, replace: bool = False) -> dict:
+def save_summary(call_id: int, summary: str, replace: bool = False, no_contact: bool = False) -> dict:
     """The call's summary (shown on the contact and in Calls to review). An earlier one is replaced only with replace=True (the user agreed)."""
     from . import calls
     call = calls.get_call(call_id)
@@ -162,6 +165,10 @@ def save_summary(call_id: int, summary: str, replace: bool = False) -> dict:
         raise AutopilotError("No such call.")
     if not (summary or "").strip():
         raise AutopilotError("The summary is empty.")
+    if not call.get("contacts") and not no_contact:       # a summary nobody's contact holds is lost a week later
+        return {"saved": False, "needs_contact": True, "call_id": call_id, "title": call["title"],
+                "tell_the_user": "This call is not linked to any contact. Ask who it was with (suggest from what they said or the names in the transcript), "
+                                 "link it with link_call_to_contact after they confirm, then save the summary. Only if it was not with a contact, save with no_contact=true."}
     if (call.get("summary") or "").strip() and not replace:
         return {"saved": False, "already_summarized": True, "call_id": call_id, "title": call["title"], "existing_summary": call["summary"],
                 "tell_the_user": "This call already has a summary (shown here). Ask if they want it replaced; save again with replace=true only after yes."}
@@ -267,7 +274,7 @@ def register(app):
 
     @app.put("/api/calls/<int:call_id>/summary")
     def autopilot_summary(call_id):
-        return run(save_summary, call_id, b().get("summary", ""), bool(b().get("replace")))
+        return run(save_summary, call_id, b().get("summary", ""), bool(b().get("replace")), bool(b().get("no_contact")))
 
     @app.post("/api/calendar/autopilot/drafts")
     def autopilot_draft_save():

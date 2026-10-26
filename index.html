@@ -2038,6 +2038,41 @@
         .then(function (res) { return res.json().then(function (d) { if (!res.ok) throw new Error(d.error || 'Something went wrong'); return d; }); })
         .catch(function (e) { el.disabled = false; el.textContent = old; alert(e.message); throw e; });
     }
+    // A recording nobody was matched to by email (an impromptu Zoom, a call that moved to Telegram): pick who it was with
+    function linkCallToContact(callId, title) {
+      var back = document.createElement('div'); back.className = 'confirm-backdrop';
+      var box = document.createElement('div'); box.className = 'confirm-modal lks-company-modal'; box.setAttribute('role', 'dialog');
+      var h2 = document.createElement('h2'); h2.textContent = 'Who was "' + title + '" with?'; box.appendChild(h2);
+      var input = document.createElement('input'); input.type = 'text'; input.className = 'demo-reset-input'; input.placeholder = 'Search a contact by name, email or company'; box.appendChild(input);
+      var list = document.createElement('div'); list.className = 'lks-co-section'; box.appendChild(list);
+      var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary btn-small'; cancel.textContent = 'Cancel'; box.appendChild(cancel);
+      back.appendChild(box); document.body.appendChild(back);
+      function close() { back.remove(); }
+      cancel.addEventListener('click', close);
+      back.addEventListener('click', function (ev) { if (ev.target === back) close(); });
+      var timer = null;
+      input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+          var q = input.value.trim(); list.innerHTML = '';
+          if (!q) return;
+          fetch('/api/calendar/contacts?limit=8&q=' + encodeURIComponent(q)).then(function (r) { return r.json(); }).then(function (d) {
+            list.innerHTML = '';
+            (d.contacts || []).forEach(function (p) {
+              var b = document.createElement('button'); b.type = 'button'; b.className = 'subtle-link-btn lks-co-person';
+              b.textContent = (p.display || p.name) + (p.company ? ' · ' + p.company : '') + (p.email ? ' · ' + p.email : '');
+              b.addEventListener('click', function () {
+                fetch('/api/calls/' + callId + '/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: p.id }) })
+                  .then(function (r) { return r.json(); }).then(function (r) { if (r.error) { alert(r.error); return; } close(); loadCallsAttention(); });
+              });
+              list.appendChild(b);
+            });
+            if (!(d.contacts || []).length) { var none = document.createElement('p'); none.className = 'crm-empty'; none.textContent = 'No contact matches.'; list.appendChild(none); }
+          });
+        }, 200);
+      });
+      input.focus();
+    }
     function reviewDraft(id, el) {                   // the draft opens in the usual send card; nothing is sent until Send now
       callPost('/api/calendar/autopilot/drafts/' + id + '/review', {}, el, 'Opening…').then(function () {
         el.disabled = false; el.textContent = 'Review draft';
@@ -2064,6 +2099,7 @@
                   if (window.lkHomeChat && window.lkHomeChat.showDraft) window.lkHomeChat.showDraft('Your follow-up email to ' + (d.person_name || 'them') + ' after "' + c.title + '" is ready below. Edit it, then press Send now.');
                 });
               }],
+              (c.contacts && c.contacts[0]) ? null : ['Link to contact', 'btn btn-primary btn-small', function () { linkCallToContact(c.call_id, c.title); }],
               (c.contacts && c.contacts[0])
                 ? ['Open', 'subtle-link-btn', function () { openCrmPersonDetail(c.contacts[0].person_id); }]
                 : ['Add as contact', 'subtle-link-btn', function () {     // nobody on the call is a contact yet: the other person, prefilled
