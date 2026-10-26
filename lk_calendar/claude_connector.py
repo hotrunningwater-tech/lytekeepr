@@ -210,9 +210,10 @@ TOOLS = [
     {"name": "contacts_gone_quiet", "title": "Who is waiting (gone quiet)",
      "description": "A full sweep of every contact whose conversation stopped, split by who owes the next message: waiting_on_you = they wrote last and the user "
                     "hasn't answered for you_days days (3 by default); waiting_on_them = the user wrote last and they haven't answered for days days (14 by default). "
-                    "Use for 'who hasn't replied to me?' (waiting_on_them), 'who am I leaving hanging?' (waiting_on_you), or both. If the user didn't say which brand, "
-                    "ask first: one brand or all of them. Always label each person with their side. Leaves out contacts with an open follow-up and ones put off with 'Not now'.",
-     "inputSchema": {"type": "object", "properties": {"brand": {"type": "string", "description": "Brand name or key; empty = all brands"},
+                    "Use for 'who hasn't replied to me?' (waiting_on_them), 'who am I leaving hanging?' (waiting_on_you), or both. brand is REQUIRED: if the user didn't say, "
+                    "ask which brand (or 'all') before calling. Always label each person with their side. Leaves out contacts marked not interested (Lost), "
+                    "ones with an open follow-up, and ones put off with 'Not now'.",
+     "inputSchema": {"type": "object", "required": ["brand"], "properties": {"brand": {"type": "string", "description": "Brand name or key, or 'all' for every brand"},
                                                       "side": {"type": "string", "enum": ["you", "them", "both"], "default": "both"},
                                                       "days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 14, "description": "Waiting on them: at least this many days"},
                                                       "you_days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 3, "description": "Waiting on you: at least this many days"},
@@ -672,8 +673,12 @@ def _run_tool(call, name: str, args: dict):
     if name == "contacts_gone_quiet":
         q = {k: int(args[k]) for k in ("days", "you_days") if args.get(k) not in (None, "")}
         q["limit"] = int(args.get("limit") or 50)
-        if args.get("brand"):
-            q["brand"] = str(args["brand"])
+        brand = str(args.get("brand") or "").strip()
+        if not brand:                                      # never a silent sweep of everything: the user picks
+            names = [b.get("name") for b in need(*call("GET", "/api/crm/brands")).get("brands", [])]
+            return {"searched": False, "ask_the_user": "Which brand: " + ", ".join(names) + ", or all of them?"}
+        if brand.lower() not in ("all", "all brands", "every brand", "everything"):
+            q["brand"] = brand
         if args.get("side") in ("you", "them"):
             q["side"] = args["side"]
         return need(*call("GET", "/api/crm/quiet?" + urllib.parse.urlencode(q)))

@@ -56,7 +56,6 @@ CREATE TABLE IF NOT EXISTS people (
     funnel_stage_id INTEGER REFERENCES funnel_stages(stage_id),
     name TEXT NOT NULL,
     job_title TEXT,
-    person_status TEXT NOT NULL DEFAULT 'active',
     notes TEXT
 );
 
@@ -246,6 +245,8 @@ def init_db() -> None:
     conn = get_connection()
     try:
         conn.executescript(_SCHEMA)
+        if "person_status" in {row["name"] for row in conn.execute("PRAGMA table_info(people)")}:
+            conn.execute("ALTER TABLE people DROP COLUMN person_status")     # the old 'client status': always 'active', never used
         # people.company_checked: added after the original schema, so an
         # existing db needs the column added rather than re-created.
         existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(people)")}
@@ -557,7 +558,7 @@ def find_channel_account(conn: sqlite3.Connection, channel: str, channel_identif
 
 def create_person(conn: sqlite3.Connection, name: str, company_id: int | None = None) -> int:
     cur = conn.execute(
-        "INSERT INTO people (company_id, name, person_status) VALUES (?, ?, 'active')",
+        "INSERT INTO people (company_id, name) VALUES (?, ?)",
         (company_id, name),
     )
     return cur.lastrowid
@@ -767,7 +768,7 @@ def get_person_detail(conn: sqlite3.Connection, person_id: int) -> dict | None:
     slightly off around messages sent close together across channels."""
     row = conn.execute(
         """
-        SELECT p.person_id, p.name, p.job_title, p.person_status, p.notes, p.phone, p.telegram, p.brand,
+        SELECT p.person_id, p.name, p.job_title, p.notes, p.phone, p.telegram, p.brand,
                (SELECT channel_identifier FROM channel_accounts e WHERE e.person_id = p.person_id AND e.channel = 'email' ORDER BY e.account_id LIMIT 1) AS email, p.raw_notes,
                co.company_name,
                fn.funnel_id, fn.name AS funnel_name,
@@ -1200,7 +1201,7 @@ def get_overview(conn: sqlite3.Connection) -> dict:
     people_rows = conn.execute(
         """
         SELECT
-            p.person_id, p.name, p.job_title, p.person_status, p.batch, p.created_at, p.brand,
+            p.person_id, p.name, p.job_title, p.batch, p.created_at, p.brand,
             (SELECT channel_identifier FROM channel_accounts e WHERE e.person_id = p.person_id AND e.channel = 'email' ORDER BY e.account_id LIMIT 1) AS email, p.phone, p.telegram, p.location, p.industry, p.website, p.notes,
             co.company_name,
             fn.funnel_id, fn.name AS funnel_name,

@@ -4,7 +4,7 @@ their address, and outreach steps ("dm sent" counts as yours, "replied" as their
 - waiting_on_you: they wrote last and you haven't answered for `you_days` days (3 by default);
 - waiting_on_them: you wrote last and they haven't answered for `days` days (14 by default).
 A recorded call or a logged conversation after the last message means you were in touch: nobody is waiting.
-Left out: contacts never written to, contacts with an open follow-up reminder (they show under Follow-ups), and contacts put
+Left out: contacts marked "not interested" on any channel (moving someone to Lost sets that), contacts never written to, contacts with an open follow-up reminder (they show under Follow-ups), and contacts put
 off with "Not now" until that date (kept in sync_state under 'quiet_snoozed', a {person_id: date} map).
 Plain code, no AI. A team member gets only the contacts they may see."""
 
@@ -113,13 +113,15 @@ def waiting(days: int = DEFAULT_DAYS, you_days: int = DEFAULT_YOU_DAYS, brand: s
         people = [dict(r) for r in conn.execute("""SELECT p.person_id, p.name, co.company_name, fn.name AS funnel_name, fs.name AS stage_name,
                                                           COALESCE(NULLIF(fn.brand, ''), p.brand, '') AS brand
                                                    FROM people p LEFT JOIN companies co ON co.company_id = p.company_id
-                                                   LEFT JOIN funnels fn ON fn.funnel_id = p.funnel_id LEFT JOIN funnel_stages fs ON fs.stage_id = p.funnel_stage_id
-                                                   WHERE p.person_status = 'active'""")]
+                                                   LEFT JOIN funnels fn ON fn.funnel_id = p.funnel_id LEFT JOIN funnel_stages fs ON fs.stage_id = p.funnel_stage_id""")]
     if brand:
         people = [p for p in people if p["brand"] == brand]
     visible = access.person_ids()
     if visible is not None:
         people = [p for p in people if p["person_id"] in visible]
+    with store._conn() as conn:                                    # "not interested" on any channel: never waiting, on either side
+        done = {r["person_id"] for r in conn.execute("SELECT person_id FROM leads WHERE status = 'done' AND person_id IS NOT NULL")}
+    people = [p for p in people if p["person_id"] not in done]
     covered = _covered()
     snoozed = {int(k) for k, v in _snoozed().items() if v > today.isoformat()}
     people = [p for p in people if p["person_id"] not in covered and p["person_id"] not in snoozed]

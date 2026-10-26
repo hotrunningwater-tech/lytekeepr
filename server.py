@@ -720,11 +720,13 @@ def crm_move_to_stage():
         return jsonify({"error": "person_id and stage_id are required."}), 400
     conn = crm_db.get_connection()
     try:
-        crm_db.move_person_to_stage(conn, person_id, stage_id)      # the stage only: statuses and follow-ups stay as they are
+        crm_db.move_person_to_stage(conn, person_id, stage_id)      # the stage; statuses stay, except Lost (below)
         conn.commit()
     finally:
         conn.close()
-    return jsonify({"ok": True})
+    from lk_calendar import contacts as lk_contacts
+    lost = lk_contacts.lost_on_stage(int(person_id))                # moved to Lost: "not interested" on each channel
+    return jsonify({"ok": True, **({"not_interested_on": lost} if lost else {})})
 
 
 @app.post("/api/crm/people/<int:person_id>/delete")

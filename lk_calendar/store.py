@@ -47,7 +47,7 @@ def _adopt_legacy(path: Path) -> None:
 # Which funnel stage each status belongs to (by stage name). Changing a status moves the person to that stage if they are in a funnel.
 DEFAULT_STAGES = {
     ("linkedin", "new"): "New lead", ("linkedin", "sent"): "Contacted", ("linkedin", "accepted"): "Contacted",
-    ("linkedin", "message_sent"): "Contacted", ("linkedin", "replied"): "In conversation", ("linkedin", "non customer"): "Lost",
+    ("linkedin", "message_sent"): "Contacted", ("linkedin", "replied"): "In conversation", ("linkedin", "non customer"): "Lost", ("linkedin", "done"): "Lost",
     ("instagram", "new"): "New lead", ("instagram", "sent"): "Contacted", ("instagram", "replied"): "In conversation", ("instagram", "done"): "Lost",
     ("email", "new"): "New lead", ("email", "sent"): "Contacted", ("email", "replied"): "In conversation", ("email", "bounced"): "Lost", ("email", "done"): "Lost",
 }
@@ -74,7 +74,7 @@ BUCKETS = ("cold", "warm", "closed", "none", "task")      # task = its own task 
 # closed = nothing more to do (reminder closed); none = no task (new leads, and custom labels unless set otherwise).
 DEFAULT_BUCKETS = {
     ("linkedin", "new"): "none", ("linkedin", "sent"): "cold", ("linkedin", "accepted"): "cold",
-    ("linkedin", "message_sent"): "cold", ("linkedin", "replied"): "warm", ("linkedin", "non customer"): "closed",
+    ("linkedin", "message_sent"): "cold", ("linkedin", "replied"): "warm", ("linkedin", "non customer"): "closed", ("linkedin", "done"): "closed",
     ("instagram", "new"): "none", ("instagram", "sent"): "cold", ("instagram", "replied"): "warm", ("instagram", "done"): "closed",
     ("email", "new"): "none", ("email", "sent"): "cold", ("email", "replied"): "warm", ("email", "bounced"): "closed", ("email", "done"): "closed",
 }
@@ -270,6 +270,10 @@ def _conn():
     if conn.execute("SELECT COUNT(*) FROM status_buckets").fetchone()[0] == 0:
         conn.executemany("INSERT OR IGNORE INTO status_buckets (channel, status_key, bucket) VALUES (?, ?, ?)",
                          [(ch, key, b) for (ch, key), b in DEFAULT_BUCKETS.items()])
+    # LinkedIn's "not interested" came later: existing workspaces get its bucket and stage once (a choice already made stays)
+    conn.execute("INSERT OR IGNORE INTO status_buckets (channel, status_key, bucket) VALUES ('linkedin', 'done', 'closed')")
+    conn.execute("INSERT OR IGNORE INTO status_stages (channel, status_key, stage_name) VALUES ('linkedin', 'done', ?)",
+                 (DEFAULT_STAGES[("linkedin", "done")],))
     if conn.execute("SELECT COUNT(*) FROM brands").fetchone()[0] == 0:
         conn.executemany("INSERT OR IGNORE INTO brands (key, name, color, position) VALUES (?, ?, ?, ?)",
                          [(k, n, c, i) for i, (k, n, c) in enumerate(DEFAULT_BRANDS)])

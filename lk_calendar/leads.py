@@ -25,13 +25,13 @@ ACCEPTED_DM_DAYS = 1      # connection accepted -> 'Send DM' reminder this many 
 # Internal keys are stored in the database; LABELS are what the user sees and says.
 BUILTIN = {
     "instagram": ("new", "sent", "replied", "done"),
-    "linkedin": ("new", "sent", "accepted", "message_sent", "replied"),
+    "linkedin": ("new", "sent", "accepted", "message_sent", "replied", "done"),
     "email": ("new", "sent", "replied", "bounced", "done"),
 }
 LABELS = {
     "instagram": {"new": "new", "sent": "dm sent", "replied": "customer replied", "done": "customer not interested"},
     "linkedin": {"new": "new", "sent": "connection request sent", "accepted": "connection accepted",
-                 "message_sent": "message sent", "replied": "replied"},
+                 "message_sent": "message sent", "replied": "replied", "done": "not interested"},
     "email": {"new": "new", "sent": "email sent", "replied": "replied", "bounced": "bounced", "done": "not interested"},
 }
 _EXTRA_ALIASES = {
@@ -43,6 +43,7 @@ _EXTRA_ALIASES = {
                  "accepted": "accepted", "connected": "accepted", "accepted connection": "accepted",
                  "dm sent": "message_sent", "messaged": "message_sent", "message": "message_sent", "dm": "message_sent",
                  "reply": "replied", "responded": "replied", "customer replied": "replied",
+                 "done": "done", "closed": "done", "lost": "done", "customer not interested": "done",
                  "lead": "new", "not contacted": "new", "to contact": "new", "": "new"},
     "email": {"sent": "sent", "emailed": "sent", "contacted": "sent", "reply": "replied", "responded": "replied", "bounce": "bounced",
               "wrong address": "bounced", "done": "done", "closed": "done", "lost": "done", "lead": "new", "not contacted": "new", "to contact": "new", "": "new"},

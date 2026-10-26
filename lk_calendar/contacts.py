@@ -257,7 +257,7 @@ def _insert_person(conn, vals: dict, *, channel: str, company_id, company_name: 
     url = str(vals.get("url", "")).strip()
     name = (str(vals.get("name", "")).strip() or _fallback_name(channel, url, company_name))[:200]
     row = {c: str(vals.get(c, ""))[:2000] for c in PERSON_COLUMNS if c != "name"}
-    row.update(name=name, company_id=company_id, person_status="active", extras=json.dumps(extras, ensure_ascii=False),
+    row.update(name=name, company_id=company_id, extras=json.dumps(extras, ensure_ascii=False),
                raw_notes=str(vals.get("raw_notes", ""))[:200000],
                source_file=source_file[:200], batch=batch[:100], created_at=_now())
     cols = list(row)
@@ -834,6 +834,25 @@ def sync_stage(conn, person_id: int) -> None:
         hits = [r for r in stages if r["name"].lower() in names]
         if hits and order.index(hits[-1]["stage_id"]) > now:
             c.execute("UPDATE people SET funnel_stage_id = ? WHERE person_id = ?", (hits[-1]["stage_id"], person_id))
+
+
+def lost_on_stage(person_id: int) -> list:
+    """Moved by hand to the stage "not interested" leads to (Lost by default; a renamed stage keeps the link): their outreach becomes
+    "not interested" on each of their channels, so stage and status never disagree (and their open follow-ups close). Returns the channels set."""
+    with _crm() as c:
+        row = c.execute("""SELECT fs.name FROM people p JOIN funnel_stages fs ON fs.stage_id = p.funnel_stage_id WHERE p.person_id = ?""",
+                        (int(person_id),)).fetchone()
+    if not row:
+        return []
+    with store._conn() as conn:
+        lost_channels = {r["channel"] for r in conn.execute("SELECT channel FROM status_stages WHERE status_key = 'done' AND lower(stage_name) = ?",
+                                                            (row["name"].strip().lower(),))}
+    done = []
+    for ch in outreach(int(person_id))["channels"]:
+        if ch["channel"] in lost_channels:
+            set_outreach(int(person_id), ch["channel"], "done")
+            done.append(ch["channel"])
+    return done
 
 
 def sync_stages(person_ids: list) -> None:
