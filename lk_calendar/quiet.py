@@ -4,7 +4,8 @@ their address, and outreach steps ("dm sent" counts as yours, "replied" as their
 - waiting_on_you: they wrote last and you haven't answered for `you_days` days (3 by default);
 - waiting_on_them: you wrote last and they haven't answered for `days` days (14 by default).
 A recorded call or a logged conversation after the last message means you were in touch: nobody is waiting.
-Left out: contacts marked "not interested" on any channel (moving someone to Lost sets that), contacts never written to, contacts with an open follow-up reminder (they show under Follow-ups), and contacts put
+Each row says whether a follow-up is planned for them, and whether it is overdue (then it is on you).
+Left out: contacts marked "not interested" on any channel (moving someone to Lost sets that), contacts never written to, and contacts put
 off with "Not now" until that date (kept in sync_state under 'quiet_snoozed', a {person_id: date} map).
 Plain code, no AI. A team member gets only the contacts they may see."""
 
@@ -86,13 +87,14 @@ def last_touches(person_ids: list) -> dict:
     return best
 
 
-def _covered() -> set:
-    """Contacts with an open follow-up reminder: those are already under Follow-ups."""
+def _follow_ups() -> dict:
+    """person_id -> the date of their earliest open follow-up reminder (shown on the row: planned, or overdue = on you)."""
     with store._conn() as conn:
-        rows = conn.execute("""SELECT l.person_id FROM events e JOIN leads l ON e.lead_ref = 'lead:' || l.id
+        rows = conn.execute("""SELECT l.person_id, MIN(e.start_date) AS d FROM events e JOIN leads l ON e.lead_ref = 'lead:' || l.id
                                WHERE e.source = 'auto' AND l.person_id IS NOT NULL
-                                 AND NOT EXISTS (SELECT 1 FROM completions c WHERE c.event_id = e.id AND c.occ_date = e.start_date)""").fetchall()
-    return {r["person_id"] for r in rows}
+                                 AND NOT EXISTS (SELECT 1 FROM completions c WHERE c.event_id = e.id AND c.occ_date = e.start_date)
+                               GROUP BY l.person_id""").fetchall()
+    return {r["person_id"]: r["d"] for r in rows}
 
 
 def _snoozed() -> dict:
@@ -122,9 +124,9 @@ def waiting(days: int = DEFAULT_DAYS, you_days: int = DEFAULT_YOU_DAYS, brand: s
     with store._conn() as conn:                                    # "not interested" on any channel: never waiting, on either side
         done = {r["person_id"] for r in conn.execute("SELECT person_id FROM leads WHERE status = 'done' AND person_id IS NOT NULL")}
     people = [p for p in people if p["person_id"] not in done]
-    covered = _covered()
+    follow_ups = _follow_ups()
     snoozed = {int(k) for k, v in _snoozed().items() if v > today.isoformat()}
-    people = [p for p in people if p["person_id"] not in covered and p["person_id"] not in snoozed]
+    people = [p for p in people if p["person_id"] not in snoozed]
     touches = last_touches([p["person_id"] for p in people])
     out = {"waiting_on_you": [], "waiting_on_them": []}
     for p in people:
@@ -142,6 +144,9 @@ def waiting(days: int = DEFAULT_DAYS, you_days: int = DEFAULT_YOU_DAYS, brand: s
             continue
         row = {**p, "contact_id": p["person_id"], "side": "waiting_on_you" if theirs else "waiting_on_them", "days_quiet": quiet,
                "last_at": last["at"], "last_how": last["how"]}
+        if p["person_id"] in follow_ups:                           # a follow-up is planned; overdue means it is on you
+            d = follow_ups[p["person_id"]]
+            row["follow_up"] = {"date": d, "overdue": d < today.isoformat()}
         if theirs and access.is_full():                            # their words: message previews belong to whoever owns the mailbox
             row["their_last_words"] = last["text"]
         out[row["side"]].append(row)

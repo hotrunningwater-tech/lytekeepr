@@ -189,7 +189,10 @@
   /* ---------- who is waiting: every contact whose conversation stopped, split by who owes the next message ---------- */
   var HOW = { email: 'email', linkedin: 'LinkedIn', instagram: 'Instagram', outreach: 'outreach step' };
   function quietRow(c) {
-    var meta = [h('span', { class: 'hm-late' }, c.days_quiet + ' days'), h('span', {}, 'Last: ' + (HOW[c.last_how] || c.last_how)),
+    var today = state.agenda ? state.agenda.now.slice(0, 10) : '';
+    var fu = c.follow_up ? (c.follow_up.overdue ? h('span', { class: 'hm-late' }, 'Follow-up overdue since ' + dayLabel(c.follow_up.date, today))
+                                                : h('span', {}, 'Follow-up planned ' + dayLabel(c.follow_up.date, today))) : null;
+    var meta = [h('span', { class: 'hm-late' }, c.days_quiet + ' days'), h('span', {}, 'Last: ' + (HOW[c.last_how] || c.last_how)), fu,
                 c.funnel_name ? h('span', {}, c.funnel_name + (c.stage_name ? ' · ' + c.stage_name : '')) : null, c.company_name ? h('span', {}, c.company_name) : null,
                 brandDot(c.brand)].filter(Boolean);
     return h('div', { class: 'hm-row' }, [

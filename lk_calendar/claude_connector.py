@@ -210,10 +210,12 @@ TOOLS = [
     {"name": "contacts_gone_quiet", "title": "Who is waiting (gone quiet)",
      "description": "A full sweep of every contact whose conversation stopped, split by who owes the next message: waiting_on_you = they wrote last and the user "
                     "hasn't answered for you_days days (3 by default); waiting_on_them = the user wrote last and they haven't answered for days days (14 by default). "
-                    "Use for 'who hasn't replied to me?' (waiting_on_them), 'who am I leaving hanging?' (waiting_on_you), or both. brand is REQUIRED: if the user didn't say, "
-                    "ask which brand (or 'all') before calling. Always label each person with their side. Leaves out contacts marked not interested (Lost), "
-                    "ones with an open follow-up, and ones put off with 'Not now'.",
-     "inputSchema": {"type": "object", "required": ["brand"], "properties": {"brand": {"type": "string", "description": "Brand name or key, or 'all' for every brand"},
+                    "Use for 'who hasn't replied to me?' (waiting_on_them), 'who am I leaving hanging?' (waiting_on_you), or both. The brand must come from the USER: "
+                    "pass their own words that named it in brand_from_user. Never choose a brand or 'all' yourself; if they didn't name one, call without it and ask "
+                    "the question the tool returns. Always label each person with their side, and say when a follow-up is planned or overdue (overdue = on the user). "
+                    "Leaves out contacts marked not interested (Lost) and ones put off with 'Not now'.",
+     "inputSchema": {"type": "object", "properties": {"brand": {"type": "string", "description": "Brand name or key, or 'all' for every brand"},
+                                                      "brand_from_user": {"type": "string", "description": "The user's own words that named the brand or said all (quote them)"},
                                                       "side": {"type": "string", "enum": ["you", "them", "both"], "default": "both"},
                                                       "days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 14, "description": "Waiting on them: at least this many days"},
                                                       "you_days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 3, "description": "Waiting on you: at least this many days"},
@@ -674,10 +676,15 @@ def _run_tool(call, name: str, args: dict):
         q = {k: int(args[k]) for k in ("days", "you_days") if args.get(k) not in (None, "")}
         q["limit"] = int(args.get("limit") or 50)
         brand = str(args.get("brand") or "").strip()
-        if not brand:                                      # never a silent sweep of everything: the user picks
-            names = [b.get("name") for b in need(*call("GET", "/api/crm/brands")).get("brands", [])]
+        said = str(args.get("brand_from_user") or "").lower()
+        listed = need(*call("GET", "/api/crm/brands")).get("brands", [])
+        names = [b.get("name") for b in listed]
+        wants_all = brand.lower() in ("all", "all brands", "every brand", "everything")
+        named = any(w in said for w in ("all", "every", "everything", "both")) if wants_all else \
+            any(brand.lower() in (b.get("key", "").lower(), b.get("name", "").lower()) and (b.get("key", "").lower() in said or b.get("name", "").lower() in said) for b in listed)
+        if not brand or not named:                         # the brand comes from the user's words, never from Claude
             return {"searched": False, "ask_the_user": "Which brand: " + ", ".join(names) + ", or all of them?"}
-        if brand.lower() not in ("all", "all brands", "every brand", "everything"):
+        if not wants_all:
             q["brand"] = brand
         if args.get("side") in ("you", "them"):
             q["side"] = args["side"]
