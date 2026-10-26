@@ -252,12 +252,24 @@ TOOLS = [
     {"name": "set_stage_won", "title": "Mark a funnel stage as Won",
      "description": "Mark (or unmark) a funnel stage as the won-deal stage; reaching it starts onboarding on the next autopilot run. People already in it are treated as existing customers. Admin only. stage_id from get_funnel.",
      "inputSchema": {"type": "object", "properties": {"stage_id": {"type": "integer"}, "won": {"type": "boolean", "default": True}}, "required": ["stage_id"]}},
-    {"name": "save_meeting_brief", "title": "Save meeting brief",
-     "description": "Save the brief for an upcoming meeting (autopilot). Replaces an earlier brief; never touches the user's own notes; never sent to Google or guests.",
+    {"name": "save_meeting_prep", "title": "Save meeting prep",
+     "description": "When the user asks to prepare for a meeting (and in the autopilot run): ONLY for a meeting in the calendar (item_id from get_agenda or list_calendar); "
+                    "if there is no such meeting, say so and prepare nothing. FIRST read get_meeting_notes: if it already has a prep, tell the user it is already prepped "
+                    "(and when), show it, and prepare again only if they insist (then replace=true). Then write the prep (who they are, where things stand, the last "
+                    "conversations, open questions, what to aim for), show it in the chat and save it here: it goes into the meeting's private notes as Claude's prep, "
+                    "never touching the user's own notes, never sent to Google or guests.",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"},
+                                                      "replace": {"type": "boolean", "description": "true only after the user said to redo an existing prep"}},
+                     "required": ["item_id", "text"]}},
+    {"name": "save_meeting_brief", "title": "Save meeting prep (old name)",
+     "description": "Same as save_meeting_prep (kept for scheduled runs set up earlier). Never replaces an existing prep.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["item_id", "text"]}},
     {"name": "save_call_summary", "title": "Save call summary",
-     "description": "Save the summary of a recorded call (autopilot). Shows on Home under Calls to review and on the contact.",
-     "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}, "summary": {"type": "string"}}, "required": ["call_id", "summary"]}},
+     "description": "Save a call's summary on the call (shows on the contact and on Home under Calls to review). Whenever you summarize a recorded call for the user, "
+                    "save it here too. If the answer says it already has a summary, warn the user and save again with replace=true only after they say yes.",
+     "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}, "summary": {"type": "string"},
+                                                      "replace": {"type": "boolean", "description": "true only after the user agreed to replace the existing summary"}},
+                     "required": ["call_id", "summary"]}},
     {"name": "save_followup_draft", "title": "Save follow-up draft",
      "description": "Save a follow-up email draft after a meeting (autopilot): call_id for a recorded call, or item_id for a meeting with no recording. "
                     "Goes to the first contact on it with an email. NOT sent: the user reviews it on Home and sends it themselves. Body without a subject line; sign off with 'Best,' and [Your Name].",
@@ -265,7 +277,7 @@ TOOLS = [
                      "required": ["subject", "body"]}},
     {"name": "calls_to_review", "title": "Calls to review", "description": "Recorded calls with a transcript not summarized yet, and meetings that passed with no recording (possible no-shows).",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
-    {"name": "get_call", "title": "Call transcript", "description": "One recorded call (from Fathom): who was on it, the summary if any, and the full transcript.",
+    {"name": "get_call", "title": "Call transcript", "description": "One recorded call (from Fathom): who was on it, the summary if any, and the full transcript. When you summarize it for the user, save the summary with save_call_summary.",
      "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}}, "required": ["call_id"]}, "read": True},
     {"name": "create_task", "title": "Create a task",
      "description": "Add a task (shows on the user's Home, under Actions needed when due today, otherwise under Tasks; the calendar shows only meetings). Use for follow-ups too (e.g. 'Follow up with Sara about pricing'). Today or later only.",
@@ -346,7 +358,7 @@ TOOLS = [
                                                       "google_meet": {"type": "boolean", "default": True}, "record_with_fathom": {"type": "boolean", "default": True, "description": "Leave out (on). false only when the user says not to record."},
                                                       "notes": {"type": "string"}}, "required": ["title", "date", "time"]}, "read": False},
     {"name": "get_meeting_notes", "title": "A meeting's private notes",
-     "description": "The user's own private notes on a meeting (prep, and notes during or after the call), and the brief saved by the scheduled autopilot run if any. item_id from get_agenda or list_calendar. Only the user sees these.",
+     "description": "The user's own private notes on a meeting (notes before, during or after the call), with Claude's prep separately in `prep` and when it was written in `prepared_on` (empty = not prepped yet). item_id from get_agenda or list_calendar. Only the user sees these.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}}, "required": ["item_id"]}, "read": True},
     {"name": "write_meeting_notes", "title": "Write private meeting notes",
      "description": (CONFIRM_RULE + " " + "Add to the user's private notes on a meeting (prep plan, what was said, follow-ups). mode 'append' (the default) adds at the end and keeps "
@@ -684,10 +696,11 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("POST", "/api/calendar/autopilot/onboarding", {k: args.get(k) for k in ("contact_id", "subject", "body", "reminders")}))
     if name == "set_stage_won":
         return need(*call("POST", f"/api/crm/funnels/stages/{int(args['stage_id'])}/won", {"won": args.get("won", True) is not False}))
-    if name == "save_meeting_brief":
-        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/brief", {"text": args.get("text", "")}))
+    if name in ("save_meeting_prep", "save_meeting_brief"):
+        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/prep",
+                          {"text": args.get("text", ""), "replace": name == "save_meeting_prep" and args.get("replace") is True}))
     if name == "save_call_summary":
-        return need(*call("PUT", f"/api/calls/{int(args['call_id'])}/summary", {"summary": args.get("summary", "")}))
+        return need(*call("PUT", f"/api/calls/{int(args['call_id'])}/summary", {"summary": args.get("summary", ""), "replace": args.get("replace") is True}))
     if name == "save_followup_draft":
         return need(*call("POST", "/api/calendar/autopilot/drafts", {k: args.get(k) for k in ("call_id", "item_id", "subject", "body")}))
     if name == "get_call":

@@ -1,7 +1,7 @@
 """Meetings on autopilot, done by Claude on a schedule (every 2 hours). LyteKeepr only lists the work and keeps the results;
 no AI runs here (Claude writes, on the user's own Claude plan, through the connector).
-- Before a meeting: a brief for each meeting in the next 26 hours that has a contact as a guest. Kept like a private meeting note
-  (per person, never sent to Google or guests) but apart from the person's own notes: who = 'brief:<who>'. Shown on the meeting and on Home.
+- Before a meeting: a prep for each meeting in the next 26 hours that has a contact as a guest and no prep yet. It goes into the
+  person's private note on the meeting as Claude's prep section (meeting_notes.set_prep), the same place a prep asked for goes.
 - After a meeting: once the Fathom transcript is in, the call summary (the call's own summary field) and a follow-up email draft.
   A transcript too short to mean anything (a test call) is listed as too short and left alone.
   A meeting with no recording is left alone until the user says what happened (Home asks 2 hours after it ends):
@@ -22,10 +22,10 @@ PROMPT = ("Run the LyteKeepr autopilot: call autopilot_queue and follow the inst
           "with the tools it names. Do not ask me anything and do not send any email; whatever needs me waits in LyteKeepr. "
           "If there is nothing to do, stop.")
 DOES = ("Today: new emails and messages are read for interested people, messages waiting for your answer, and promises with deadlines; "
-        "a welcome email draft and onboarding reminders when a deal is won; a brief before each meeting with a contact; and after a recorded call the summary and a follow-up email draft (a \"want to reschedule?\" draft after a no-show).")
+        "a welcome email draft and onboarding reminders when a deal is won; a prep in your private notes before each meeting with a contact; and after a recorded call the summary and a follow-up email draft (a \"want to reschedule?\" draft after a no-show).")
 INSTRUCTIONS = {
-    "meetings_needing_brief": "For each meeting: read get_contact and get_contact_history for its contacts (and get_meeting_notes), then write a short brief "
-                              "(who they are, where things stand, the last conversations, open questions, what to aim for in this meeting). Save with save_meeting_brief.",
+    "meetings_needing_brief": "For each meeting: read get_contact and get_contact_history for its contacts (and get_meeting_notes), then write a short prep "
+                              "(who they are, where things stand, the last conversations, open questions, what to aim for in this meeting). Save with save_meeting_prep.",
     "calls_needing_summary": "For each call: read it with get_call and summarize what was discussed, the decisions, and the next steps with who owns them. Save with save_call_summary.",
     "needing_followup_draft": "For each item: write a short follow-up email from what its `use` says, never inventing facts. Body without a subject line, "
                               "signed 'Best,' and [Your Name]. Save with save_followup_draft (call_id for a call, item_id for a meeting). It is not sent.",
@@ -61,10 +61,6 @@ def _conn():
     conn = store._conn()
     conn.executescript(SCHEMA)
     return conn
-
-
-def _brief_who() -> str:
-    return "brief:" + meeting_notes._me()
 
 
 def _mine(ev) -> bool:
@@ -107,7 +103,8 @@ def queue() -> dict:
            "needing_followup_draft": [], "waiting_for_recording": [], "asked_what_happened": []}
     with store._conn() as conn:
         meeting_notes._ready(conn)
-        briefed = {r["meeting_key"] for r in conn.execute("SELECT meeting_key FROM meeting_private_notes WHERE who = ? AND text != ''", (_brief_who(),))}
+        briefed = {r["meeting_key"] for r in conn.execute("SELECT meeting_key, text FROM meeting_private_notes WHERE who = ?", (meeting_notes._me(),))
+                   if meeting_notes.split_prep(r["text"])[0]}
     for e in store.occurrences(now.date().isoformat(), (now + timedelta(hours=BRIEF_HOURS)).date().isoformat()):
         if not _is_meeting(e) or e.get("untimed") or e.get("meeting_status") == "cancelled" or not access.can_event(e) or not _mine(e):
             continue
@@ -151,42 +148,23 @@ def queue() -> dict:
                 if guests and _first_email([g["person_id"] for g in guests])[1]:
                     out["needing_followup_draft"].append({**brief, "kind": "happened" if e["meeting_status"] == "completed" else "no_show",
                         "contacts": [{"contact_id": g["person_id"], "name": g["contact_name"]} for g in guests],
-                        "use": "your private notes and the brief (get_meeting_notes)" if e["meeting_status"] == "completed"
+                        "use": "your private notes and the prep (get_meeting_notes)" if e["meeting_status"] == "completed"
                                else "nothing: a short, friendly 'sorry we missed each other, want to pick another time?'"})
     return out
 
 
 # ------------------------------------------------------------------ saving what Claude wrote
-def save_brief(event_id: int, text: str) -> dict:
-    ev = meeting_notes._event(event_id)
-    if not (text or "").strip():
-        raise AutopilotError("The brief is empty.")
-    with store._conn() as conn:
-        meeting_notes._ready(conn)
-        conn.execute("INSERT OR REPLACE INTO meeting_private_notes (meeting_key, who, text, updated_at) VALUES (?, ?, ?, ?)",
-                     (meeting_notes._key(ev), _brief_who(), text.strip()[:meeting_notes.MAX], store.now_local().isoformat(timespec="minutes")))
-    return {"item_id": ev["id"], "title": ev["title"], "saved": True}
-
-
-def add_briefs(events: list) -> None:
-    """Put the viewer's brief on each meeting (next to their private notes)."""
-    if not events:
-        return
-    with store._conn() as conn:
-        meeting_notes._ready(conn)
-        mine = {r["meeting_key"]: r["text"] for r in conn.execute("SELECT meeting_key, text FROM meeting_private_notes WHERE who = ?", (_brief_who(),))}
-    for e in events:
-        if isinstance(e, dict) and e.get("id") is not None:
-            e["brief"] = mine.get(meeting_notes._key(e), "")
-
-
-def save_summary(call_id: int, summary: str) -> dict:
+def save_summary(call_id: int, summary: str, replace: bool = False) -> dict:
+    """The call's summary (shown on the contact and in Calls to review). An earlier one is replaced only with replace=True (the user agreed)."""
     from . import calls
     call = calls.get_call(call_id)
     if not call:
         raise AutopilotError("No such call.")
     if not (summary or "").strip():
         raise AutopilotError("The summary is empty.")
+    if (call.get("summary") or "").strip() and not replace:
+        return {"saved": False, "already_summarized": True, "call_id": call_id, "title": call["title"], "existing_summary": call["summary"],
+                "tell_the_user": "This call already has a summary (shown here). Ask if they want it replaced; save again with replace=true only after yes."}
     with calls._crm() as c:
         c.execute("UPDATE calls SET summary = ? WHERE call_id = ?", (summary.strip(), call_id))
     return {"call_id": call_id, "title": call["title"], "saved": True}
@@ -287,13 +265,9 @@ def register(app):
     def autopilot_queue():
         return run(queue)
 
-    @app.put("/api/calendar/events/<int:event_id>/brief")
-    def autopilot_brief(event_id):
-        return run(save_brief, event_id, b().get("text", ""))
-
     @app.put("/api/calls/<int:call_id>/summary")
     def autopilot_summary(call_id):
-        return run(save_summary, call_id, b().get("summary", ""))
+        return run(save_summary, call_id, b().get("summary", ""), bool(b().get("replace")))
 
     @app.post("/api/calendar/autopilot/drafts")
     def autopilot_draft_save():
