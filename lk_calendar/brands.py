@@ -29,14 +29,47 @@ def names() -> dict:
     return {b["key"]: b["name"] for b in all_brands()}
 
 
+def _flat(s) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(s or "").lower())
+
+
+def best_match(text, brand_list: list):
+    """The brand meant by `text`, forgiving typos and spacing ("Nexi" -> Nexy, "Lyte Keeper" -> LyteKeepr, "Aspan CRM" -> Aspan).
+    Returns the brand dict, or None when nothing is close or two brands are about equally close (then the caller asks)."""
+    import difflib
+    t = _flat(text)
+    if not t:
+        return None
+    for b in brand_list:                                          # exact (any case, any spacing)
+        if t in (_flat(b["key"]), _flat(b["name"])):
+            return b
+    scored = []
+    for b in brand_list:
+        best = 0.0
+        for cand in {_flat(b["key"]), _flat(b["name"])}:
+            if not cand:
+                continue
+            r = difflib.SequenceMatcher(None, t, cand).ratio()
+            if len(cand) >= 3 and (t.startswith(cand) or cand.startswith(t)) and len(t) >= 3:
+                r = max(r, 0.9)                                   # "aspancrm" / "nex"
+            best = max(best, r)
+        scored.append((best, b))
+    scored.sort(key=lambda x: -x[0])
+    if not scored or scored[0][0] < 0.7:
+        return None
+    if len(scored) > 1 and scored[0][0] - scored[1][0] < 0.1:
+        return None                                               # too close to call: ask
+    return scored[0][1]
+
+
 def resolve(text) -> str:
-    """A brand key from a key or a name (any case). '' stays '' (no brand). Unknown → ValidationError listing the brands."""
+    """A brand key from a key or a name, forgiving typos (best_match). '' stays '' (no brand). Nothing close → ValidationError listing the brands."""
     t = str(text or "").strip()
     if not t:
         return ""
-    for b in all_brands():
-        if t.lower() in (b["key"].lower(), b["name"].lower()):
-            return b["key"]
+    b = best_match(t, all_brands())
+    if b:
+        return b["key"]
     raise store.ValidationError(f"There is no brand “{t}”. Brands: {', '.join(b['name'] for b in all_brands()) or 'none yet'}.")
 
 

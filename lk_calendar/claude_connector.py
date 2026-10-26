@@ -15,6 +15,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import time
 import urllib.parse
@@ -149,10 +150,11 @@ def _brand_key(call, need, text):
         return None
     if t.lower() in ("none", "no brand", "unassigned"):
         return ""
+    from .brands import best_match                      # the same forgiving match as the app ("Nexi" -> Nexy)
     brands = need(*call("GET", "/api/crm/brands"))["brands"]
-    for b in brands:
-        if t.lower() in (b["key"].lower(), b["name"].lower()):
-            return b["key"]
+    b = best_match(t, brands)
+    if b:
+        return b["key"]
     raise ValueError(f"There is no brand '{t}'. Brands: {', '.join(b['name'] for b in brands)}.")
 
 
@@ -680,8 +682,14 @@ def _run_tool(call, name: str, args: dict):
         listed = need(*call("GET", "/api/crm/brands")).get("brands", [])
         names = [b.get("name") for b in listed]
         wants_all = brand.lower() in ("all", "all brands", "every brand", "everything")
+        from .brands import best_match                  # typos count: "Nexi" in the user's words names Nexy
+        meant = None if wants_all else best_match(brand, listed)
+        words = re.findall(r"[a-z0-9]+", said)
+        phrases = words + [a + b for a, b in zip(words, words[1:])]
         named = any(w in said for w in ("all", "every", "everything", "both")) if wants_all else \
-            any(brand.lower() in (b.get("key", "").lower(), b.get("name", "").lower()) and (b.get("key", "").lower() in said or b.get("name", "").lower() in said) for b in listed)
+            bool(meant) and any((best_match(p, listed) or {}).get("key") == meant["key"] for p in phrases if len(p) >= 3)
+        if meant:
+            brand = meant["key"]
         if not brand or not named:                         # the brand comes from the user's words, never from Claude
             return {"searched": False, "ask_the_user": "Which brand: " + ", ".join(names) + ", or all of them?"}
         if not wants_all:
