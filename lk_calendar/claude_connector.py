@@ -207,11 +207,15 @@ TOOLS = [
     {"name": "get_contact", "title": "Contact details",
      "description": "Everything about one contact: profile, notes, funnel and stage, LinkedIn/Instagram messages, follow-ups and their recorded calls (with summaries). Use search_contacts first to get the id.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
-    {"name": "contacts_gone_quiet", "title": "Contacts gone quiet",
-     "description": "Contacts in a funnel nobody has been in touch with for a while (no email, LinkedIn/Instagram message, call, logged conversation or outreach step in `days` days). "
-                    "Leaves out contacts that already have an open follow-up reminder and ones put off with 'Not now'. Longest silence first; days_quiet and last_contact_how per contact.",
-     "inputSchema": {"type": "object", "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 14, "description": "Quiet for at least this many days"},
-                                                      "funnel_id": {"type": "integer", "description": "Only this funnel (see list_funnels)"},
+    {"name": "contacts_gone_quiet", "title": "Who is waiting (gone quiet)",
+     "description": "A full sweep of every contact whose conversation stopped, split by who owes the next message: waiting_on_you = they wrote last and the user "
+                    "hasn't answered for you_days days (3 by default); waiting_on_them = the user wrote last and they haven't answered for days days (14 by default). "
+                    "Use for 'who hasn't replied to me?' (waiting_on_them), 'who am I leaving hanging?' (waiting_on_you), or both. If the user didn't say which brand, "
+                    "ask first: one brand or all of them. Always label each person with their side. Leaves out contacts with an open follow-up and ones put off with 'Not now'.",
+     "inputSchema": {"type": "object", "properties": {"brand": {"type": "string", "description": "Brand name or key; empty = all brands"},
+                                                      "side": {"type": "string", "enum": ["you", "them", "both"], "default": "both"},
+                                                      "days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 14, "description": "Waiting on them: at least this many days"},
+                                                      "you_days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 3, "description": "Waiting on you: at least this many days"},
                                                       "limit": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}}}, "read": True},
     {"name": "snooze_quiet_contact", "title": "Not now (gone quiet)",
      "description": "Take a contact off the gone-quiet list for some days (they come back after that if nobody got in touch).",
@@ -665,8 +669,12 @@ def _run_tool(call, name: str, args: dict):
                             "summary": c.get("summary"), "has_transcript": c.get("has_transcript")} for c in (calls or {}).get("calls", [])] if status < 400 else []
         return detail
     if name == "contacts_gone_quiet":
-        q = {k: int(args[k]) for k in ("days", "funnel_id") if args.get(k) not in (None, "")}
+        q = {k: int(args[k]) for k in ("days", "you_days") if args.get(k) not in (None, "")}
         q["limit"] = int(args.get("limit") or 50)
+        if args.get("brand"):
+            q["brand"] = str(args["brand"])
+        if args.get("side") in ("you", "them"):
+            q["side"] = args["side"]
         return need(*call("GET", "/api/crm/quiet?" + urllib.parse.urlencode(q)))
     if name == "snooze_quiet_contact":
         return need(*call("POST", f"/api/crm/quiet/{int(args['contact_id'])}/snooze", {"days": int(args.get("days") or 14)}))

@@ -37,10 +37,10 @@ Ask Claude: *"Prepare me for my next meeting."*
 Ask again: ✅ Claude says it is already prepped (and when) and redoes it only if you insist.
 Ask *"Prepare me for a meeting with someone I'm not meeting"*: ✅ Claude says there is no such meeting and prepares nothing.
 
-**7. (Phone + Mac) Gone quiet / not contacted recently (#8, P1)**
-a. Home → Automatic → **Gone quiet** (it only appears when someone qualifies). Switch it to 30 days.
-b. Ask Claude: *"Who in my funnels has gone quiet for 30 days?"*
-✅ Works if: Claude names the same people as the list.
+**7. (Phone + Mac) Who is waiting / gone quiet (#8, P1)**
+a. Home → Automatic → **Gone quiet** (it only appears when someone qualifies). It has two sections: **Waiting on you** (they wrote last) and **Waiting on them** (you wrote last).
+b. Ask Claude: *"Who am I leaving hanging?"* and *"Who hasn't answered me?"*
+✅ Works if: Claude asks which brand (or all), then names the same people as the matching section, each labelled with their side.
 c. Click **Not now** on one.
 ✅ Works if: they disappear from the list.
 

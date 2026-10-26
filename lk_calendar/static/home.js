@@ -23,7 +23,7 @@
   if (!$('homeActions')) return;
   function fail(e) { if (window.lkContacts && window.lkContacts.notice) window.lkContacts.notice(e.message); else alert(e.message); }
 
-  var state = { agenda: null, goals: null, brands: {}, open: {}, quiet: null, quietDays: 14 };
+  var state = { agenda: null, goals: null, brands: {}, open: {}, quiet: null, quietDays: 14, quietYouDays: 3, quietBrand: '' };
   function isMeeting(e) { return e.kind === 'meeting' || e.source === 'google' || !!e.has_call || !!e.expect_recording; }
   function toUTC(iso) { var p = iso.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
   function dayLabel(iso, today) {
@@ -46,7 +46,7 @@
   function load() {
     return Promise.all([api('GET', '/api/calendar/agenda'), api('GET', '/api/calendar/goals'),
                         api('GET', '/api/crm/brands').catch(function () { return { brands: [] }; }),
-                        api('GET', '/api/crm/quiet?days=' + state.quietDays).catch(function () { return null; }),
+                        api('GET', '/api/crm/quiet?days=' + state.quietDays + '&you_days=' + state.quietYouDays + '&brand=' + encodeURIComponent(state.quietBrand || '')).catch(function () { return null; }),
                         api('GET', '/api/calendar/inbox/flags').catch(function () { return { flags: [] }; })])
       .then(function (r) {
         state.agenda = r[0]; state.goals = r[1]; state.quiet = r[3]; state.flags = r[4].flags || [];
@@ -163,26 +163,41 @@
     fill($('homeFlags'), out);
   }
 
-  /* ---------- gone quiet: funnel contacts nobody has been in touch with for N days ---------- */
-  var HOW = { email: 'email', linkedin: 'LinkedIn', instagram: 'Instagram', call: 'call', logged: 'logged conversation', outreach: 'outreach step' };
+  /* ---------- who is waiting: every contact whose conversation stopped, split by who owes the next message ---------- */
+  var HOW = { email: 'email', linkedin: 'LinkedIn', instagram: 'Instagram', outreach: 'outreach step' };
+  function quietRow(c) {
+    var meta = [h('span', { class: 'hm-late' }, c.days_quiet + ' days'), h('span', {}, 'Last: ' + (HOW[c.last_how] || c.last_how)),
+                c.funnel_name ? h('span', {}, c.funnel_name + (c.stage_name ? ' · ' + c.stage_name : '')) : null, c.company_name ? h('span', {}, c.company_name) : null,
+                brandDot(c.brand)].filter(Boolean);
+    return h('div', { class: 'hm-row' }, [
+      h('div', { class: 'hm-main' }, [h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { if (window.openCrmPersonDetail) window.openCrmPersonDetail(c.person_id); } }, c.name),
+        c.their_last_words ? h('span', { class: 'hm-quote' }, '“' + c.their_last_words + '”') : null, h('div', { class: 'hm-meta' }, meta)]),
+      h('button', { class: 'hm-mini', type: 'button', title: 'Off this list for 14 days', onclick: function () {
+        api('POST', '/api/crm/quiet/' + c.person_id + '/snooze', { days: 14 }).then(load).catch(fail);
+      } }, 'Not now')]);
+  }
   function renderQuiet() {
     var q = state.quiet;
     state.counts.Quiet = q ? q.count : 0;
     if (!q) { fill($('homeQuiet'), []); return; }
-    var pick = h('select', { class: 'hm-input hm-days', onchange: function () { state.quietDays = +pick.value; load(); } }, [14, 30, 60, 90].map(function (d) {
-      return h('option', { value: d, selected: d === q.days }, 'No contact for ' + d + '+ days');
-    }));
-    var rows = q.contacts.map(function (c) {
-      return h('div', { class: 'hm-row' }, [
-        h('div', { class: 'hm-main' }, [h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { if (window.openCrmPersonDetail) window.openCrmPersonDetail(c.person_id); } }, c.name),
-          h('div', { class: 'hm-meta' }, [h('span', { class: 'hm-late' }, c.days_quiet + ' days quiet'), h('span', {}, 'Last: ' + (HOW[c.last_contact_how] || c.last_contact_how)),
-            h('span', {}, c.funnel_name + (c.stage_name ? ' · ' + c.stage_name : '')), c.company_name ? h('span', {}, c.company_name) : null].filter(Boolean))]),
-        h('button', { class: 'hm-mini', type: 'button', title: 'Off this list for 14 days', onclick: function () {
-          api('POST', '/api/crm/quiet/' + c.person_id + '/snooze', { days: 14 }).then(load).catch(fail);
-        } }, 'Not now')]);
-    });
-    fill($('homeQuiet'), [h('div', { class: 'hm-quiet-head' }, [pick, h('span', { class: 'hm-empty' }, 'In a funnel, contacted before, nothing since.')])]
-      .concat(rows.length ? rows : [h('p', { class: 'hm-empty' }, 'Nobody has gone quiet.')]));
+    var brandPick = h('select', { class: 'hm-input hm-days', onchange: function () { state.quietBrand = brandPick.value; load(); } },
+      [h('option', { value: '', selected: !q.brand }, 'All brands')].concat(Object.keys(state.brands).map(function (k) {
+        return h('option', { value: k, selected: q.brand === k }, state.brands[k].name);
+      })));
+    function dayPick(key, list, value, label) {
+      var sel = h('select', { class: 'hm-input hm-days', onchange: function () { state[key] = +sel.value; load(); } }, list.map(function (d) {
+        return h('option', { value: d, selected: d === value }, label + ' ' + d + '+ days');
+      }));
+      return sel;
+    }
+    var out = [h('div', { class: 'hm-quiet-head' }, [brandPick])];
+    out.push(h('div', { class: 'hm-quiet-head' }, [h('div', { class: 'hm-day hm-late' }, 'Waiting on you · ' + q.waiting_on_you.length),
+      dayPick('quietYouDays', [1, 3, 7, 14], q.you_days, 'Unanswered')]));
+    out = out.concat(q.waiting_on_you.length ? q.waiting_on_you.map(quietRow) : [h('p', { class: 'hm-empty' }, 'Nobody is waiting on you.')]);
+    out.push(h('div', { class: 'hm-quiet-head' }, [h('div', { class: 'hm-day' }, 'Waiting on them · ' + q.waiting_on_them.length),
+      dayPick('quietDays', [7, 14, 30, 60, 90], q.days, 'No answer')]));
+    out = out.concat(q.waiting_on_them.length ? q.waiting_on_them.map(quietRow) : [h('p', { class: 'hm-empty' }, 'Nobody owes you an answer.')]);
+    fill($('homeQuiet'), out);
   }
 
   /* ---------- the automatic bar: one chip per type with its count; a chip opens its list below the bar ---------- */

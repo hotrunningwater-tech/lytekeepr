@@ -34,7 +34,7 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 
 | # | Feature | Need | Type | Status | Rating |
 |---|---|---|---|---|---|
-| P1 | Neglected lead detection | 9/10 | Plain code (always on) | Gone quiet on Home: funnel contacts with no contact for 14/30/60/90 days, with Not now; Claude tools contacts_gone_quiet and snooze_quiet_contact. Lead follow-up tasks are automatic too | 9 |
+| P1 | Neglected lead detection | 9/10 | Plain code (always on) | Gone quiet on Home, every contact (by brand), split by who owes the next message: Waiting on you (they wrote last, unanswered 3+ days) and Waiting on them (you wrote last, no answer 14+ days); Not now; Claude tool contacts_gone_quiet (asks which brand, labels each side) | 9 |
 | P2 | New-customer onboarding | 7/10 | Scheduled (Claude) | Built 2026-10-24: a funnel stage can be marked Won (Edit stages → Won?, or Claude's set_stage_won). Each autopilot run notices contacts who arrived in a Won stage (people already there when it was marked don't count) and Claude saves a welcome email draft (waits on Home, never sent) plus onboarding reminders (tasks) through save_onboarding | 8 |
 | P5 | Post-meeting processing | 8/10 | Scheduled (Claude) | Fathom pulls the recording. The scheduled run writes the call summary (shown on the call and in the contact's history) and a follow-up draft, plus a reschedule draft after a no-show. Drafts wait on Home and are never sent on their own | 9 |
 | P7 | Automatic meeting preparation | 8/10 | Scheduled (Claude) | The scheduled run writes a brief for each meeting with a contact in the next 26 hours, shown on Home and on the meeting | 9 |
