@@ -250,6 +250,12 @@ def create_pending_send(person_name: str, subject: str, body: str, reply_in_thre
     }
 
 
+def storage_load(mid: str) -> dict:
+    from gmail import storage
+    from mailserver import own as own_mail
+    return storage.load_message(own_mail.address(), mid) or storage.load_pending(own_mail.address(), mid) or {}
+
+
 def _reply_target(person_id: int, subject: str):
     """The last email thread with this person: (threadId, Message-ID to reply to, subject). Falls back to a new thread if anything is missing."""
     conn = crm_db.get_connection()
@@ -262,9 +268,15 @@ def _reply_target(person_id: int, subject: str):
     if not row:
         return None, None, subject
     try:
-        meta = gmail_client.get_message(row["external_message_id"])
-        headers = {h.get("name", "").lower(): h.get("value", "") for h in (meta.get("payload", {}).get("headers") or [])}
-        message_id, original = headers.get("message-id"), headers.get("subject", "")
+        from mailserver import own as own_mail
+        if own_mail.is_enabled():                       # own mail server: the Message-ID was kept when the email was synced
+            message_id = own_mail.message_id_header(row["external_message_id"])
+            saved = storage_load(row["external_message_id"])
+            original = saved.get("subject", "")
+        else:
+            meta = gmail_client.get_message(row["external_message_id"])
+            headers = {h.get("name", "").lower(): h.get("value", "") for h in (meta.get("payload", {}).get("headers") or [])}
+            message_id, original = headers.get("message-id"), headers.get("subject", "")
         if not message_id:
             return None, None, subject
         if not (subject or "").strip():
@@ -320,8 +332,14 @@ def send_email(person_id, person_name: str, to_email: str, subject: str, body: s
         mime["In-Reply-To"] = in_reply_to
         mime["References"] = in_reply_to
 
+    from mailserver import own as own_mail
     try:
-        result = gmail_client.send_message(mime.as_bytes(), thread_id=thread_id)
+        if own_mail.is_enabled():                       # the workspace's own mail server (e.g. through Brevo)
+            result = own_mail.send(to_email, subject, body, in_reply_to=in_reply_to)
+        else:
+            result = gmail_client.send_message(mime.as_bytes(), thread_id=thread_id)
+    except own_mail.MailError as exc:
+        return {"status": "failed", "message": f"Not sent to {person_name} — {exc}", "person_name": person_name}
     except GmailSyncError as exc:
         # A real API error here means it genuinely did not send — unlike
         # LinkedIn's browser automation, Gmail's response is trustworthy,

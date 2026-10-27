@@ -211,10 +211,14 @@ def reply(text: str, email_id=None, contact=None) -> dict:
     to = [sender] if sender not in me else [t for t in (_addr(x) for x in e.get("to") or []) if t and t not in me]
     if not to:
         raise ValueError("Couldn't tell who to reply to.")
-    from gmail import client as gmail_client
-    meta = gmail_client.get_message(mid)
-    headers = {h.get("name", "").lower(): h.get("value", "") for h in (meta.get("payload", {}).get("headers") or [])}
-    message_id = headers.get("message-id")
+    from mailserver import own as own_mail
+    if own_mail.is_enabled():                           # own mail server: the Message-ID was kept when the email was synced
+        message_id = own_mail.message_id_header(mid)
+    else:
+        from gmail import client as gmail_client
+        meta = gmail_client.get_message(mid)
+        headers = {h.get("name", "").lower(): h.get("value", "") for h in (meta.get("payload", {}).get("headers") or [])}
+        message_id = headers.get("message-id")
     subject = e.get("subject") or ""
     subject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
     from assistant import email_send_flow

@@ -733,6 +733,7 @@
       me = r; window.lkMe = r; showChip(r);
       var tb = nav.querySelector('[data-view=team]'); if (tb) tb.hidden = r.role !== 'admin';      // admin only
       var bb = nav.querySelector('[data-view=brands]'); if (bb) bb.hidden = r.role !== 'admin';     // admin only
+      var eb = nav.querySelector('[data-view=email]'); if (eb) eb.hidden = r.role !== 'admin';      // the mailbox is the admin's
       var cb = nav.querySelector('[data-view=calls]'); if (cb) cb.hidden = false;                  // everyone: their own Fathom
       return r;
     }).catch(function () { return null; });
@@ -779,7 +780,7 @@
   function showSettings(view) {
     currentSettingsView = view;
     nav.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.view === view); });
-    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else if (view === 'claude') claudeView(); else if (view === 'brands') brandsView(); else detailsView();
+    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else if (view === 'claude') claudeView(); else if (view === 'brands') brandsView(); else if (view === 'email') emailView(); else detailsView();
   }
   nav.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { showSettings(b.dataset.view); }); });
 
@@ -959,6 +960,50 @@
         }));
       card.replaceChildren.apply(card, kids.filter(Boolean));
     }).catch(function (e) { card.replaceChildren(h('h2', {}, 'Claude'), h('p', {}, e.message)); });    main.appendChild(autopilotCard());
+  }
+
+  /* Email: Gmail (sign in with Google, as before) or the workspace's own mail server (IMAP to read, SMTP such as Brevo to send) */
+  function emailView() {
+    main.replaceChildren();
+    var card = h('div', { class: 'lks-card' }, [h('h2', {}, 'Email'), h('p', {}, 'Loading…')]);
+    main.appendChild(card);
+    api('GET', '/api/mail/own').then(function (c) {
+      var f = {};
+      function field(key, label, opts) {
+        opts = opts || {};
+        var inp = h('input', { type: opts.type || 'text', value: opts.type === 'password' ? '' : (c[key] || opts.def || ''),
+          placeholder: opts.type === 'password' && c[key + '_set'] ? '•••••• (saved; leave empty to keep it)' : (opts.ph || '') });
+        f[key] = inp;
+        return h('div', { class: 'lks-opt' }, [h('label', {}, label), inp]);
+      }
+      var status = h('p', { class: 'lks-note' }, c.connected ? 'Connected: your own mail server' + (c.last_sync ? ' · last sync ' + new Date(c.last_sync).toLocaleString() : ' · first sync within 15 minutes') : 'Not connected: LyteKeepr uses Gmail.');
+      var msg = h('p', { class: 'lks-note' }, '');
+      function body() { var b = {}; Object.keys(f).forEach(function (k) { b[k] = f[k].value; }); return b; }
+      var saveBtn = h('button', { class: 'btn btn-primary', type: 'button', onclick: function () {
+        msg.textContent = 'Saving…';
+        api('PUT', '/api/mail/own', body()).then(function () {
+          msg.textContent = 'Saved. Testing…';
+          return api('POST', '/api/mail/own/test', { send: true });
+        }).then(function (t) { msg.textContent = 'Works: logged in to both servers' + (t.test_email ? ', test email ' + t.test_email : '') + '. Sent folder: ' + t.sent_folder + '.'; emailView(); })
+          .catch(function (e) { msg.textContent = e.message; });
+      } }, c.connected ? 'Save and test' : 'Connect and test');
+      var off = c.connected ? h('button', { class: 'btn lks-soft', type: 'button', onclick: function () {
+        askConfirm('Disconnect your mail server? LyteKeepr goes back to Gmail. Emails already saved stay.', 'Disconnect').then(function (yes) {
+          if (yes) api('DELETE', '/api/mail/own').then(emailView);
+        });
+      } }, 'Disconnect (back to Gmail)') : null;
+      card.replaceChildren(h('h2', {}, 'Email'),
+        h('p', {}, 'LyteKeepr reads and sends your email through Gmail, or through your own mail server: IMAP to read your Inbox and Sent folders, SMTP to send (for example Brevo). A copy of each email LyteKeepr sends is saved in your Sent folder.'),
+        status,
+        h('div', { class: 'lks-opts' }, [
+          field('address', 'Your email address', { ph: 'you@yourdomain.com' }), field('from_name', 'Your name (shown to recipients)'),
+          field('imap_host', 'IMAP server', { ph: 'mail.yourdomain.com' }), field('imap_port', 'IMAP port', { def: '993' }),
+          field('imap_user', 'IMAP username'), field('imap_password', 'IMAP password', { type: 'password' }),
+          field('smtp_host', 'SMTP server', { ph: 'smtp-relay.brevo.com' }), field('smtp_port', 'SMTP port', { def: '587' }),
+          field('smtp_user', 'SMTP username'), field('smtp_password', 'SMTP password / key', { type: 'password' })]),
+        h('div', { class: 'lks-row' }, [saveBtn, off]), msg,
+        h('div', { class: 'lks-hint' }, [h('b', {}, 'Test: '), 'connecting logs in to both servers and sends you a test email. Passwords are stored encrypted and never shown again.']));
+    }).catch(function (e) { card.replaceChildren(h('h2', {}, 'Email'), h('p', {}, e.message)); });
   }
 
   /* The scheduled Claude run (meetings on autopilot): the same prompt for everyone, to paste into a scheduled task in Claude */

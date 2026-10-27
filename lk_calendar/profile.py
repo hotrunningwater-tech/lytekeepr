@@ -19,8 +19,12 @@ def refresh_suggested(force: bool = False) -> str:
         return store.get_setting("sender_name_suggested")
     _last_try = time.time()
     try:
-        from gmail import client as gmail_client
-        name = gmail_client.get_sender_name()
+        from mailserver import own as own_mail
+        if own_mail.is_enabled():
+            name = (own_mail.load() or {}).get("from_name", "")
+        else:
+            from gmail import client as gmail_client
+            name = gmail_client.get_sender_name()
     except Exception:
         logging.getLogger(__name__).info("could not read the name from the Google account")
         return store.get_setting("sender_name_suggested")

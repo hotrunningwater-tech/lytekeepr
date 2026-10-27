@@ -44,6 +44,12 @@ def _display_fields(message: dict) -> dict:
 
 
 def get_active_account_id() -> str | None:
+    try:                                              # the workspace's own mail server, when connected, is its mailbox
+        from mailserver import own
+        if own.is_enabled():
+            return own.address()
+    except Exception:
+        pass
     active_account_id = load_active_account_id()
     if active_account_id:
         return active_account_id

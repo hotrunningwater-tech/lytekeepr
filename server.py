@@ -1111,8 +1111,10 @@ def gmail_message_detail(message_id):
 
 
 def run_gmail_scan(since_date=None) -> dict:
-    """Scan Gmail once. Emails from trusted CRM contacts are saved to the contact straight away; the rest wait for review."""
-    result = scan_for_candidates(since_date=since_date)
+    """Scan the mailbox once (Gmail, or the workspace's own mail server). Emails from trusted CRM contacts are saved to the contact
+    straight away; the rest wait for review."""
+    from mailserver import own as own_mail
+    result = own_mail.scan(since_date) if own_mail.is_enabled() else scan_for_candidates(since_date=since_date)
     account_id = result["account_id"]
 
     known_contact_ids = []

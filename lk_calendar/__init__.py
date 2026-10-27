@@ -46,6 +46,8 @@ def register(app):
     company_view.register(app)
     from . import funnel_drafts
     funnel_drafts.register(app)
+    from mailserver import own as own_mail
+    own_mail.register(app)
     from . import quiet
     quiet.register(app)
     from . import goals
