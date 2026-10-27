@@ -363,9 +363,9 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
   function attentionItems() {
     var a = state.agenda, due = fold(a.overdue.concat(a.today)).filter(function (e) { return !e.done && (e.group || e.source === 'auto' || (e.lead && e.lead.id)); });
     return { replies: due.filter(function (e) { return !e.group && kindOf(e) === 'reply'; }), follow: due.filter(function (e) { return e.group || kindOf(e) !== 'reply'; }),
-             calls: state.calls.ready || [], missing: state.calls.missing || [] };
+             calls: state.calls.ready || [], missing: state.calls.missing || [], drafts: state.calls.drafts || [] };
   }
-  function attentionCount() { var x = attentionItems(); return x.replies.length + x.follow.length + x.calls.length + x.missing.length + (state.suggestions || []).length; }
+  function attentionCount() { var x = attentionItems(); return x.replies.length + x.follow.length + x.calls.length + x.missing.length + x.drafts.length + (state.suggestions || []).length; }
   function renderAttention() {
     var box = $('attBody'); box.replaceChildren();
     var x = attentionItems(), total = attentionCount();
@@ -411,6 +411,15 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
       button(c, sg.kind === 'add_to_opportunity' ? 'Add' : 'Create contact', 'ink', function () { api('POST', '/api/crm/suggestions/' + sg.suggestion_id + '/accept', {}).then(function () { vanish(c, 'Added'); }).catch(fail); });
       if (sg.opportunity_id) button(c, 'Open', 'soft', function (b) { b.disabled = false; openOpportunity(sg.opportunity_id); });
       button(c, 'Dismiss', 'soft', function () { api('POST', '/api/crm/suggestions/' + sg.suggestion_id + '/dismiss', {}).then(function () { vanish(c, 'Dismissed'); }).catch(fail); });
+      return c;
+    }));
+    section('Drafts waiting', x.drafts.map(function (d) {           // the scheduled run's drafts, and yours unsent for 2 days
+      var c = card('✉', d.waiting ? (d.kind === 'funnel' ? 'Funnel email' : d.title) : d.title, d.subject || '', d.since ? 'Since ' + dateLabel(d.since) : 'Ready',
+                   (d.kind === 'funnel' ? 'To ' + d.to + '. ' : '') + 'Ask Claude to send it, or discard it.');
+      button(c, 'Discard', 'soft', function () {
+        (d.kind === 'funnel' ? api('DELETE', '/api/calendar/funnel-drafts/' + d.draft_id) : api('POST', '/api/calendar/autopilot/drafts/' + d.draft_id + '/dismiss', {}))
+          .then(function () { vanish(c, 'Discarded'); }).catch(fail);
+      });
       return c;
     }));
     section('Possible no-shows', x.missing.map(function (m) {

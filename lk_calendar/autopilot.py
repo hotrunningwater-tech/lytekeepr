@@ -32,6 +32,7 @@ INSTRUCTIONS = {
     "too_short_to_summarize": "Nothing to do: too short to mean anything.",
     "waiting_for_recording": "Nothing to do yet: the recording may still arrive; the next run picks it up.",
     "asked_what_happened": "Nothing to do: the user tells LyteKeepr whether it happened.",
+    "unsent_drafts": "Change nothing. In your summary of this run, list each one (who it is for, since when) so the user sees what is waiting to be sent.",
     "calls_without_contact": "Nothing to do: these recordings are not linked to a contact yet; the user links them first (on Home, or when they ask you about the call).",
 }
 BRIEF_HOURS = 26                # a 2-hourly run briefs every meeting well ahead of time
@@ -100,7 +101,7 @@ def queue() -> dict:
     admin = users.is_admin()
     from . import inbox_watch, onboarding
     out = {"instructions": {**INSTRUCTIONS, "new_messages": inbox_watch.INSTRUCTIONS, "newly_won": onboarding.INSTRUCTIONS},
-           "new_messages": inbox_watch.feed(), "newly_won": onboarding.newly_won(), "meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [],
+           "new_messages": inbox_watch.feed(), "newly_won": onboarding.newly_won(), "unsent_drafts": unsent(), "meetings_needing_brief": [], "calls_needing_summary": [], "too_short_to_summarize": [],
            "needing_followup_draft": [], "waiting_for_recording": [], "asked_what_happened": [], "calls_without_contact": []}
     with store._conn() as conn:
         meeting_notes._ready(conn)
@@ -216,6 +217,72 @@ def store_draft(ref: str, kind: str, pid, email: str, name: str, title: str, sub
     return {"draft_id": did, "to": f"{name} <{email}>", "saved": True, "sent": False}
 
 
+# ------------------------------------------------------------------ a draft to one contact (Claude saves it as it writes; one per contact)
+REMIND_AFTER_DAYS = 2
+
+
+def save_contact_draft(person_id: int, subject: str, body: str) -> dict:
+    """The latest version of an email to one contact: replaces the one before, shows in their activity as "Draft (not sent)", never sent here."""
+    from . import access, contacts, users
+    if not users.is_admin():
+        raise AutopilotError("Emails go out from the admin's Gmail, so only the admin's drafts are kept.")
+    if not access.can_person(person_id):
+        raise AutopilotError("No such contact.")
+    if not (body or "").strip():
+        raise AutopilotError("The draft is empty.")
+    info = contacts.get_contact(int(person_id)) or {}
+    if not info.get("email"):
+        raise AutopilotError(f"{info.get('name') or 'This contact'} has no email address; add one first.")
+    name = info.get("name") or info["email"]
+    return store_draft(f"contact:{int(person_id)}", "manual", int(person_id), info["email"], name, f"Email to {name}", subject or "", body)
+
+
+def contact_draft(person_id: int) -> dict | None:
+    """The waiting draft(s) to this contact, newest first (their own, or one the scheduled run prepared for them)."""
+    with _conn() as conn:
+        r = conn.execute("SELECT * FROM autopilot_drafts WHERE person_id = ? AND state = 'waiting' ORDER BY created_at DESC LIMIT 1", (int(person_id),)).fetchone()
+    return dict(r) if r else None
+
+
+def draft_item(person_id: int) -> dict | None:
+    """The waiting draft as an entry of the contact's activity (marked draft, next to their sent emails)."""
+    d = contact_draft(person_id)
+    if not d:
+        return None
+    return {"message_id": f"draft:{d['draft_id']}", "draft_id": d["draft_id"], "draft": True, "channel": "email", "direction": "outgoing",
+            "sender": "You (draft, not sent)", "timestamp": d["created_at"],
+            "message_text": (f"Subject: {d['subject']}\n\n" if d["subject"] else "") + d["body"]}
+
+
+def draft_sent(person_id) -> None:
+    """An email went to this contact: their waiting drafts are done."""
+    if not person_id:
+        return
+    with _conn() as conn:
+        conn.execute("UPDATE autopilot_drafts SET state = 'sent' WHERE person_id = ? AND state = 'waiting'", (int(person_id),))
+
+
+def unsent(days: int = REMIND_AFTER_DAYS) -> list:
+    """Drafts left unsent for `days` days or more: one-contact drafts, the scheduled run's drafts, and funnel emails not sent yet."""
+    from . import users
+    if not users.is_admin():
+        return []
+    cutoff = (store.now_local() - timedelta(days=days)).isoformat(timespec="minutes")
+    out = []
+    with _conn() as conn:
+        for r in conn.execute("SELECT * FROM autopilot_drafts WHERE state = 'waiting' AND created_at <= ? ORDER BY created_at", (cutoff,)):
+            out.append({"kind": "contact" if r["kind"] == "manual" else r["kind"], "draft_id": r["draft_id"], "to": r["to_email"], "title": r["title"],
+                        "subject": r["subject"], "since": r["created_at"][:10]})
+    from . import funnel_drafts
+    utc_cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat(timespec="seconds")
+    with funnel_drafts._conn() as conn:
+        for r in conn.execute("SELECT * FROM funnel_drafts WHERE status IN ('draft', 'stopped') AND updated_at <= ? ORDER BY updated_at", (utc_cutoff,)):
+            n = len(json.loads(r["recipients"] or "[]"))
+            out.append({"kind": "funnel", "draft_id": r["draft_id"], "to": f"{n} {'person' if n == 1 else 'people'} in {r['funnel_name']}"
+                        + (f" / {r['stage_name']}" if r["stage_name"] else ""), "title": r["subject"] or "Funnel email", "subject": r["subject"], "since": r["updated_at"][:10]})
+    return out
+
+
 def drafts() -> list:
     """The waiting drafts, for Home."""
     from . import users
@@ -280,6 +347,19 @@ def register(app):
     def autopilot_draft_save():
         x = b()
         return run(save_draft, x.get("subject", ""), x.get("body", ""), call_id=x.get("call_id"), item_id=x.get("item_id"))
+
+    @app.get("/api/crm/people/<int:person_id>/draft")
+    def contact_draft_get(person_id):
+        return run(lambda: {"draft": contact_draft(person_id)})
+
+    @app.put("/api/crm/people/<int:person_id>/draft")
+    def contact_draft_save(person_id):
+        x = b()
+        return run(save_contact_draft, person_id, x.get("subject", ""), x.get("body", ""))
+
+    @app.get("/api/calendar/autopilot/unsent")
+    def autopilot_unsent():
+        return run(lambda: {"drafts": unsent()})
 
     @app.get("/api/calendar/autopilot/drafts")
     def autopilot_drafts():

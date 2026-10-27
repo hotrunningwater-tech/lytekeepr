@@ -210,6 +210,11 @@ def person_history(person_id: int) -> list:
         items.append({"message_id": f"call:{c.get('call_id') or c.get('event_id')}", "channel": "call", "timestamp": c.get("started_at"), "call": c,
                       "message_text": c.get("summary") or "", "direction": "call"})
     items += [as_message(r) for r in for_person(person_id, "conversation")]
+    if users.is_admin():                                 # a waiting draft to them, marked as a draft (not sent)
+        from . import autopilot
+        draft = autopilot.draft_item(person_id)
+        if draft:
+            items.append(draft)
     return _sorted(items)
 
 

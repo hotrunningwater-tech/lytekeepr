@@ -490,6 +490,20 @@ TOOLS = [
      "description": "Delete a folder. One with folders or documents inside is refused unless with_contents=true, which the user must confirm first.",
      "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "with_contents": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
     # --- notes and the communication history (calls, meetings and conversations logged by hand next to messages, emails and recordings) ---
+    {"name": "save_email_draft", "title": "Save email draft",
+     "description": "Save the email you are writing to ONE contact as their draft. Call it EVERY time you write or revise an email draft for one contact, "
+                    "without asking: each save replaces the previous version (one draft per contact). It shows in their activity as 'Draft (not sent)'; "
+                    "nothing is sent. To send it later, show the text and use send_email after the user says yes (the draft is then cleared). "
+                    "For one email to several people, use create_funnel_draft instead.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"}},
+                     "required": ["contact_id", "body"]}},
+    {"name": "get_email_draft", "title": "Open an email draft", "description": "A contact's saved, unsent email draft (or none). Use it to continue or send a draft the user started earlier.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
+    {"name": "list_unsent_drafts", "title": "Unsent drafts", "description": "Every draft waiting 2+ days: emails to one contact, the scheduled run's drafts, and funnel emails not sent yet.",
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "discard_email_draft", "title": "Discard an email draft", "destructive": True,
+     "description": "Delete a contact's saved email draft (only when the user asks).",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}},
     {"name": "create_funnel_draft", "title": "Draft one email for a funnel",
      "description": "One email for several contacts of a funnel: everyone (with an email) in one stage, or the contacts named. Saved under the funnel until sent "
                     "or deleted; nothing is sent here. Write {name} where each person's first name goes (a contact with no real name gets just 'Hi,'), or no "
@@ -744,6 +758,18 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", "/api/calendar/autopilot/queue"))
     if name == "save_message_review":
         return need(*call("POST", "/api/calendar/inbox/review", {k: args.get(k) or [] for k in ("reviewed", "flags", "follow_ups")}))
+    if name == "save_email_draft":
+        return need(*call("PUT", f"/api/crm/people/{int(args['contact_id'])}/draft", {"subject": args.get("subject", ""), "body": args.get("body", "")}))
+    if name == "get_email_draft":
+        return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/draft"))
+    if name == "list_unsent_drafts":
+        return need(*call("GET", "/api/calendar/autopilot/unsent"))
+    if name == "discard_email_draft":
+        d = need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/draft")).get("draft")
+        if not d:
+            return {"discarded": False, "message": "This contact has no saved draft."}
+        need(*call("POST", f"/api/calendar/autopilot/drafts/{d['draft_id']}/dismiss", {}))
+        return {"discarded": True, "draft_id": d["draft_id"]}
     if name == "create_funnel_draft":
         return need(*call("POST", "/api/calendar/funnel-drafts", {k: args.get(k) for k in ("funnel", "stage", "contact_ids", "subject", "body")}))
     if name == "list_funnel_drafts":

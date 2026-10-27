@@ -349,6 +349,11 @@ def send_email(person_id, person_name: str, to_email: str, subject: str, body: s
         conn.close()
 
     _mark_email_sent(person_id, follow_up_days)
+    try:
+        from lk_calendar import autopilot
+        autopilot.draft_sent(person_id)                 # their waiting draft is done
+    except Exception:
+        pass
     return {"status": "sent", "message": f"Sent to {person_name}.", "person_name": person_name}
 
 

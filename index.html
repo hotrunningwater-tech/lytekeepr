@@ -2122,7 +2122,21 @@
           }
           callsAttentionList.appendChild(card);
         });
-        (data.drafts || []).forEach(function (d) {          // a follow-up for a meeting with no recording (you said it happened, or it was a no-show)
+        (data.drafts || []).forEach(function (d) {          // a draft waiting: the scheduled run's, or yours unsent for 2 days
+          if (d.waiting) {
+            var since = new Date(d.since + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });     // a day, no time
+            if (d.kind === 'funnel') {
+              callsAttentionList.appendChild(callRow('Funnel email waiting since ' + since, (d.subject || 'No subject') + ' · to ' + d.to + '. Ask Claude to send it.', [
+                ['Delete', 'subtle-link-btn', function (el) { el.disabled = true; fetch('/api/calendar/funnel-drafts/' + d.draft_id, { method: 'DELETE' }).then(loadCallsAttention); }]
+              ]));
+            } else {
+              callsAttentionList.appendChild(callRow('Draft waiting since ' + since, d.title + ' · ' + (d.subject || 'No subject'), [
+                ['Review draft', 'btn btn-primary btn-small', function (el) { reviewDraft(d.draft_id, el); }],
+                ['Discard', 'subtle-link-btn', function (el) { callPost('/api/calendar/autopilot/drafts/' + d.draft_id + '/dismiss', {}, el, 'Discarding…').then(loadCallsAttention); }]
+              ]));
+            }
+            return;
+          }
           callsAttentionList.appendChild(callRow(d.kind === 'no_show' ? 'No-show — reschedule email ready' : d.kind === 'welcome' ? 'Deal won — welcome email ready' : 'Follow-up email ready',
             d.title + ' · to ' + d.to, [
               ['Review draft', 'btn btn-primary btn-small', function (el) { reviewDraft(d.draft_id, el); }],
@@ -2624,6 +2638,19 @@
 
     function buildCrmDetailMessageRow(m) {
       if (m.channel === 'call' && m.call) return buildCrmCallRow(m.call);
+      if (m.draft) {                                     // an email to them, saved but not sent
+        var dr = document.createElement('div'); dr.className = 'crm-detail-message is-mine crm-draft';
+        var head = document.createElement('div'); head.className = 'crm-detail-message-meta';
+        var tag = document.createElement('span'); tag.className = 'crm-detail-message-sender'; tag.textContent = 'Draft (not sent) · ' + formatCrmTimestamp(m.timestamp);
+        head.appendChild(tag); dr.appendChild(head);
+        var tx = document.createElement('div'); tx.className = 'crm-detail-message-text'; tx.style.whiteSpace = 'pre-wrap'; tx.textContent = m.message_text; dr.appendChild(tx);
+        var acts = document.createElement('div'); acts.className = 'attention-actions';
+        [['Review & send', 'btn btn-primary btn-small', function (b) { reviewDraft(m.draft_id, b); var t = document.getElementById('homeTab'); if (t) t.click(); }],
+         ['Discard', 'btn btn-secondary btn-small', function (b) { callPost('/api/calendar/autopilot/drafts/' + m.draft_id + '/dismiss', {}, b, 'Discarding…').then(function () { openCrmPersonDetail(crmCurrentPersonId); }); }]
+        ].forEach(function (x) { var b = document.createElement('button'); b.type = 'button'; b.className = x[1]; b.textContent = x[0]; b.addEventListener('click', function () { x[2](b); }); acts.appendChild(b); });
+        dr.appendChild(acts);
+        return dr;
+      }
       if (m.logged && window.lkRecords) return window.lkRecords.row(m, function () { openCrmPersonDetail(crmCurrentPersonId); }, (m.people || []).length > 1);     // a call or talk logged by hand
       var contactName = crmCurrentPersonData ? crmCurrentPersonData.name : null;
       var who = m.direction === 'outgoing' ? 'You' : (contactName || m.sender || 'Them');

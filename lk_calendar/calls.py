@@ -528,7 +528,8 @@ def attention(days: int = 14) -> dict:
         d = by_call.get(f"call:{r['call_id']}")
         r["draft"] = {"draft_id": d["draft_id"], "to": d["to_email"], "subject": d["subject"]} if d else None
     others = [{"draft_id": d["draft_id"], "to": d["to_email"], "subject": d["subject"], "title": d["title"], "kind": d["kind"]}
-              for d in waiting if not d["ref"].startswith("call:")]
+              for d in waiting if not d["ref"].startswith(("call:", "contact:"))]
+    others += [{**u, "waiting": True} for u in autopilot.unsent() if u["kind"] in ("contact", "funnel")]      # your own drafts, after 2 days unsent
     return {"ready": ready, "missing": missing, "drafts": others}
 
 
