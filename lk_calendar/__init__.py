@@ -44,6 +44,8 @@ def register(app):
     onboarding.register(app)
     from . import company_view
     company_view.register(app)
+    from . import funnel_drafts
+    funnel_drafts.register(app)
     from . import quiet
     quiet.register(app)
     from . import goals

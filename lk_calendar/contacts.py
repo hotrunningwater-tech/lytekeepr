@@ -1007,16 +1007,19 @@ def apply_history_status(person_ids: list) -> None:
             logging.getLogger(__name__).exception("could not set the status from the messages already sent to person %s", pid)
 
 
-def mark_email_sent(person_id: int) -> None:
-    """After an email goes out: a person who is in a funnel gets the status "email sent" on the email channel (only from New: never downgrades)."""
+def mark_email_sent(person_id: int, follow_up_days: int | None = None) -> None:
+    """After an email goes out: a person who is in a funnel gets the status "email sent" on the email channel (only from New: never downgrades).
+    follow_up_days (the user's answer for a batch): N > 0 = a follow-up in N days, 0 = none; None = not asked."""
     with _crm() as conn:
         row = conn.execute("SELECT funnel_id FROM people WHERE person_id = ?", (person_id,)).fetchone()
     if not row or not row["funnel_id"]:
         return
     with store._conn() as cal:
-        lead = cal.execute("SELECT status FROM leads WHERE person_id = ? AND channel = 'email'", (person_id,)).fetchone()
+        lead = cal.execute("SELECT id, status FROM leads WHERE person_id = ? AND channel = 'email'", (person_id,)).fetchone()
     if lead is None or lead["status"] == "new":
-        set_outreach(person_id, "email", "email sent")
+        set_outreach(person_id, "email", "email sent", follow_up_days)
+    elif follow_up_days:                                   # already further along: the follow-up the user asked for still comes
+        leads.choose_follow_up(lead["id"], int(follow_up_days))
 
 
 def backfill_from_accounts() -> int:

@@ -274,11 +274,11 @@ def _reply_target(person_id: int, subject: str):
         return None, None, subject
 
 
-def _mark_email_sent(person_id: int) -> None:
-    """A person in a funnel moves to "email sent" (which also schedules the follow-up task). Never lets a failure here affect the send."""
+def _mark_email_sent(person_id: int, follow_up_days: int | None = None) -> None:
+    """A person in a funnel moves to "email sent", with the follow-up the user chose (None = not asked here). Never lets a failure here affect the send."""
     try:
         from lk_calendar import contacts as lk_contacts
-        lk_contacts.mark_email_sent(person_id)
+        lk_contacts.mark_email_sent(person_id, follow_up_days)
     except Exception:
         import logging
         logging.getLogger(__name__).exception("could not update the status after sending an email")
@@ -301,7 +301,8 @@ def update_pending_send(subject: str, body: str) -> dict | None:
     return payload
 
 
-def send_email(person_id, person_name: str, to_email: str, subject: str, body: str, reply_in_thread: bool = False, thread: tuple | None = None) -> dict:
+def send_email(person_id, person_name: str, to_email: str, subject: str, body: str, reply_in_thread: bool = False, thread: tuple | None = None,
+               follow_up_days: int | None = None) -> dict:
     """Sends one real email through Gmail and records it: the message on the contact, then the "email sent" status and follow-up task.
     Returns {"status": "sent"/"failed", "message", "person_name"}. Shared by the single draft and the funnel batch."""
     account_id = get_active_account_id()
@@ -347,7 +348,7 @@ def send_email(person_id, person_name: str, to_email: str, subject: str, body: s
     finally:
         conn.close()
 
-    _mark_email_sent(person_id)
+    _mark_email_sent(person_id, follow_up_days)
     return {"status": "sent", "message": f"Sent to {person_name}.", "person_name": person_name}
 
 

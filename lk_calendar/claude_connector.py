@@ -490,6 +490,35 @@ TOOLS = [
      "description": "Delete a folder. One with folders or documents inside is refused unless with_contents=true, which the user must confirm first.",
      "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "with_contents": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
     # --- notes and the communication history (calls, meetings and conversations logged by hand next to messages, emails and recordings) ---
+    {"name": "create_funnel_draft", "title": "Draft one email for a funnel",
+     "description": "One email for several contacts of a funnel: everyone (with an email) in one stage, or the contacts named. Saved under the funnel until sent "
+                    "or deleted; nothing is sent here. Write {name} where each person's first name goes (a contact with no real name gets just 'Hi,'), or no "
+                    "{name} at all for the same text to everyone ('Hi, ...'). Show the user the result (the text, a sample copy, who gets it and who is skipped). "
+                    "Different groups need different openers: make one draft per stage.",
+     "inputSchema": {"type": "object", "properties": {"funnel": {"type": "string", "description": "Funnel name or id"}, "stage": {"type": "string"},
+                                                      "contact_ids": {"type": "array", "items": {"type": "integer"}, "description": "Instead of a stage: these contacts"},
+                                                      "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["funnel", "body"]}},
+    {"name": "list_funnel_drafts", "title": "Funnel email drafts", "description": "The saved funnel email drafts (of one funnel, or all): subject, who, status (draft, sending, stopped, sent), how many sent.",
+     "inputSchema": {"type": "object", "properties": {"funnel": {"type": "string"}}}, "read": True},
+    {"name": "update_funnel_draft", "title": "Change a funnel email draft",
+     "description": "Change a saved draft's subject or text, add or remove contacts, or take everyone of another stage instead. Show the user the new preview.",
+     "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"},
+                                                      "add_contact_ids": {"type": "array", "items": {"type": "integer"}},
+                                                      "remove_contact_ids": {"type": "array", "items": {"type": "integer"}}, "stage": {"type": "string"}},
+                     "required": ["draft_id"]}},
+    {"name": "preview_funnel_draft", "title": "Preview a funnel email",
+     "description": "Before sending: the full email, one person's copy, everyone it will go to, and who is skipped (no email, already got it, replied since).",
+     "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}, "required": ["draft_id"]}, "read": True},
+    {"name": "send_funnel_draft", "title": "Send a funnel email", "destructive": True,
+     "description": "Only after showing preview_funnel_draft and the user saying yes to sending to that list. Ask once for the whole batch: follow up in 3 days, "
+                    "another number of days, or no follow-up (0). Sends one by one, about a minute apart, from the user's Gmail, on its own; returns at once. "
+                    "Each is saved on the contact. The first failure stops it. Check progress with funnel_send_status.",
+     "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}, "follow_up_days": {"type": "integer", "minimum": 0, "maximum": 365}},
+                     "required": ["draft_id", "follow_up_days"]}},
+    {"name": "funnel_send_status", "title": "Funnel email progress", "description": "How a funnel email batch is going (the latest one if no draft_id): sent so far, who got it, who failed, who is left.",
+     "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}}, "read": True},
+    {"name": "delete_funnel_draft", "title": "Delete a funnel email draft", "destructive": True,
+     "description": "Delete a saved draft (not one being sent).", "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}, "required": ["draft_id"]}},
     {"name": "find_companies", "title": "Find companies",
      "description": "Companies in LyteKeepr by name (empty lists them). Returns company_id, name, website and how many contacts.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}, "read": True},
@@ -715,6 +744,21 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", "/api/calendar/autopilot/queue"))
     if name == "save_message_review":
         return need(*call("POST", "/api/calendar/inbox/review", {k: args.get(k) or [] for k in ("reviewed", "flags", "follow_ups")}))
+    if name == "create_funnel_draft":
+        return need(*call("POST", "/api/calendar/funnel-drafts", {k: args.get(k) for k in ("funnel", "stage", "contact_ids", "subject", "body")}))
+    if name == "list_funnel_drafts":
+        return need(*call("GET", "/api/calendar/funnel-drafts" + ("?funnel=" + urllib.parse.quote(str(args["funnel"])) if args.get("funnel") else "")))
+    if name == "update_funnel_draft":
+        return need(*call("PUT", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}",
+                          {k: args.get(k) for k in ("subject", "body", "add_contact_ids", "remove_contact_ids", "stage") if args.get(k) is not None}))
+    if name == "preview_funnel_draft":
+        return need(*call("GET", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}"))
+    if name == "send_funnel_draft":
+        return need(*call("POST", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}/send", {"follow_up_days": int(args["follow_up_days"])}))
+    if name == "funnel_send_status":
+        return need(*call("GET", "/api/calendar/funnel-drafts/status" + (f"?draft_id={int(args['draft_id'])}" if args.get("draft_id") else "")))
+    if name == "delete_funnel_draft":
+        return need(*call("DELETE", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}"))
     if name == "find_companies":
         rows = need(*call("GET", "/api/calendar/companies?q=" + urllib.parse.quote(str(args.get("query") or ""))))["companies"]
         return [{"company_id": r["id"], "name": r["name"], "website": r.get("website") or "", "contacts": r.get("contacts", 0)} for r in rows[:50]]
