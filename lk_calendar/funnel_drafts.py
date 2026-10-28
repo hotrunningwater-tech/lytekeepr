@@ -366,6 +366,22 @@ def _run(draft_id: int, todo: list, gap: int, follow_up_days: int) -> None:
         conn.execute("UPDATE funnel_drafts SET status = 'sent', message = 'Sent to everyone.', updated_at = ? WHERE draft_id = ?", (_now(), draft_id))
 
 
+def person_emailed(person_id: int) -> None:
+    """An email went to this person some other way (a reply, send_email, the app): drafts not being sent no longer wait on them.
+    A draft only for them is marked sent; a draft for several people just loses them."""
+    pid = int(person_id)
+    with _conn() as conn:
+        for r in conn.execute("SELECT draft_id, recipients FROM funnel_drafts WHERE status = 'draft'").fetchall():
+            ids = json.loads(r["recipients"] or "[]")
+            if pid not in ids:
+                continue
+            rest = [i for i in ids if i != pid]
+            if rest:
+                conn.execute("UPDATE funnel_drafts SET recipients = ?, updated_at = ? WHERE draft_id = ?", (json.dumps(rest), _now(), r["draft_id"]))
+            else:
+                conn.execute("UPDATE funnel_drafts SET status = 'sent', message = 'Sent separately.', updated_at = ? WHERE draft_id = ?", (_now(), r["draft_id"]))
+
+
 def status(draft_id=None) -> dict:
     """How a batch is going: sent so far, who is left, and who didn't get it."""
     _admin()

@@ -294,6 +294,8 @@ def draft_sent(person_id) -> None:
         return
     with _conn() as conn:
         conn.execute("UPDATE autopilot_drafts SET state = 'sent' WHERE person_id = ? AND state = 'waiting'", (int(person_id),))
+    from . import funnel_drafts
+    funnel_drafts.person_emailed(person_id)           # and the several-people / reply drafts waiting on them
 
 
 def unsent(days: int = REMIND_AFTER_DAYS) -> list:
