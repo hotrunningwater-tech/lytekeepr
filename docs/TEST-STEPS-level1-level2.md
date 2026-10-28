@@ -44,13 +44,13 @@ b. Ask Claude: *"Who am I leaving hanging?"* and *"Who hasn't answered me?"*
 c. Click **Not now** on one.
 ✅ Works if: they disappear from the list.
 
-**8. (Phone + Mac) Contacts and companies (#9, #10)**
-a. CRM → Contacts → Companies → **Open company** on one you know.
-✅ Works if: you see its people, opportunities and recent history.
-b. Ask Claude: *"What's going on with [company]? Who do we know there?"*
-✅ Works if: you get the same people and opportunities, plus where things stand.
-c. Ask Claude: *"Add a note to [company]: prefers annual billing."* → it asks first; say yes.
-✅ Works if: the note shows when you Open company again.
+**8. (Phone) Contacts, companies and funnels (#9, #10)**
+a. Tell Claude: *"Add Anna Lee from Newco, anna@newco.com, to the Nexy Pilot funnel."*
+✅ Works if: she is created with company Newco, in that funnel (Claude asks the brand if you didn't say).
+b. Ask Claude: *"Who do we have at Newco?"*
+✅ Works if: you get every contact at Newco.
+c. Tell Claude: *"Anna moved to Windowly."*
+✅ Works if: her company changes to Windowly.
 
 **9. (Phone) Capture (P8)**
 a. In Claude, send a photo of a business card: *"Add this person to LyteKeepr."*
