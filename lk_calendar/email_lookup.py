@@ -206,7 +206,9 @@ def reply(text: str, email_id=None, contact=None) -> dict:
     if not target:
         raise ValueError("No such email among the saved ones to reply to.")
     account, mid, e = target
-    me = _me()
+    from gmail.sync import get_active_account_id
+    sending = (get_active_account_id() or "").lower()
+    me = {sending} if sending else _me()              # who to answer: only the mailbox sending now is "you" (an old mailbox is a normal address)
     sender = _addr(e.get("from"))
     to = [sender] if sender not in me else [t for t in (_addr(x) for x in e.get("to") or []) if t and t not in me]
     if not to:
