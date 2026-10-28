@@ -318,7 +318,8 @@ TOOLS = [
                                                       "done": {"type": "boolean", "default": True}}, "required": ["task_id", "date"]}, "read": False},
     # --- added for everyday phone use: the same actions the three LyteKeepr AI chats have ---
     {"name": "create_contact", "title": "Add a contact",
-     "description": "Add a new contact. FIRST call search_contacts (no duplicates; update_contact if they exist), then print back exactly what you will save "
+     "description": "Add a new contact. It needs a name or a company, a way to reach them (email, phone, LinkedIn or Instagram) and a brand: ask for what's missing first. "
+                    "Then call search_contacts (no duplicates; update_contact if they exist), print back exactly what you will save "
                     "(name, company, job title, email, phone, links, brand, funnel if any, notes) and ask 'Add?'. Call this only after the user says yes, with "
                     "user_confirmed=true. An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'. From a business card photo "
                     "or a voice note: read the details the same way, anything else said goes in notes.",
@@ -328,7 +329,7 @@ TOOLS = [
                                                       "linkedin": {"type": "string", "description": "LinkedIn profile link"}, "notes": {"type": "string"},
                                                       "brand": {"type": "string", "description": "REQUIRED: the brand (name or key, see list_brands). Ask the user which brand unless they said it; never guess. With no brands yet, tell them to create one first (Settings → Brands, or create_brand)."},
                                                       "user_confirmed": {"type": "boolean", "description": "true only after you printed the details and the user said yes"}},
-                     "required": ["brand", "user_confirmed"]}, "read": False},
+                     "required": ["user_confirmed"]}, "read": False},
     {"name": "update_contact", "title": "Update a contact",
      "description": "Change a contact's details, or add a note (add_note is saved as a dated note, like add_contact_note). Only the fields given change.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "name": {"type": "string"}, "company": {"type": "string"},
@@ -847,6 +848,15 @@ def _run_tool(call, name: str, args: dict):
     if name == "mark_task_done":
         return need(*call("POST", f"/api/calendar/events/{int(args['task_id'])}/done", {"date": args["date"], "done": bool(args.get("done", True))}))
     if name == "create_contact":
+        missing = []                                            # the app's own minimum, checked before anything is shown or confirmed
+        if not (str(args.get("name") or "").strip() or str(args.get("company") or "").strip()):
+            missing.append("a name or a company")
+        if not any(str(args.get(k) or "").strip() for k in ("email", "phone", "linkedin", "instagram", "profile_url")):
+            missing.append("a way to reach them (an email, a phone number, or a LinkedIn or Instagram link)")
+        if not str(args.get("brand") or "").strip():
+            missing.append("the brand")
+        if missing:
+            return {"saved": False, "missing": missing, "ask_the_user": "To add this contact, LyteKeepr still needs " + " and ".join(missing) + ". Ask the user for it first."}
         if args.get("user_confirmed") is not True:             # the details are printed back and confirmed before anything is added
             return {"saved": False, "do_this_first": "Nothing was added. Print back exactly what you will save (name, company, email, phone, links, brand, "
                                                      "funnel, notes), ask 'Add?', and call again with user_confirmed=true after they say yes."}
