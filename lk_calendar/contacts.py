@@ -404,7 +404,7 @@ def contact_dict(conn, pid: int) -> dict | None:
     d["instagram"] = next(("@" + a["channel_identifier"] for a in accts if a["channel"] == "instagram" and a["channel_identifier"]
                            and not a["channel_identifier"].startswith("name:")), "")
     d["brand"], d["funnel_brand"] = d.get("brand") or "", d.get("funnel_brand") or ""      # funnel_brand set = the brand comes from the funnel
-    d["display"] = d["name"] or d["company"] or "(no name)"
+    d["display"] = d["name"] or d["email"] or d["phone"] or d["instagram"] or d["telegram"] or d["company"] or "(no name)"   # no name: how to reach them says who it is
     d["funnels"] = [{"channel": d["funnel_name"], "status": d["stage_name"] or "", "status_date": ""}] if d.get("funnel_id") else []
     return d
 
