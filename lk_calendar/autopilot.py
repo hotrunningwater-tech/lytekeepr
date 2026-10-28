@@ -256,14 +256,36 @@ def contact_draft(person_id: int) -> dict | None:
     return dict(r) if r else None
 
 
-def draft_item(person_id: int) -> dict | None:
-    """The waiting draft as an entry of the contact's activity (marked draft, next to their sent emails)."""
+def draft_items(person_id: int) -> list:
+    """Unsent drafts to this contact as entries of their activity (marked draft, next to their sent emails): one to them alone,
+    and any several-people draft they are in and haven't been sent yet."""
+    out = []
     d = contact_draft(person_id)
-    if not d:
-        return None
-    return {"message_id": f"draft:{d['draft_id']}", "draft_id": d["draft_id"], "draft": True, "channel": "email", "direction": "outgoing",
-            "sender": "You (draft, not sent)", "timestamp": d["created_at"],
-            "message_text": (f"Subject: {d['subject']}\n\n" if d["subject"] else "") + d["body"]}
+    if d:
+        out.append({"message_id": f"draft:{d['draft_id']}", "draft_id": d["draft_id"], "draft": True, "channel": "email", "direction": "outgoing",
+                    "sender": "You (draft, not sent)", "timestamp": d["created_at"],
+                    "message_text": (f"Subject: {d['subject']}\n\n" if d["subject"] else "") + d["body"]})
+    from . import funnel_drafts
+    from assistant import bulk_email
+    with funnel_drafts._conn() as conn:
+        rows = conn.execute("SELECT * FROM funnel_drafts WHERE status IN ('draft', 'stopped')").fetchall()
+        for r in rows:
+            ids = json.loads(r["recipients"] or "[]")
+            if int(person_id) not in ids or conn.execute("SELECT 1 FROM funnel_draft_sends WHERE draft_id = ? AND person_id = ? AND status = 'sent'",
+                                                         (r["draft_id"], int(person_id))).fetchone():
+                continue
+            first = (funnel_drafts._people([int(person_id)]) or [{"first_name": ""}])[0]["first_name"]
+            text = bulk_email.render(r["body"], first)
+            out.append({"message_id": f"group-draft:{r['draft_id']}", "group_draft_id": r["draft_id"], "group_size": len(ids), "draft": True,
+                        "as_reply": bool(r["as_reply"]), "channel": "email", "direction": "outgoing", "timestamp": r["updated_at"],
+                        "sender": f"You (draft, not sent · group of {len(ids)})",
+                        "message_text": (f"Subject: {bulk_email.render(r['subject'], first)}\n\n" if r["subject"] and not r["as_reply"] else "") + text})
+    return out
+
+
+def draft_item(person_id: int) -> dict | None:
+    items = draft_items(person_id)
+    return items[0] if items else None
 
 
 def draft_sent(person_id) -> None:

@@ -212,9 +212,7 @@ def person_history(person_id: int) -> list:
     items += [as_message(r) for r in for_person(person_id, "conversation")]
     if users.is_admin():                                 # a waiting draft to them, marked as a draft (not sent)
         from . import autopilot
-        draft = autopilot.draft_item(person_id)
-        if draft:
-            items.append(draft)
+        items.extend(autopilot.draft_items(person_id))
     return _sorted(items)
 
 

@@ -2642,13 +2642,19 @@
       if (m.draft) {                                     // an email to them, saved but not sent
         var dr = document.createElement('div'); dr.className = 'crm-detail-message is-mine crm-draft';
         var head = document.createElement('div'); head.className = 'crm-detail-message-meta';
-        var tag = document.createElement('span'); tag.className = 'crm-detail-message-sender'; tag.textContent = 'Draft (not sent) · ' + formatCrmTimestamp(m.timestamp);
+        var tag = document.createElement('span'); tag.className = 'crm-detail-message-sender';
+        tag.textContent = (m.group_draft_id ? 'Draft (not sent) · group of ' + m.group_size + (m.as_reply ? ' · as a reply' : '') : 'Draft (not sent)') + ' · ' + formatCrmTimestamp(m.timestamp);
         head.appendChild(tag); dr.appendChild(head);
         var tx = document.createElement('div'); tx.className = 'crm-detail-message-text'; tx.style.whiteSpace = 'pre-wrap'; tx.textContent = m.message_text; dr.appendChild(tx);
         var acts = document.createElement('div'); acts.className = 'attention-actions';
+        (m.group_draft_id ? [['Take them out of this group draft', 'btn btn-secondary btn-small', function (b) {
+            b.disabled = true;
+            fetch('/api/calendar/funnel-drafts/' + m.group_draft_id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ remove_contact_ids: [crmCurrentPersonId] }) })
+              .then(function () { openCrmPersonDetail(crmCurrentPersonId); });
+          }]] :
         [['Review & send', 'btn btn-primary btn-small', function (b) { reviewDraft(m.draft_id, b); var t = document.getElementById('homeTab'); if (t) t.click(); }],
          ['Discard', 'btn btn-secondary btn-small', function (b) { callPost('/api/calendar/autopilot/drafts/' + m.draft_id + '/dismiss', {}, b, 'Discarding…').then(function () { openCrmPersonDetail(crmCurrentPersonId); }); }]
-        ].forEach(function (x) { var b = document.createElement('button'); b.type = 'button'; b.className = x[1]; b.textContent = x[0]; b.addEventListener('click', function () { x[2](b); }); acts.appendChild(b); });
+        ]).forEach(function (x) { var b = document.createElement('button'); b.type = 'button'; b.className = x[1]; b.textContent = x[0]; b.addEventListener('click', function () { x[2](b); }); acts.appendChild(b); });
         dr.appendChild(acts);
         return dr;
       }

@@ -500,55 +500,48 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "with_contents": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
     # --- notes and the communication history (calls, meetings and conversations logged by hand next to messages, emails and recordings) ---
     {"name": "save_email_draft", "title": "Save email draft",
-     "description": "Save an email draft to ONE contact (for 2 or more people use create_funnel_draft: one draft for the group), ONLY when the user asks for it ('save it', 'keep it as a draft', 'save draft'). Never on your own. "
-                    "When an email looks finished in the chat, you may ask 'Save it as a draft?'. Pass the user's own words that asked for it in user_said. "
-                    "It saves the wording you last printed in the chat, replacing an earlier draft (one per contact), and shows in their activity as "
-                    "'Draft (not sent)'. Nothing is sent. To send it later, show the text and use send_email after the user says yes (the draft is then cleared). "
-                    "For one email to several people, use create_funnel_draft instead.",
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"},
-                                                      "user_said": {"type": "string", "description": "The user's own words asking to save (quote them)"}},
-                     "required": ["contact_id", "body", "user_said"]}},
-    {"name": "get_email_draft", "title": "Open an email draft", "description": "A contact's saved, unsent email draft (or none). Use it to continue or send a draft the user started earlier.",
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
-    {"name": "list_unsent_drafts", "title": "Unsent drafts", "description": "Every draft waiting 2+ days: emails to one contact, the scheduled run's drafts, and funnel emails not sent yet.",
-     "inputSchema": {"type": "object", "properties": {}}, "read": True},
-    {"name": "discard_email_draft", "title": "Discard an email draft", "destructive": True,
-     "description": "Delete a contact's saved email draft (only when the user asks).",
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}},
-    {"name": "create_funnel_draft", "title": "Save one email draft for several people",
-     "description": "The ONE draft for an email to 2 or more people (never one save_email_draft per person): the contacts named, or everyone (with an email) "
-                    "in one stage of a funnel. Save it ONLY when the user asks ('save it'); pass their words in user_said. as_reply=true sends each "
-                    "person's copy as a reply in their last email thread with the user (a new email if there is none), e.g. 'reply to these three'. "
-                    "Write {name} where each person's first name goes, or no {name} for the same text to all ('Hi, ...'). Nothing is sent here. "
-                    "Show the user the result (a sample copy, who gets it, who is skipped). Different groups needing different openers: one draft each.",
-     "inputSchema": {"type": "object", "properties": {"contact_ids": {"type": "array", "items": {"type": "integer"}, "description": "The people (2 or more)"},
-                                                      "funnel": {"type": "string", "description": "Funnel name or id, with stage: everyone in that stage"},
+     "description": "THE one tool to save an email draft, for one person, several people, or everyone in a funnel stage: ONE call with all of them (never one call "
+                    "per person). Save ONLY when the user asks ('save it', 'keep it as a draft'); pass their own words in user_said. When an email looks "
+                    "finished in the chat, you may ask 'Save it as a draft?'. It saves the wording you last printed in the chat. Write {name} where each "
+                    "person's first name goes (several people), or no {name} for the same text to everyone ('Hi, ...'). as_reply=true sends each copy as a "
+                    "reply in that person's last email thread with the user (a new email if there is none). It shows in each person's activity as "
+                    "'Draft (not sent)'. Nothing is sent here.",
+     "inputSchema": {"type": "object", "properties": {"contact_ids": {"type": "array", "items": {"type": "integer"}, "description": "The people: one or more"},
+                                                      "funnel": {"type": "string", "description": "Instead of contact_ids: a funnel (name or id) with its stage, for everyone in it"},
                                                       "stage": {"type": "string"}, "as_reply": {"type": "boolean"},
                                                       "subject": {"type": "string", "description": "Not needed for replies (they use Re: the thread's subject)"},
                                                       "body": {"type": "string"},
                                                       "user_said": {"type": "string", "description": "The user's own words asking to save (quote them)"}},
                      "required": ["body", "user_said"]}},
-    {"name": "list_funnel_drafts", "title": "Funnel email drafts", "description": "The saved funnel email drafts (of one funnel, or all): subject, who, status (draft, sending, stopped, sent), how many sent.",
-     "inputSchema": {"type": "object", "properties": {"funnel": {"type": "string"}}}, "read": True},
-    {"name": "update_funnel_draft", "title": "Change a funnel email draft",
-     "description": "Change a saved draft's subject or text, add or remove contacts, or take everyone of another stage instead. Show the user the new preview.",
+    {"name": "list_drafts", "title": "Email drafts", "description": "Every saved, unsent email draft: to one person (by contact) and to several people (draft_id), with status for groups (draft, sending, stopped, sent).",
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "get_email_draft", "title": "Open a person's email draft", "description": "A contact's saved, unsent draft to them alone (or none). Several-people drafts: preview_group_draft.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
+    {"name": "discard_email_draft", "title": "Discard an email draft", "destructive": True,
+     "description": "Only when the user asks: delete a contact's draft to them alone, and take them out of any several-people draft.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}},
+    {"name": "list_unsent_drafts", "title": "Drafts waiting 2+ days", "description": "Every draft unsent for 2 days or more, including the scheduled run's.",
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "update_group_draft", "title": "Change a several-people draft",
+     "description": "Change a several-people draft's subject or text, add or remove people, switch reply on or off, or take everyone of another stage. Show the new preview.",
      "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"},
                                                       "add_contact_ids": {"type": "array", "items": {"type": "integer"}},
-                                                      "remove_contact_ids": {"type": "array", "items": {"type": "integer"}}, "stage": {"type": "string"}},
+                                                      "remove_contact_ids": {"type": "array", "items": {"type": "integer"}}, "stage": {"type": "string"},
+                                                      "as_reply": {"type": "boolean"}},
                      "required": ["draft_id"]}},
-    {"name": "preview_funnel_draft", "title": "Preview a funnel email",
-     "description": "Before sending: the full email, one person's copy, everyone it will go to, and who is skipped (no email, already got it, replied since).",
+    {"name": "preview_group_draft", "title": "Preview a several-people draft",
+     "description": "Before sending: the text, one person's copy, everyone it will go to, and who is skipped (no email, already got it, replied since).",
      "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}, "required": ["draft_id"]}, "read": True},
-    {"name": "send_funnel_draft", "title": "Send a funnel email", "destructive": True,
-     "description": "Only after showing preview_funnel_draft and the user saying yes to sending to that list. Ask once for the whole batch: follow up in 3 days, "
-                    "another number of days, or no follow-up (0). Sends one by one, about a minute apart, from the user's Gmail, on its own; returns at once. "
-                    "Each is saved on the contact. The first failure stops it. Check progress with funnel_send_status.",
+    {"name": "send_group_draft", "title": "Send a several-people draft", "destructive": True,
+     "description": "Only after showing preview_group_draft and the user saying yes to that list. Ask once for the whole batch: follow up in 3 days, another number "
+                    "of days, or no follow-up (0). Sends one by one, about a minute apart, on its own; returns at once. Each is saved on the contact. "
+                    "The first failure stops it. A one-person draft is sent with send_email instead.",
      "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}, "follow_up_days": {"type": "integer", "minimum": 0, "maximum": 365}},
                      "required": ["draft_id", "follow_up_days"]}},
-    {"name": "funnel_send_status", "title": "Funnel email progress", "description": "How a funnel email batch is going (the latest one if no draft_id): sent so far, who got it, who failed, who is left.",
+    {"name": "group_send_status", "title": "Several-people send progress", "description": "How a batch is going (the latest one if no draft_id): sent so far, who got it, who failed, who is left.",
      "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}}, "read": True},
-    {"name": "delete_funnel_draft", "title": "Delete a funnel email draft", "destructive": True,
-     "description": "Delete a saved draft (not one being sent).", "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}, "required": ["draft_id"]}},
+    {"name": "delete_group_draft", "title": "Delete a several-people draft", "destructive": True,
+     "description": "Delete a several-people draft (not one being sent).", "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}, "required": ["draft_id"]}},
     {"name": "find_companies", "title": "Find companies",
      "description": "Companies in LyteKeepr by name (empty lists them). Returns company_id, name, website and how many contacts.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}, "read": True},
@@ -777,33 +770,42 @@ def _run_tool(call, name: str, args: dict):
     if name == "save_email_draft":
         if not _asked_to_save(args.get("user_said")):                     # only when the user asked for it
             return {"saved": False, "message": "Nothing was saved: drafts are saved only when the user asks ('save it'). You may ask them: 'Save it as a draft?'"}
-        return need(*call("PUT", f"/api/crm/people/{int(args['contact_id'])}/draft", {"subject": args.get("subject", ""), "body": args.get("body", "")}))
+        ids = [int(i) for i in (args.get("contact_ids") or ([args["contact_id"]] if args.get("contact_id") else []))]
+        if len(ids) == 1 and not args.get("funnel") and not args.get("as_reply"):     # one person: their own draft
+            return need(*call("PUT", f"/api/crm/people/{ids[0]}/draft", {"subject": args.get("subject", ""), "body": args.get("body", "")}))
+        body = {"contact_ids": ids or None, "funnel": args.get("funnel"), "stage": args.get("stage"), "subject": args.get("subject", ""),
+                "body": args.get("body", ""), "as_reply": bool(args.get("as_reply"))}
+        return need(*call("POST", "/api/calendar/funnel-drafts", body))              # several people (or a reply): one draft for all of them
+    if name == "list_drafts":
+        mine = [d for d in need(*call("GET", "/api/calendar/autopilot/drafts")).get("drafts", []) if d.get("kind") == "manual"]
+        return {"to_one_person": [{"contact_id": d["person_id"], "to": d["to_email"], "subject": d["subject"], "saved": d["created_at"]} for d in mine],
+                "to_several_people": need(*call("GET", "/api/calendar/funnel-drafts")).get("drafts", [])}
     if name == "get_email_draft":
         return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/draft"))
     if name == "list_unsent_drafts":
         return need(*call("GET", "/api/calendar/autopilot/unsent"))
     if name == "discard_email_draft":
-        d = need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/draft")).get("draft")
-        if not d:
-            return {"discarded": False, "message": "This contact has no saved draft."}
-        need(*call("POST", f"/api/calendar/autopilot/drafts/{d['draft_id']}/dismiss", {}))
-        return {"discarded": True, "draft_id": d["draft_id"]}
-    if name == "create_funnel_draft":
-        if not _asked_to_save(args.get("user_said")):
-            return {"saved": False, "message": "Nothing was saved: drafts are saved only when the user asks ('save it'). You may ask them: 'Save it as a draft?'"}
-        return need(*call("POST", "/api/calendar/funnel-drafts", {k: args.get(k) for k in ("funnel", "stage", "contact_ids", "subject", "body", "as_reply")}))
-    if name == "list_funnel_drafts":
-        return need(*call("GET", "/api/calendar/funnel-drafts" + ("?funnel=" + urllib.parse.quote(str(args["funnel"])) if args.get("funnel") else "")))
-    if name == "update_funnel_draft":
+        pid = int(args["contact_id"])
+        out = {"discarded": False}
+        d = need(*call("GET", f"/api/crm/people/{pid}/draft")).get("draft")
+        if d:
+            need(*call("POST", f"/api/calendar/autopilot/drafts/{d['draft_id']}/dismiss", {}))
+            out = {"discarded": True, "draft_id": d["draft_id"]}
+        for g in need(*call("GET", "/api/calendar/funnel-drafts")).get("drafts", []):
+            if g["status"] in ("draft", "stopped") and pid in (g.get("contact_ids") or []):
+                need(*call("PUT", f"/api/calendar/funnel-drafts/{g['draft_id']}", {"remove_contact_ids": [pid]}))
+                out.setdefault("removed_from_group_drafts", []).append(g["draft_id"])
+        return out if (out.get("discarded") or out.get("removed_from_group_drafts")) else {"discarded": False, "message": "This contact has no saved draft."}
+    if name == "update_group_draft":
         return need(*call("PUT", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}",
-                          {k: args.get(k) for k in ("subject", "body", "add_contact_ids", "remove_contact_ids", "stage") if args.get(k) is not None}))
-    if name == "preview_funnel_draft":
+                          {k: args.get(k) for k in ("subject", "body", "add_contact_ids", "remove_contact_ids", "stage", "as_reply") if args.get(k) is not None}))
+    if name == "preview_group_draft":
         return need(*call("GET", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}"))
-    if name == "send_funnel_draft":
+    if name == "send_group_draft":
         return need(*call("POST", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}/send", {"follow_up_days": int(args["follow_up_days"])}))
-    if name == "funnel_send_status":
+    if name == "group_send_status":
         return need(*call("GET", "/api/calendar/funnel-drafts/status" + (f"?draft_id={int(args['draft_id'])}" if args.get("draft_id") else "")))
-    if name == "delete_funnel_draft":
+    if name == "delete_group_draft":
         return need(*call("DELETE", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}"))
     if name == "find_companies":
         rows = need(*call("GET", "/api/calendar/companies?q=" + urllib.parse.quote(str(args.get("query") or ""))))["companies"]

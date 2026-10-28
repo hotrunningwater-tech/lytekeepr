@@ -547,9 +547,7 @@ def crm_person_detail(person_id):
     detail["messages"] = interactions._sorted(detail["messages"] + [interactions.as_message(r) for r in interactions.for_person(person_id, "conversation")])
     if lk_users.is_admin():                            # a waiting draft to them, marked "Draft (not sent)"
         from lk_calendar import autopilot
-        item = autopilot.draft_item(person_id)
-        if item:
-            detail["messages"].append(item)
+        detail["messages"].extend(autopilot.draft_items(person_id))
     detail["notes_log"] = interactions.for_person(person_id, "note")
     return jsonify(detail)
 
