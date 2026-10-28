@@ -91,20 +91,23 @@
       onclick: function (ev) { ev.stopPropagation(); onToggle(); } }, done ? '✓' : '');
   }
   function markDone(e) {
+    if (e.lead && !confirm('Mark "' + e.title + '" done?')) return;         // a follow-up is never cleared by a stray click
     return api('POST', '/api/calendar/events/' + e.id + '/done', { date: e.date, done: true })
-      .then(function () { undoBar([{ id: e.id, date: e.date }], 'Marked done'); return load(); }).catch(fail);
+      .then(function () { showUndo(e.lead ? 'homeFollowups' : 'homeActions', [{ id: e.id, date: e.date }], '"' + e.title + '" marked done'); return load(); }).catch(fail);
   }
-  // A few seconds to take back a "done": nothing is cleared without you seeing it
+  // Undo sits at the top of the same list, where you just clicked, for 15 seconds
   var undoTimer = null;
-  function undoBar(items, text) {
-    var bar = document.getElementById('hmUndoBar');
-    if (!bar) { bar = h('div', { id: 'hmUndoBar', class: 'hm-undo', role: 'status' }); document.body.appendChild(bar); }
-    fill(bar, [h('span', {}, text), h('button', { type: 'button', onclick: function () {
-      bar.hidden = true;
-      api('POST', '/api/calendar/events/done-bulk', { items: items, done: false }).then(load).catch(fail);
+  function showUndo(listId, items, text) {
+    state.undo = { list: listId, items: items, text: text };
+    clearTimeout(undoTimer); undoTimer = setTimeout(function () { state.undo = null; render(); }, 15000);
+  }
+  function undoRow(listId) {
+    var u = state.undo;
+    if (!u || u.list !== listId) return null;
+    return h('div', { class: 'hm-undo' }, [h('span', {}, u.text), h('button', { type: 'button', onclick: function () {
+      state.undo = null; clearTimeout(undoTimer);
+      api('POST', '/api/calendar/events/done-bulk', { items: u.items, done: false }).then(load).catch(fail);
     } }, 'Undo')]);
-    bar.hidden = false;
-    clearTimeout(undoTimer); undoTimer = setTimeout(function () { bar.hidden = true; }, 8000);
   }
   function itemRow(e, today, overdue) {
     var who = e.lead && e.lead.person_id;
@@ -125,10 +128,10 @@
     var all = h('button', { class: 'hm-mini', type: 'button', onclick: function (ev) {
       ev.stopPropagation();
       var n = g.members.length;
-      if (n > 1 && !confirm('Mark all ' + n + ' ' + name + ' follow-ups done?')) return;      // one click never clears a whole group unasked
+      if (!confirm('Mark all ' + n + ' ' + name + ' follow-ups done?')) return;      // one click never clears a whole group unasked
       var items = g.members.map(function (m) { return { id: m.id, date: m.date }; });
       api('POST', '/api/calendar/events/done-bulk', { items: items, done: true })
-        .then(function () { undoBar(items, n + ' marked done'); return load(); }).catch(fail);
+        .then(function () { showUndo('homeFollowups', items, n + ' ' + name + ' follow-up' + (n === 1 ? '' : 's') + ' marked done'); return load(); }).catch(fail);
     } }, 'All done');
     var row = h('div', { class: 'hm-row hm-group' }, [check(false, function () { all.click(); }, 'Mark all done'),
       h('div', { class: 'hm-main' }, [h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { state.open[key] = !open; render(); } }, (open ? '▾ ' : '▸ ') + label),
@@ -147,7 +150,7 @@
     fill($('homeActionsTools'), [late.length ? h('button', { class: 'hm-mini', type: 'button', onclick: function () {
       api('POST', '/api/calendar/overdue/move', { to: 'today' }).then(load).catch(fail);
     } }, 'Move overdue to today') : null]);
-    fill($('homeActions'), [late.length ? h('div', { class: 'hm-day hm-late' }, 'Overdue') : null].concat(late.map(function (e) { return itemRow(e, today, true); }),
+    fill($('homeActions'), [undoRow('homeActions'), late.length ? h('div', { class: 'hm-day hm-late' }, 'Overdue') : null].concat(late.map(function (e) { return itemRow(e, today, true); }),
       [h('div', { class: 'hm-day' }, 'Today')], now.length ? now.map(function (e) { return itemRow(e, today, false); }) : [h('p', { class: 'hm-empty' }, 'Nothing due today.')]));
     // Follow-ups in three parts: late, today, and the next 7 days (so a planned one is visible before its day)
     function part(label, list, cls, section) {
@@ -161,7 +164,7 @@
     var fComing = (coming || []).filter(function (e) { return e.lead && !e.done && e.date > today; });
     state.followComing = fComing.length;
     var parts = part('Overdue', fLate, 'hm-late', 'late').concat(part('Today', fToday, '', 'today'), part('Coming up · next 7 days', fComing, '', 'coming'));
-    fill($('homeFollowups'), parts.length ? parts : [h('p', { class: 'hm-empty' }, 'No follow-ups due or coming up.')]);
+    fill($('homeFollowups'), [undoRow('homeFollowups')].concat(parts.length ? parts : [h('p', { class: 'hm-empty' }, 'No follow-ups due or coming up.')]).filter(Boolean));
   }
 
   /* ---------- needs a brand: contacts a sync or a one-click suggestion created without one; every contact belongs to a brand ---------- */
