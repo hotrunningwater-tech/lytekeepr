@@ -47,7 +47,8 @@ c. Click **Not now** on one.
 **8. (Phone + Mac) Contacts and companies (#9, #10)**
 a. CRM → Contacts → Companies → **Open company** on one you know.
 ✅ Works if: you see its people, opportunities and recent history.
-b. Ask Claude: *"Show me the company [name]."* → same people and opportunities.
+b. Ask Claude: *"What's going on with [company]? Who do we know there?"*
+✅ Works if: you get the same people and opportunities, plus where things stand.
 c. Ask Claude: *"Add a note to [company]: prefers annual billing."* → it asks first; say yes.
 ✅ Works if: the note shows when you Open company again.
 
