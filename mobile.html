@@ -378,7 +378,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
     }
     function button(c, label, cls, fn) { var b = el('button', 'btn sm ' + cls, label); b.addEventListener('click', function () { b.disabled = true; fn(b); }); c.acts.appendChild(b); }
     function vanish(c, msg) { c.classList.add('gone'); toast(msg); setTimeout(refresh, 260); }
-    function leadName(e) { var m = /^(?:Follow up|Send DM|Reply to):?\s*(.*)$/i.exec(e.title); return m ? m[1] : e.title; }
+    function leadName(e) { if (e.lead && e.lead.person_name) return e.lead.person_name; var m = /^(?:Follow up|Send DM|Reply to):?\s*(.*)$/i.exec(e.title); return m ? m[1] : e.title; }
     function snooze(e) {
       var ids = (e.group ? e.members : [e]).map(function (m) { return m.lead && m.lead.id; }).filter(Boolean);
       return ids.length ? api('POST', '/api/calendar/followups/move', { lead_ids: ids, to_date: addDays(state.today, 2) }) : Promise.reject(new Error('Nothing to move'));

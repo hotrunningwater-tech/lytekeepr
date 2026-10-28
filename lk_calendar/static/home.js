@@ -91,9 +91,9 @@
       onclick: function (ev) { ev.stopPropagation(); onToggle(); } }, done ? '✓' : '');
   }
   function markDone(e) {
-    if (e.lead && !confirm('Mark "' + e.title + '" done?')) return;         // a follow-up is never cleared by a stray click
+    if (e.lead && !confirm('Mark "' + itemTitle(e) + '" done?')) return;         // a follow-up is never cleared by a stray click
     return api('POST', '/api/calendar/events/' + e.id + '/done', { date: e.date, done: true })
-      .then(function () { showUndo(e.lead ? 'homeFollowups' : 'homeActions', [{ id: e.id, date: e.date }], '"' + e.title + '" marked done'); return load(); }).catch(fail);
+      .then(function () { showUndo(e.lead ? 'homeFollowups' : 'homeActions', [{ id: e.id, date: e.date }], '"' + itemTitle(e) + '" marked done'); return load(); }).catch(fail);
   }
   // Undo sits at the top of the same list, where you just clicked, for 15 seconds
   var undoTimer = null;
@@ -109,10 +109,16 @@
       api('POST', '/api/calendar/events/done-bulk', { items: u.items, done: false }).then(load).catch(fail);
     } }, 'Undo')]);
   }
+  // "Reply to david@x.com" reads as "Reply to David Woodbridge" when the contact has a name
+  function itemTitle(e) {
+    var l = e.lead;
+    if (!l || !l.person_name || !l.contact) return e.title;
+    return e.title.indexOf(l.contact) >= 0 ? e.title.replace(l.contact, l.person_name) : e.title + ' · ' + l.person_name;
+  }
   function itemRow(e, today, overdue) {
     var who = e.lead && e.lead.person_id;
     var title = h(who ? 'button' : 'span', who ? { class: 'hm-title hm-link', type: 'button', onclick: function () { if (window.openCrmPersonDetail) window.openCrmPersonDetail(e.lead.person_id); } }
-                                               : { class: 'hm-title' }, e.title);
+                                               : { class: 'hm-title' }, itemTitle(e));
     var meta = [overdue ? h('span', { class: 'hm-late' }, 'Overdue · ' + dayLabel(e.date, today)) : (e.untimed ? null : h('span', {}, time12(e.start_time))),
                 brandDot(e.project)].filter(Boolean);
     return h('div', { class: 'hm-row' }, [check(false, function () { markDone(e); }), h('div', { class: 'hm-main' }, [title, meta.length ? h('div', { class: 'hm-meta' }, meta) : null])]);

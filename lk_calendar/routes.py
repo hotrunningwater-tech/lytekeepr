@@ -46,6 +46,20 @@ def _with_people(events: list) -> list:
     return events
 
 
+def _with_lead_names(events: list) -> list:
+    """A follow-up's contact by name (the lead only knows the email or handle)."""
+    ids = {e["lead"]["person_id"] for e in events if e.get("lead") and e["lead"].get("person_id")}
+    if not ids:
+        return events
+    from . import contacts
+    with contacts._crm() as c:
+        names = {r[0]: r[1] for r in c.execute(f"SELECT person_id, name FROM people WHERE person_id IN ({','.join('?' for _ in ids)})", list(ids)) if r[1]}
+    for e in events:
+        if e.get("lead") and names.get(e["lead"].get("person_id")):
+            e["lead"] = {**e["lead"], "person_name": names[e["lead"]["person_id"]]}
+    return events
+
+
 @bp.get("/api/calendar/events")
 def list_events():
     start, end = request.args.get("start"), request.args.get("end")
@@ -66,7 +80,7 @@ def move_overdue():
 def agenda():
     data = store.agenda()
     for key in ("overdue", "today", "upcoming"):
-        data[key] = _with_people(_one_per_meeting([e for e in data[key] if access.can_event(e)]))
+        data[key] = _with_lead_names(_with_people(_one_per_meeting([e for e in data[key] if access.can_event(e)])))
         brands.meeting_brands(data[key])
         meeting_notes.add_to(data[key])
     data["badge"] = len(data["overdue"]) + sum(1 for o in data["today"] if not o["done"])
