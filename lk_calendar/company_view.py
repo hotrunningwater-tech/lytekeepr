@@ -15,7 +15,7 @@ def overview(company_id: int) -> dict | None:
     visible = access.person_ids()
     people = [p for p in c.get("contacts") or [] if visible is None or p.get("id") in visible]
     ids = [p["id"] for p in people]
-    with contacts._crm() as conn:
+    with opportunities._crm() as conn:                 # its own connection makes sure the opportunity tables exist
         opp_ids = {r[0] for r in conn.execute("SELECT opportunity_id FROM opportunities WHERE company_id = ?", (int(company_id),))}
         if ids:
             opp_ids |= {r[0] for r in conn.execute(f"SELECT DISTINCT opportunity_id FROM opportunity_people WHERE person_id IN ({','.join('?' for _ in ids)})", ids)}

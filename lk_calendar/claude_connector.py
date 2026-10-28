@@ -545,11 +545,8 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}}, "read": True},
     {"name": "delete_group_draft", "title": "Delete a several-people draft", "destructive": True,
      "description": "Delete a several-people draft (not one being sent).", "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}, "required": ["draft_id"]}},
-    {"name": "find_companies", "title": "Find companies",
-     "description": "Companies in LyteKeepr by name (empty lists them). Returns company_id, name, website and how many contacts.",
-     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}, "read": True},
     {"name": "get_company", "title": "Company overview",
-     "description": "One company: name, website, notes, its people (with funnel and stage), its opportunities, and the recent history of everyone there (newest first).",
+     "description": "One company (company_id from a contact's details or search_contacts): name, website, notes, its people (with funnel and stage), its opportunities, and the recent history of everyone there (newest first).",
      "inputSchema": {"type": "object", "properties": {"company_id": {"type": "integer"}}, "required": ["company_id"]}, "read": True},
     {"name": "update_company", "title": "Update a company",
      "description": CONFIRM_RULE + " (This applies to add_note.) " + "Change a company's name or website, or add a note to it (added at the end, nothing is replaced). To put a contact in a company, use update_contact with company.",
@@ -710,7 +707,7 @@ def _run_tool(call, name: str, args: dict):
             rows = [c for c in rows if (c.get("brand") or "") == wanted][:limit]
         if not rows and str(args.get("query") or "").strip():
             return _did_you_mean(_close_matches(call, need, args["query"], ("contact",)))
-        return [{"id": c["id"], "name": c.get("display"), "company": c.get("company"), "email": c.get("email"), "instagram": c.get("instagram") or None, "channel": c.get("channel"),
+        return [{"id": c["id"], "name": c.get("display"), "company": c.get("company"), "company_id": c.get("company_id"), "email": c.get("email"), "instagram": c.get("instagram") or None, "channel": c.get("channel"),
                  "brand": c.get("brand") or "", "funnel": c.get("funnel_name") or "", "stage": c.get("stage_name") or "", "job_title": c.get("job_title")} for c in rows]
     if name == "get_contact":
         pid = int(args["contact_id"])
@@ -718,7 +715,10 @@ def _run_tool(call, name: str, args: dict):
         emails = [m for m in detail.get("messages") or [] if m.get("channel") == "email"]
         detail["messages"] = [m for m in detail.get("messages") or [] if m.get("channel") != "email"]
         if emails:
-            detail["emails_not_shared"] = f"{len(emails)} email(s) exist in LyteKeepr; email text is not shared with Claude yet."
+            detail["emails"] = f"{len(emails)} email(s) with them in LyteKeepr: read them with email_lookup (contact) and email_thread."
+        st_c, card = call("GET", f"/api/calendar/contacts/{pid}")
+        if st_c < 400 and card.get("company_id"):
+            detail["company_id"] = card["company_id"]          # for get_company / update_company
         status, outreach = call("GET", f"/api/calendar/people/{pid}/outreach")
         if status < 400:
             detail["outreach"] = outreach
@@ -810,9 +810,6 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", "/api/calendar/funnel-drafts/status" + (f"?draft_id={int(args['draft_id'])}" if args.get("draft_id") else "")))
     if name == "delete_group_draft":
         return need(*call("DELETE", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}"))
-    if name == "find_companies":
-        rows = need(*call("GET", "/api/calendar/companies?q=" + urllib.parse.quote(str(args.get("query") or ""))))["companies"]
-        return [{"company_id": r["id"], "name": r["name"], "website": r.get("website") or "", "contacts": r.get("contacts", 0)} for r in rows[:50]]
     if name == "get_company":
         return need(*call("GET", f"/api/calendar/companies/{int(args['company_id'])}/overview"))
     if name == "update_company":
