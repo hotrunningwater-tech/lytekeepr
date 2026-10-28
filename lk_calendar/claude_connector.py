@@ -318,15 +318,17 @@ TOOLS = [
                                                       "done": {"type": "boolean", "default": True}}, "required": ["task_id", "date"]}, "read": False},
     # --- added for everyday phone use: the same actions the three LyteKeepr AI chats have ---
     {"name": "create_contact", "title": "Add a contact",
-     "description": "Add a new contact (someone you just met or talked to). An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'. "
-                    "From a business card photo or a voice note: read name, job title, company, email, phone and links, call search_contacts first (no duplicates; "
-                    "update_contact if they exist), show the user what you read, and save after they confirm. Anything else said goes in notes.",
+     "description": "Add a new contact. FIRST call search_contacts (no duplicates; update_contact if they exist), then print back exactly what you will save "
+                    "(name, company, job title, email, phone, links, brand, funnel if any, notes) and ask 'Add?'. Call this only after the user says yes, with "
+                    "user_confirmed=true. An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'. From a business card photo "
+                    "or a voice note: read the details the same way, anything else said goes in notes.",
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string", "description": "The person's name; leave empty if only a handle is known"},
                                                       "company": {"type": "string"}, "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
                                                       "instagram": {"type": "string", "description": "Instagram handle like @name (or the instagram.com link)"},
                                                       "linkedin": {"type": "string", "description": "LinkedIn profile link"}, "notes": {"type": "string"},
-                                                      "brand": {"type": "string", "description": "REQUIRED: the brand (name or key, see list_brands). Ask the user which brand unless they said it; never guess. With no brands yet, tell them to create one first (Settings → Brands, or create_brand)."}},
-                     "required": ["brand"]}, "read": False},
+                                                      "brand": {"type": "string", "description": "REQUIRED: the brand (name or key, see list_brands). Ask the user which brand unless they said it; never guess. With no brands yet, tell them to create one first (Settings → Brands, or create_brand)."},
+                                                      "user_confirmed": {"type": "boolean", "description": "true only after you printed the details and the user said yes"}},
+                     "required": ["brand", "user_confirmed"]}, "read": False},
     {"name": "update_contact", "title": "Update a contact",
      "description": "Change a contact's details, or add a note (add_note is saved as a dated note, like add_contact_note). Only the fields given change.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "name": {"type": "string"}, "company": {"type": "string"},
@@ -845,6 +847,9 @@ def _run_tool(call, name: str, args: dict):
     if name == "mark_task_done":
         return need(*call("POST", f"/api/calendar/events/{int(args['task_id'])}/done", {"date": args["date"], "done": bool(args.get("done", True))}))
     if name == "create_contact":
+        if args.get("user_confirmed") is not True:             # the details are printed back and confirmed before anything is added
+            return {"saved": False, "do_this_first": "Nothing was added. Print back exactly what you will save (name, company, email, phone, links, brand, "
+                                                     "funnel, notes), ask 'Add?', and call again with user_confirmed=true after they say yes."}
         body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "instagram", "notes", "brand") if args.get(k)}
         if args.get("linkedin") or args.get("profile_url"):
             body["url"] = args.get("linkedin") or args.get("profile_url")
