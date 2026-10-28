@@ -206,6 +206,13 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "create_brand", "title": "Add a brand", "description": "Add a new brand (business). Only when the user asks for it.",
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}, "read": False},
+    {"name": "create_funnel", "title": "Create a funnel",
+     "description": "Create a new sales funnel. It needs a name and a brand (everyone put in the funnel takes its brand): ask for whichever the user didn't say; never guess the brand. "
+                    "It starts with the standard stages (New lead, Contacted, In conversation, Confirmed, Onboarding, Completed, Lost); they can be changed later in the app (Edit funnel). "
+                    "Print back the name and brand, ask 'Create?', and call with user_confirmed=true only after the user says yes.",
+     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "brand": {"type": "string", "description": "The brand the user named (name or key, see list_brands)"},
+                                                      "user_confirmed": {"type": "boolean", "description": "true only after you printed the name and brand and the user said yes"}},
+                     "required": ["name", "brand", "user_confirmed"]}, "read": False},
     {"name": "set_funnel_brand", "title": "Set a funnel's brand",
      "description": "Make a funnel belong to a brand. Everyone in the funnel takes that brand, and their follow-ups are filed under it. Empty brand clears the funnel's brand.",
      "inputSchema": {"type": "object", "properties": {"funnel_id": {"type": "integer"}, "brand": {"type": "string", "description": "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
@@ -699,6 +706,20 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", "/api/crm/brands"))["brands"]
     if name == "create_brand":
         return need(*call("POST", "/api/crm/brands", {"name": args.get("name", "")}))["brand"]
+    if name == "create_funnel":
+        fname = str(args.get("name") or "").strip()
+        if not fname:
+            raise ValueError("The funnel needs a name: ask the user.")
+        key = _brand_key(call, need, args.get("brand"))
+        if not key:
+            raise ValueError("The funnel needs a brand: ask the user which one (see list_brands).")
+        existing = need(*call("GET", "/api/crm/funnels"))["funnels"]
+        if any(f["name"].strip().lower() == fname.lower() for f in existing):
+            raise ValueError(f"There is already a funnel called '{fname}'. Ask the user for another name.")
+        if args.get("user_confirmed") is not True:
+            return {"created": False, "do_this_first": f"Nothing was created. Print back: funnel '{fname}', brand {key}, standard stages; ask 'Create?' and call again with user_confirmed=true after they say yes."}
+        made = need(*call("POST", "/api/crm/funnels", {"name": fname, "brand": key}))
+        return {"created": True, "funnel_id": made["funnel_id"], "name": fname, "brand": key}
     if name == "set_funnel_brand":
         return need(*call("POST", f"/api/crm/funnels/{int(args['funnel_id'])}/brand", {"brand": args.get("brand", "")}))
     if name == "search_contacts":
