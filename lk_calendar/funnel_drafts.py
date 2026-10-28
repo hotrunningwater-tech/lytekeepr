@@ -57,6 +57,8 @@ class DraftError(ValueError):
 def _conn():
     conn = store._conn()
     conn.executescript(SCHEMA)
+    if "as_reply" not in {r[1] for r in conn.execute("PRAGMA table_info(funnel_drafts)")}:
+        conn.execute("ALTER TABLE funnel_drafts ADD COLUMN as_reply INTEGER NOT NULL DEFAULT 0")   # each copy as a reply in that person's thread
     return conn
 
 
@@ -157,15 +159,29 @@ def _summary(d: dict, conn) -> dict:
     sent = conn.execute("SELECT COUNT(*) FROM funnel_draft_sends WHERE draft_id = ? AND status = 'sent'", (d["draft_id"],)).fetchone()[0]
     return {"draft_id": d["draft_id"], "funnel": d["funnel_name"], "stage": d["stage_name"], "subject": d["subject"], "status": d["status"],
             "recipients": len(d["recipients"]), "sent": sent, "greets_by_name": "{{first_name}}" in (d["subject"] + d["body"]),
+            "as_reply": bool(d.get("as_reply")),
             "updated_at": d["updated_at"]}
 
 
 # ------------------------------------------------------------------ drafts
-def create(funnel, subject: str, body: str, stage: str = "", contact_ids=None) -> dict:
+def _home_funnel(ids: list) -> dict:
+    """Picked people with no funnel named: the draft lives under the first one's funnel (or under no funnel)."""
+    from . import contacts
+    with contacts._crm() as c:
+        for pid in ids:
+            r = c.execute("SELECT f.funnel_id, f.name FROM people p JOIN funnels f ON f.funnel_id = p.funnel_id WHERE p.person_id = ?", (int(pid),)).fetchone()
+            if r:
+                return {"funnel_id": r["funnel_id"], "name": r["name"]}
+    return {"funnel_id": 0, "name": ""}
+
+
+def create(funnel, subject: str, body: str, stage: str = "", contact_ids=None, as_reply: bool = False) -> dict:
     _admin()
     if not (body or "").strip():
         raise DraftError("The email needs text.")
-    f = _funnel(funnel)
+    f = _funnel(funnel) if funnel else (_home_funnel(contact_ids) if contact_ids else None)
+    if f is None:
+        raise DraftError("Say who gets it: the people, or a funnel and its stage.")
     if contact_ids:
         stage_name, ids = "", [int(i) for i in contact_ids]
     elif stage:
@@ -176,10 +192,10 @@ def create(funnel, subject: str, body: str, stage: str = "", contact_ids=None) -
         raise DraftError(f"{len(ids)} people; one draft is limited to {MAX_RECIPIENTS}. Split it (e.g. one draft per stage).")
     now = _now()
     with _conn() as conn:
-        did = conn.execute("""INSERT INTO funnel_drafts (funnel_id, funnel_name, stage_name, subject, body, recipients, pause_seconds, created_at, updated_at)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        did = conn.execute("""INSERT INTO funnel_drafts (funnel_id, funnel_name, stage_name, subject, body, recipients, pause_seconds, created_at, updated_at, as_reply)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                            (f["funnel_id"], f["name"], stage_name, _normalize(subject).strip(), _normalize(body).rstrip(), json.dumps(ids),
-                            PAUSE_SECONDS, now, now)).lastrowid
+                            PAUSE_SECONDS, now, now, 1 if as_reply else 0)).lastrowid
     return preview(did)
 
 
@@ -194,7 +210,7 @@ def list_drafts(funnel=None) -> dict:
     return {"drafts": out}
 
 
-def update(draft_id: int, subject=None, body=None, add_contact_ids=None, remove_contact_ids=None, stage=None) -> dict:
+def update(draft_id: int, subject=None, body=None, add_contact_ids=None, remove_contact_ids=None, stage=None, as_reply=None) -> dict:
     _admin()
     with _conn() as conn:
         d = _row(conn, draft_id)
@@ -209,6 +225,8 @@ def update(draft_id: int, subject=None, body=None, add_contact_ids=None, remove_
                 ids.append(int(i))
         gone = {int(i) for i in remove_contact_ids or []}
         ids = [i for i in ids if i not in gone]
+        if as_reply is not None:
+            conn.execute("UPDATE funnel_drafts SET as_reply = ? WHERE draft_id = ?", (1 if as_reply else 0, d["draft_id"]))
         conn.execute("""UPDATE funnel_drafts SET subject = ?, body = ?, recipients = ?, stage_name = ?, updated_at = ? WHERE draft_id = ?""",
                      (_normalize(subject).strip() if subject is not None else d["subject"], _normalize(body).rstrip() if body is not None else d["body"],
                       json.dumps(ids), stage_name, _now(), d["draft_id"]))
@@ -256,8 +274,12 @@ def preview(draft_id: int) -> dict:
         send, skipped = _plan(d, conn)
         out = _summary(d, conn)
     sample = send[0] if send else {"first_name": ""}
+    sample_subject = bulk_email.render(d["subject"], sample["first_name"])
+    if d.get("as_reply") and sample.get("contact_id"):
+        tid, _mid, re_subject = _reply_to(sample["contact_id"])
+        sample_subject = re_subject if tid else sample_subject + "  (no earlier email with them: sent as a new email)"
     return {**out, "body": d["body"],
-            "sample_copy": {"to": sample.get("name", ""), "subject": bulk_email.render(d["subject"], sample["first_name"]),
+            "sample_copy": {"to": sample.get("name", ""), "subject": sample_subject,
                             "body": bulk_email.render(d["body"], sample["first_name"])},
             "will_send_to": [{"contact_id": p["contact_id"], "name": p["name"], "email": p["email"]} for p in send],
             "skipped": [{"contact_id": p["contact_id"], "name": p["name"], "reason": p["reason"]} for p in skipped],
@@ -282,6 +304,11 @@ def send(draft_id: int, follow_up_days, pause_seconds=None) -> dict:
             todo, skipped = _plan(d, conn)
             if not todo:
                 raise DraftError("Nobody left to send to." + (" Skipped: " + "; ".join(f"{p['name']} ({p['reason']})" for p in skipped) if skipped else ""))
+            if d.get("as_reply") and not d["subject"].strip():     # someone with no earlier thread would get a new email with no subject
+                fresh = [p["name"] for p in todo if not _reply_to(p["contact_id"])[0]]
+                if fresh:
+                    raise DraftError(f"No earlier email with {', '.join(fresh)}, so theirs goes as a new email and needs a subject. "
+                                     "Add one (update_funnel_draft subject) or remove them.")
             gap = max(5, min(int(pause_seconds or d["pause_seconds"] or PAUSE_SECONDS), 600))
             conn.execute("UPDATE funnel_drafts SET status = 'sending', follow_up_days = ?, pause_seconds = ?, message = '', heartbeat = ?, updated_at = ? WHERE draft_id = ?",
                          (max(0, int(follow_up_days)), gap, time.time(), _now(), d["draft_id"]))
@@ -298,6 +325,13 @@ def _run_in(profile_id: str, *args) -> None:
         _run(*args)
 
 
+def _reply_to(person_id: int) -> tuple:
+    """The last email thread with this person: (thread id, Message-ID, "Re: subject"), or (None, None, '') when there is none."""
+    from assistant import email_send_flow
+    tid, mid, subject = email_send_flow._reply_target(int(person_id), "")
+    return (tid, mid, subject) if tid and mid else (None, None, "")
+
+
 def _run(draft_id: int, todo: list, gap: int, follow_up_days: int) -> None:
     from assistant import bulk_email, email_send_flow
     with _conn() as conn:
@@ -305,7 +339,12 @@ def _run(draft_id: int, todo: list, gap: int, follow_up_days: int) -> None:
     for i, p in enumerate(todo):
         subject, body = bulk_email.render(d["subject"], p["first_name"]), bulk_email.render(d["body"], p["first_name"])
         try:
-            res = email_send_flow.send_email(p["contact_id"], p["name"], p["email"], subject, body, follow_up_days=follow_up_days)
+            thread = None
+            if d.get("as_reply"):                      # a reply in that person's last thread (a new email if there is none)
+                tid, mid, re_subject = _reply_to(p["contact_id"])
+                if tid:
+                    thread, subject = (tid, mid), re_subject
+            res = email_send_flow.send_email(p["contact_id"], p["name"], p["email"], subject, body, thread=thread, follow_up_days=follow_up_days)
         except Exception as exc:
             res = {"status": "failed", "message": f"Not sent to {p['name']}: {exc}"}
         with _conn() as conn:
@@ -367,7 +406,7 @@ def register(app):
     @app.post("/api/calendar/funnel-drafts")
     def fd_create():
         x = b()
-        return run(create, x.get("funnel"), x.get("subject", ""), x.get("body", ""), x.get("stage", ""), x.get("contact_ids"))
+        return run(create, x.get("funnel"), x.get("subject", ""), x.get("body", ""), x.get("stage", ""), x.get("contact_ids"), bool(x.get("as_reply")))
 
     @app.get("/api/calendar/funnel-drafts/<int:draft_id>")
     def fd_preview(draft_id):
@@ -376,7 +415,7 @@ def register(app):
     @app.put("/api/calendar/funnel-drafts/<int:draft_id>")
     def fd_update(draft_id):
         x = b()
-        return run(update, draft_id, x.get("subject"), x.get("body"), x.get("add_contact_ids"), x.get("remove_contact_ids"), x.get("stage"))
+        return run(update, draft_id, x.get("subject"), x.get("body"), x.get("add_contact_ids"), x.get("remove_contact_ids"), x.get("stage"), x.get("as_reply"))
 
     @app.delete("/api/calendar/funnel-drafts/<int:draft_id>")
     def fd_delete(draft_id):

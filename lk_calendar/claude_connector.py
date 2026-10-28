@@ -143,6 +143,15 @@ def _did_you_mean(matches: list) -> dict:
             "say": "No exact match. Ask in ONE short line: 'Did you mean " + " or ".join(m["name"] for m in matches) + "?' Nothing else."}
 
 
+def _asked_to_save(words) -> bool:
+    """Did the user ask to save (typos forgiven: 'sav', 'saev', 'keeep', 'drfat')?"""
+    import difflib
+    for w in re.findall(r"[a-z]+", str(words or "").lower()):
+        if any(w == k or (len(w) >= 3 and difflib.SequenceMatcher(None, w, k).ratio() >= 0.75) for k in ("save", "saving", "saved", "keep", "draft", "store")):
+            return True
+    return False
+
+
 def _brand_key(call, need, text):
     """A brand name or key → its key; None when no brand was asked for; '' for 'none'. Unknown brands are an error listing the real ones."""
     t = str(text or "").strip()
@@ -491,7 +500,7 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "with_contents": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
     # --- notes and the communication history (calls, meetings and conversations logged by hand next to messages, emails and recordings) ---
     {"name": "save_email_draft", "title": "Save email draft",
-     "description": "Save an email draft to ONE contact, ONLY when the user asks for it ('save it', 'keep it as a draft', 'save draft'). Never on your own. "
+     "description": "Save an email draft to ONE contact (for 2 or more people use create_funnel_draft: one draft for the group), ONLY when the user asks for it ('save it', 'keep it as a draft', 'save draft'). Never on your own. "
                     "When an email looks finished in the chat, you may ask 'Save it as a draft?'. Pass the user's own words that asked for it in user_said. "
                     "It saves the wording you last printed in the chat, replacing an earlier draft (one per contact), and shows in their activity as "
                     "'Draft (not sent)'. Nothing is sent. To send it later, show the text and use send_email after the user says yes (the draft is then cleared). "
@@ -506,14 +515,19 @@ TOOLS = [
     {"name": "discard_email_draft", "title": "Discard an email draft", "destructive": True,
      "description": "Delete a contact's saved email draft (only when the user asks).",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}},
-    {"name": "create_funnel_draft", "title": "Draft one email for a funnel",
-     "description": "One email for several contacts of a funnel: everyone (with an email) in one stage, or the contacts named. Saved under the funnel until sent "
-                    "or deleted; nothing is sent here. Write {name} where each person's first name goes (a contact with no real name gets just 'Hi,'), or no "
-                    "{name} at all for the same text to everyone ('Hi, ...'). Show the user the result (the text, a sample copy, who gets it and who is skipped). "
-                    "Different groups need different openers: make one draft per stage.",
-     "inputSchema": {"type": "object", "properties": {"funnel": {"type": "string", "description": "Funnel name or id"}, "stage": {"type": "string"},
-                                                      "contact_ids": {"type": "array", "items": {"type": "integer"}, "description": "Instead of a stage: these contacts"},
-                                                      "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["funnel", "body"]}},
+    {"name": "create_funnel_draft", "title": "Save one email draft for several people",
+     "description": "The ONE draft for an email to 2 or more people (never one save_email_draft per person): the contacts named, or everyone (with an email) "
+                    "in one stage of a funnel. Save it ONLY when the user asks ('save it'); pass their words in user_said. as_reply=true sends each "
+                    "person's copy as a reply in their last email thread with the user (a new email if there is none), e.g. 'reply to these three'. "
+                    "Write {name} where each person's first name goes, or no {name} for the same text to all ('Hi, ...'). Nothing is sent here. "
+                    "Show the user the result (a sample copy, who gets it, who is skipped). Different groups needing different openers: one draft each.",
+     "inputSchema": {"type": "object", "properties": {"contact_ids": {"type": "array", "items": {"type": "integer"}, "description": "The people (2 or more)"},
+                                                      "funnel": {"type": "string", "description": "Funnel name or id, with stage: everyone in that stage"},
+                                                      "stage": {"type": "string"}, "as_reply": {"type": "boolean"},
+                                                      "subject": {"type": "string", "description": "Not needed for replies (they use Re: the thread's subject)"},
+                                                      "body": {"type": "string"},
+                                                      "user_said": {"type": "string", "description": "The user's own words asking to save (quote them)"}},
+                     "required": ["body", "user_said"]}},
     {"name": "list_funnel_drafts", "title": "Funnel email drafts", "description": "The saved funnel email drafts (of one funnel, or all): subject, who, status (draft, sending, stopped, sent), how many sent.",
      "inputSchema": {"type": "object", "properties": {"funnel": {"type": "string"}}}, "read": True},
     {"name": "update_funnel_draft", "title": "Change a funnel email draft",
@@ -761,7 +775,7 @@ def _run_tool(call, name: str, args: dict):
     if name == "save_message_review":
         return need(*call("POST", "/api/calendar/inbox/review", {k: args.get(k) or [] for k in ("reviewed", "flags", "follow_ups")}))
     if name == "save_email_draft":
-        if not re.search(r"\b(save|saving|keep|draft|store)\b", str(args.get("user_said") or ""), re.I):    # only when the user asked for it
+        if not _asked_to_save(args.get("user_said")):                     # only when the user asked for it
             return {"saved": False, "message": "Nothing was saved: drafts are saved only when the user asks ('save it'). You may ask them: 'Save it as a draft?'"}
         return need(*call("PUT", f"/api/crm/people/{int(args['contact_id'])}/draft", {"subject": args.get("subject", ""), "body": args.get("body", "")}))
     if name == "get_email_draft":
@@ -775,7 +789,9 @@ def _run_tool(call, name: str, args: dict):
         need(*call("POST", f"/api/calendar/autopilot/drafts/{d['draft_id']}/dismiss", {}))
         return {"discarded": True, "draft_id": d["draft_id"]}
     if name == "create_funnel_draft":
-        return need(*call("POST", "/api/calendar/funnel-drafts", {k: args.get(k) for k in ("funnel", "stage", "contact_ids", "subject", "body")}))
+        if not _asked_to_save(args.get("user_said")):
+            return {"saved": False, "message": "Nothing was saved: drafts are saved only when the user asks ('save it'). You may ask them: 'Save it as a draft?'"}
+        return need(*call("POST", "/api/calendar/funnel-drafts", {k: args.get(k) for k in ("funnel", "stage", "contact_ids", "subject", "body", "as_reply")}))
     if name == "list_funnel_drafts":
         return need(*call("GET", "/api/calendar/funnel-drafts" + ("?funnel=" + urllib.parse.quote(str(args["funnel"])) if args.get("funnel") else "")))
     if name == "update_funnel_draft":

@@ -233,6 +233,18 @@ def save_contact_draft(person_id: int, subject: str, body: str) -> dict:
     info = contacts.get_contact(int(person_id)) or {}
     if not info.get("email"):
         raise AutopilotError(f"{info.get('name') or 'This contact'} has no email address; add one first.")
+    recent = (store.now_local() - timedelta(minutes=15)).isoformat(timespec="minutes")
+    signed = body.strip()
+    try:
+        from . import profile
+        signed = profile.sign(body).strip()
+    except Exception:
+        pass
+    with _conn() as conn:                                # the same text just saved for someone else: this is a group email
+        twin = conn.execute("""SELECT 1 FROM autopilot_drafts WHERE kind = 'manual' AND state = 'waiting' AND person_id != ? AND body = ? AND created_at >= ?""",
+                            (int(person_id), signed, recent)).fetchone()
+    if twin:
+        raise AutopilotError("The same email was just saved for someone else: for several people, save ONE draft with create_funnel_draft (contact_ids).")
     name = info.get("name") or info["email"]
     return store_draft(f"contact:{int(person_id)}", "manual", int(person_id), info["email"], name, f"Email to {name}", subject or "", body)
 
