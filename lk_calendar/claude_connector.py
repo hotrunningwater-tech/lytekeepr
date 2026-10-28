@@ -491,15 +491,14 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "with_contents": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
     # --- notes and the communication history (calls, meetings and conversations logged by hand next to messages, emails and recordings) ---
     {"name": "save_email_draft", "title": "Save email draft",
-     "description": "Keep an email draft to ONE contact, so it isn't lost. Save as soon as you have printed in the chat the ACTUAL WORDING of the email "
-                    "(whole or partial, placeholders like [date] are fine), and again after each new version you print; no need to ask or to wait for "
-                    "the user's approval. Never save before it is printed, and never save topics, an outline, a structure or the discussion about the email: "
-                    "only its words. Each save replaces the previous one (one draft per contact) and shows in their activity as 'Draft (not sent)'. "
-                    "Nothing is sent. To send it later, show the text and use send_email after the user says yes (the draft is then cleared). "
+     "description": "Save an email draft to ONE contact, ONLY when the user asks for it ('save it', 'keep it as a draft', 'save draft'). Never on your own. "
+                    "When an email looks finished in the chat, you may ask 'Save it as a draft?'. Pass the user's own words that asked for it in user_said. "
+                    "It saves the wording you last printed in the chat, replacing an earlier draft (one per contact), and shows in their activity as "
+                    "'Draft (not sent)'. Nothing is sent. To send it later, show the text and use send_email after the user says yes (the draft is then cleared). "
                     "For one email to several people, use create_funnel_draft instead.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"},
-                                                      "shown_in_chat": {"type": "boolean", "description": "true only if this exact wording is already printed in the chat"}},
-                     "required": ["contact_id", "body", "shown_in_chat"]}},
+                                                      "user_said": {"type": "string", "description": "The user's own words asking to save (quote them)"}},
+                     "required": ["contact_id", "body", "user_said"]}},
     {"name": "get_email_draft", "title": "Open an email draft", "description": "A contact's saved, unsent email draft (or none). Use it to continue or send a draft the user started earlier.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
     {"name": "list_unsent_drafts", "title": "Unsent drafts", "description": "Every draft waiting 2+ days: emails to one contact, the scheduled run's drafts, and funnel emails not sent yet.",
@@ -762,9 +761,8 @@ def _run_tool(call, name: str, args: dict):
     if name == "save_message_review":
         return need(*call("POST", "/api/calendar/inbox/review", {k: args.get(k) or [] for k in ("reviewed", "flags", "follow_ups")}))
     if name == "save_email_draft":
-        if args.get("shown_in_chat") is not True:          # a draft is what the user has seen in the chat, not Claude's notes
-            return {"saved": False, "do_this_first": "Nothing was saved. Print the email's wording in the chat first; save it only after that, "
-                                                     "with shown_in_chat=true. Never save topics, an outline or the discussion."}
+        if not re.search(r"\b(save|saving|keep|draft|store)\b", str(args.get("user_said") or ""), re.I):    # only when the user asked for it
+            return {"saved": False, "message": "Nothing was saved: drafts are saved only when the user asks ('save it'). You may ask them: 'Save it as a draft?'"}
         return need(*call("PUT", f"/api/crm/people/{int(args['contact_id'])}/draft", {"subject": args.get("subject", ""), "body": args.get("body", "")}))
     if name == "get_email_draft":
         return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/draft"))
