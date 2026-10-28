@@ -338,8 +338,11 @@ TOOLS = [
                                                                                                  "change the funnel's brand or move them instead. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
                      "required": ["contact_id"]}, "read": False},
     {"name": "move_contact_stage", "title": "Move to a funnel stage",
-     "description": "Move a contact to a stage of their funnel by the stage's name (e.g. 'In conversation'). Only the stage changes: outreach statuses and follow-ups stay as they are (use set_outreach_status for those). Give funnel_id to put them into a funnel they are not in yet.",
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "stage": {"type": "string"}, "funnel_id": {"type": "integer"}},
+     "description": "Move a contact to a stage of their funnel by the stage's name (e.g. 'In conversation'). Their outreach status follows the stage. "
+                    "If the answer says needs_confirmation, show the user that message and call again with confirmed=true only after they say yes. "
+                    "Give funnel_id to put them into a funnel they are not in yet.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "stage": {"type": "string"}, "funnel_id": {"type": "integer"},
+                                                      "confirmed": {"type": "boolean", "description": "true only after the user confirmed the warning"}},
                      "required": ["contact_id", "stage"]}, "read": False},
     {"name": "set_outreach_status", "title": "Set outreach status",
      "description": "Set where outreach to a contact stands on a channel (linkedin, instagram or email); it can move their funnel card forward (never back). Use one of the options get_contact lists for that channel under outreach (e.g. 'email sent', 'replied', 'call booked'). "
@@ -880,8 +883,11 @@ def _run_tool(call, name: str, args: dict):
         match = [s for s in stages if (s.get("name") or "").lower() == wanted] or [s for s in stages if wanted in (s.get("name") or "").lower()]
         if len(match) != 1:
             raise ValueError("Stage not found. The stages are: " + ", ".join(s.get("name", "") for s in stages))
-        need(*call("POST", "/api/crm/funnels/stages/move", {"person_id": pid, "stage_id": match[0]["stage_id"]}))
-        return {"ok": True, "contact_id": pid, "stage": match[0]["name"]}
+        status, data = call("POST", "/api/crm/funnels/stages/move", {"person_id": pid, "stage_id": match[0]["stage_id"], "confirm": args.get("confirmed") is True})
+        if status == 409 and (data or {}).get("needs_confirmation"):
+            return {"moved": False, "needs_confirmation": True, "ask_the_user": data["message"]}
+        need(status, data)
+        return {"ok": True, "contact_id": pid, "stage": match[0]["name"], **({"statuses_set": data["statuses_set"]} if data.get("statuses_set") else {})}
     if name == "set_outreach_status":
         body = {"channel": args["channel"], "status": args["status"]}
         if args.get("follow_up_days") is not None:

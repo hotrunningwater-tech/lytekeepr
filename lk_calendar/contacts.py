@@ -855,7 +855,43 @@ def lost_on_stage(person_id: int) -> list:
     return done
 
 
-def status_on_stage(person_id: int) -> dict:
+def _stage_place(person_id: int, stage_id=None) -> dict | None:
+    """Where a card is (or would be): its funnel's stage names in order, the position of `stage_id` (or of its current stage), and the
+    position of the conversation stage (the one "replied" leads to)."""
+    with _crm() as c:
+        p = c.execute("SELECT name, funnel_id, funnel_stage_id FROM people WHERE person_id = ?", (int(person_id),)).fetchone()
+        if not p or not p["funnel_id"]:
+            return None
+        rows = c.execute("SELECT stage_id, name FROM funnel_stages WHERE funnel_id = ? ORDER BY position", (p["funnel_id"],)).fetchall()
+    ids = [r["stage_id"] for r in rows]
+    names = [r["name"].strip().lower() for r in rows]
+    with store._conn() as conn:
+        talk = {r["stage_name"].strip().lower() for r in conn.execute("SELECT stage_name FROM status_stages WHERE status_key = 'replied'")}
+    conv = next((i for i, n in enumerate(names) if n in talk), None)
+    target = int(stage_id) if stage_id else p["funnel_stage_id"]
+    return {"name": p["name"], "pos": ids.index(target) if target in ids else -1, "now": ids.index(p["funnel_stage_id"]) if p["funnel_stage_id"] in ids else -1,
+            "conv": conv, "stage_name": rows[ids.index(target)]["name"] if target in ids else "", "funnel_id": p["funnel_id"],
+            "stage_in_funnel": target in ids}
+
+
+def stage_move_check(person_id: int, stage_id: int) -> str:
+    """Before a hand move across the conversation line: a warning to confirm, or '' when nothing is odd.
+    Forward into the conversation with no record of them writing, or back out of it while there is one."""
+    from . import quiet
+    place = _stage_place(person_id, stage_id)
+    if not place or place["conv"] is None or not place["stage_in_funnel"]:
+        return ""
+    t = quiet.last_touches([int(person_id)]).get(int(person_id), {})
+    wrote = bool(t.get("in") or t.get("touch"))
+    old, new, conv, who, stage = place["now"], place["pos"], place["conv"], place["name"], place["stage_name"]
+    if new >= conv > old and not wrote:
+        return f"You're about to move {who} to {stage}, but there's no record of {who} replying. Move anyway?"
+    if old >= conv > new and wrote:
+        return f"You're about to move {who} back to {stage}, but there's a record of {who} writing to you. Move anyway?"
+    return ""
+
+
+def status_on_stage(person_id: int, allow_back: bool = False) -> dict:
     """A card moved by hand: each channel's status follows the stage, forward only, so stage and status never disagree.
     Lost -> "not interested"; In conversation -> "replied"; Confirmed / Onboarding / Completed -> those statuses. Uses the same
     status -> stage links that move a card when a status changes (a renamed stage keeps them). Returns {channel: new status}."""
@@ -883,13 +919,13 @@ def status_on_stage(person_id: int) -> dict:
         options += [k for k, v in store.LATER_STATUSES.items() if v[0].strip().lower() == stage and k not in options]
         if not options:
             continue
-        target = "done" if "done" in options else "replied" if "replied" in options else options[0]
+        target = next((k for k in ("done", "replied", "sent", "new") if k in options), options[0])
         current = leads_now.get(channel, "new")
         if current == target:
             continue
         here = order.index(stage) if stage in order else -1
         was = order.index(stage_of(channel, current)) if stage_of(channel, current) in order else -1
-        if target != "done" and was >= here:             # forward only: a status already further along stays
+        if target != "done" and was >= here and not allow_back:     # forward only, unless the card was moved back on purpose
             continue
         set_outreach(int(person_id), channel, target)
         changed[channel] = leads.label_for(channel, target)

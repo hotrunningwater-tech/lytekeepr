@@ -721,14 +721,20 @@ def crm_move_to_stage():
     stage_id = body.get("stage_id")
     if not person_id or not stage_id:
         return jsonify({"error": "person_id and stage_id are required."}), 400
+    from lk_calendar import contacts as lk_contacts
+    warning = lk_contacts.stage_move_check(int(person_id), int(stage_id))       # across the conversation line against the record: ask first
+    if warning and not body.get("confirm"):
+        return jsonify({"needs_confirmation": True, "message": warning}), 409
+    before = lk_contacts._stage_place(int(person_id))
     conn = crm_db.get_connection()
     try:
-        crm_db.move_person_to_stage(conn, person_id, stage_id)      # the stage; statuses stay, except Lost (below)
+        crm_db.move_person_to_stage(conn, person_id, stage_id)      # the stage; the statuses follow (below)
         conn.commit()
     finally:
         conn.close()
-    from lk_calendar import contacts as lk_contacts
-    changed = lk_contacts.status_on_stage(int(person_id))          # the status follows the stage (Lost -> not interested, In conversation -> replied ...)
+    after = lk_contacts._stage_place(int(person_id))
+    moved_back = bool(before and after and after["now"] < before["now"])
+    changed = lk_contacts.status_on_stage(int(person_id), allow_back=moved_back)   # the status follows the stage, back too when moved back
     return jsonify({"ok": True, **({"statuses_set": changed} if changed else {})})
 
 

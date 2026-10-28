@@ -1658,12 +1658,17 @@
           var wrap = document.createElement('div');
           wrap.className = 'crm-funnel-board';
 
-          function moveCardToStage(personId, stageId) {
+          function moveCardToStage(personId, stageId, confirmed) {
             fetch('/api/crm/funnels/stages/move', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ person_id: personId, stage_id: stageId }),
-            }).then(function () {
+              body: JSON.stringify({ person_id: personId, stage_id: stageId, confirm: !!confirmed }),
+            }).then(function (res) { return res.json().then(function (d) { return { status: res.status, d: d }; }); }).then(function (r) {
+              if (r.status === 409 && r.d.needs_confirmation) {          // across the conversation line against the record: ask first
+                if (window.confirm(r.d.message)) moveCardToStage(personId, stageId, true);
+                else renderCrmFunnelBoard();
+                return;
+              }
               renderCrmFunnelBoard();
               loadCrmOverview();
             });
