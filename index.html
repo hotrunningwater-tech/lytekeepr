@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=50">
+<link rel="stylesheet" href="styles.css?v=51">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team11">
 </head>
@@ -371,12 +371,15 @@
 
         <div class="preview-body" id="crmFunnelsBody" hidden>
           <div class="crm-funnel-board-header">
-            <h2 id="crmFunnelBoardTitle">Funnel</h2>
-            <select class="demo-reset-input" id="crmFunnelBoardSelect" hidden></select>
-            <select class="demo-reset-input crm-funnel-brand" id="crmFunnelBrandSelect" title="The brand this funnel belongs to; its contacts take it" aria-label="Funnel brand" hidden></select>
+            <div class="crm-funnel-pick">
+              <span class="crm-funnel-pick-label">Funnel</span>
+              <h2 id="crmFunnelBoardTitle">Funnel</h2>
+              <select class="crm-funnel-title-select" id="crmFunnelBoardSelect" aria-label="Funnel" hidden></select>
+            </div>
+            <span class="crm-funnel-brand-tag" id="crmFunnelBrandTag" title="The brand this funnel belongs to; its contacts take it. Change it in Edit funnel." hidden></span>
             <div class="lks-search-pill crm-funnel-search" id="crmFunnelSearchPill" hidden><input type="search" id="crmFunnelSearchInput" placeholder="Search this funnel" autocomplete="off" aria-label="Search this funnel"></div>
             <button class="btn btn-secondary btn-small" type="button" id="crmFunnelDocsBtn" title="Documents Claude keeps for this funnel and its brand" hidden>Documents</button>
-            <button class="btn btn-secondary btn-small" type="button" id="crmEditStagesBtn" hidden>Edit stages</button>
+            <button class="btn btn-secondary btn-small" type="button" id="crmEditStagesBtn" hidden>Edit funnel</button>
             <button class="btn btn-remove btn-small" type="button" id="crmDeleteFunnelBtn" hidden>Delete</button>
             <button class="btn btn-secondary btn-small" type="button" id="crmNewOpportunityBtn" hidden>New opportunity</button>
             <button class="btn btn-secondary btn-small" type="button" id="crmCreateFunnelBtn">Create new</button>
@@ -626,7 +629,15 @@
 
 <div class="confirm-backdrop" id="crmStagesBackdrop" hidden>
   <div class="confirm-modal lks-stages-modal" role="dialog" aria-modal="true" aria-labelledby="crmStagesTitle">
-    <h2 id="crmStagesTitle">Edit stages</h2>
+    <h2 id="crmStagesTitle">Edit funnel</h2>
+    <label class="lks-field-label" for="crmEditFunnelName">Funnel name</label>
+    <input type="text" class="demo-reset-input" id="crmEditFunnelName">
+    <div id="crmFunnelBrandField" hidden>
+      <label class="lks-field-label" for="crmFunnelBrandSelect">Brand</label>
+      <select class="demo-reset-input" id="crmFunnelBrandSelect"></select>
+      <p class="lks-note">Everyone in this funnel takes this brand.</p>
+    </div>
+    <label class="lks-field-label">Stages</label>
     <div id="crmStagesList"></div>
     <div class="lks-stage-add"><input type="text" class="demo-reset-input" id="crmStageNewName" placeholder="New stage name"><button class="btn btn-secondary btn-small" type="button" id="crmStageAddBtn">+ Add stage</button></div>
     <p class="lks-err" id="crmStagesError" hidden></p>
@@ -1469,7 +1480,19 @@
       document.getElementById('crmNewOpportunityBtn').hidden = !selectedFunnel;
       document.getElementById('crmFunnelDocsBtn').hidden = !selectedFunnel;
       document.getElementById('crmFunnelSearchPill').hidden = !selectedFunnel;
-      fillCrmFunnelBrand(selectedFunnel);
+      showCrmFunnelBrandTag(selectedFunnel);
+    }
+    // Read-only brand tag next to the title; the brand itself is changed in Edit funnel
+    function crmBrandName(key) {
+      var b = (crmBrandList || []).find(function (x) { return x.key === key; });
+      return b ? b.name : key;
+    }
+    function showCrmFunnelBrandTag(funnel) {
+      var tag = document.getElementById('crmFunnelBrandTag');
+      if (!funnel) { tag.hidden = true; return; }
+      var paint = function () { tag.textContent = 'Brand: ' + (funnel.brand ? crmBrandName(funnel.brand) : 'none'); tag.hidden = false; };
+      paint();
+      if (funnel.brand && !crmBrandList) loadCrmBrandList().then(paint).catch(function () {});
     }
     // Documents Claude keeps for the funnel (and its brand): a simple read-only view
     document.getElementById('crmFunnelDocsBtn').addEventListener('click', function () {
@@ -1478,19 +1501,24 @@
     });
     // The funnel's brand (admin only): everyone in the funnel takes it, and their follow-ups are filed under it.
     var crmBrandList = null;
+    function loadCrmBrandList() {
+      return crmBrandList ? Promise.resolve(crmBrandList) : fetch('/api/crm/brands').then(function (r) { return r.json(); }).then(function (r) { crmBrandList = r.brands || []; return crmBrandList; });
+    }
+    // Fills the brand field in Edit funnel (admin only)
     function fillCrmFunnelBrand(funnel) {
+      var field = document.getElementById('crmFunnelBrandField');
       var sel = document.getElementById('crmFunnelBrandSelect');
       var admin = window.lkMe && window.lkMe.role === 'admin';
-      if (!funnel || !admin) { sel.hidden = true; return; }
-      (crmBrandList ? Promise.resolve(crmBrandList) : fetch('/api/crm/brands').then(function (r) { return r.json(); }).then(function (r) { crmBrandList = r.brands || []; return crmBrandList; }))
+      if (!funnel || !admin) { field.hidden = true; return; }
+      loadCrmBrandList()
         .then(function (list) {
           sel.replaceChildren();
           var none = document.createElement('option'); none.value = ''; none.textContent = 'No brand'; sel.appendChild(none);
           list.forEach(function (b) { var o = document.createElement('option'); o.value = b.key; o.textContent = b.name; sel.appendChild(o); });
           sel.value = funnel.brand || '';
           sel.dataset.funnelId = funnel.funnel_id;
-          sel.hidden = false;
-        }).catch(function () { sel.hidden = true; });
+          field.hidden = false;
+        }).catch(function () { field.hidden = true; });
     }
     document.getElementById('crmFunnelBrandSelect').addEventListener('change', function () {
       var sel = this, fid = sel.dataset.funnelId, key = sel.value;
@@ -1499,6 +1527,7 @@
         .then(function () {
           var f = crmFunnelsData.find(function (x) { return String(x.funnel_id) === String(fid); });
           if (f) f.brand = key;
+          showCrmFunnelBrandTag(f);
           loadCrmOverview();
         })
         .catch(function (e) { alert(e.message); });
@@ -1518,6 +1547,7 @@
           crmFunnelsData = data.funnels || [];
 
           crmFunnelBoardSelect.hidden = crmFunnelsData.length < 2;
+          crmFunnelBoardTitle.hidden = crmFunnelsData.length >= 2;   // with 2+ funnels the title itself is the picker
           crmFunnelBoardSelect.innerHTML = '';
           crmFunnelsData.forEach(function (f) {
             var opt = document.createElement('option');
@@ -1608,7 +1638,21 @@
           });
         });
       }
-      document.getElementById('crmEditStagesBtn').addEventListener('click', function () { errBox.hidden = true; load(); backdrop.hidden = false; });
+      var nameInput = document.getElementById('crmEditFunnelName');
+      nameInput.addEventListener('change', function () {
+        var f = crmFunnelsData.find(function (x) { return x.funnel_id === crmSelectedFunnelId; });
+        var name = nameInput.value.trim();
+        if (!f || !name || name === f.name) { if (f) nameInput.value = f.name; return; }
+        post('/api/crm/funnels/' + f.funnel_id + '/rename', { name: name }).then(function (d) { if (!d.error) loadCrmFunnels(); });
+      });
+      document.getElementById('crmEditStagesBtn').addEventListener('click', function () {
+        var f = crmFunnelsData.find(function (x) { return x.funnel_id === crmSelectedFunnelId; });
+        errBox.hidden = true;
+        nameInput.value = f ? f.name : '';
+        fillCrmFunnelBrand(f);
+        load();
+        backdrop.hidden = false;
+      });
       document.getElementById('crmStagesDoneBtn').addEventListener('click', function () { backdrop.hidden = true; });
       document.getElementById('crmStageAddBtn').addEventListener('click', function () {
         var inp = document.getElementById('crmStageNewName');

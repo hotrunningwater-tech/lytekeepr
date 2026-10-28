@@ -591,6 +591,21 @@ def crm_create_funnel():
     return jsonify({"ok": True, "funnel_id": funnel_id})
 
 
+@app.post("/api/crm/funnels/<int:funnel_id>/rename")
+def crm_rename_funnel(funnel_id):
+    name = ((request.get_json(silent=True) or {}).get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Funnel name is required."}), 400
+    conn = crm_db.get_connection()
+    try:
+        if not conn.execute("UPDATE funnels SET name = ? WHERE funnel_id = ?", (name, funnel_id)).rowcount:
+            return jsonify({"error": "Funnel not found."}), 404
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "name": name})
+
+
 @app.post("/api/crm/funnels/<int:funnel_id>/delete")
 def crm_delete_funnel(funnel_id):
     conn = crm_db.get_connection()
