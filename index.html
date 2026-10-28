@@ -375,7 +375,7 @@
             <div class="crm-funnel-pick">
               <span class="crm-funnel-pick-label">Funnel</span>
               <h2 id="crmFunnelBoardTitle">Funnel</h2>
-              <select class="crm-funnel-title-select" id="crmFunnelBoardSelect" aria-label="Funnel" hidden></select>
+              <select class="crm-funnel-title-select" id="crmFunnelBoardSelect" aria-label="Funnel" autocomplete="off" hidden></select>
             </div>
             <div class="lks-search-pill crm-funnel-search" id="crmFunnelSearchPill" hidden><input type="search" id="crmFunnelSearchInput" placeholder="Search this funnel" autocomplete="off" aria-label="Search this funnel"></div>
             <button class="btn btn-secondary btn-small" type="button" id="crmFunnelDocsBtn" title="Documents Claude keeps for this funnel and its brand" hidden>Documents</button>
@@ -1131,6 +1131,7 @@
     var crmMoveToFunnelBtn = document.getElementById('crmMoveToFunnelBtn');
     var crmFunnelsData = [];
     var crmSelectedFunnelId = null;
+    try { var savedFunnel = parseInt(localStorage.getItem('lk-funnel'), 10); if (savedFunnel) crmSelectedFunnelId = savedFunnel; } catch (e) { /* storage blocked */ }   // reopen the funnel you were on
     var crmOverviewData = null;
     var crmSelectedPersonIds = [];
 
@@ -1481,6 +1482,7 @@
       document.getElementById('crmFunnelDocsBtn').hidden = !selectedFunnel;
       document.getElementById('crmFunnelSearchPill').hidden = !selectedFunnel;
       showCrmFunnelBrandTag(selectedFunnel);
+      if (selectedFunnel) { try { localStorage.setItem('lk-funnel', String(selectedFunnel.funnel_id)); } catch (e) { /* storage blocked */ } }
     }
     // Read-only brand tag next to the title; the brand itself is changed in Edit funnel
     function crmBrandName(key) {
@@ -1815,7 +1817,9 @@
 
     if (crmFunnelBoardSelect) {
       crmFunnelBoardSelect.addEventListener('change', function () {
-        crmSelectedFunnelId = parseInt(crmFunnelBoardSelect.value, 10);
+        var picked = parseInt(crmFunnelBoardSelect.value, 10);
+        if (!picked) return;                       // the browser restoring the empty picker on reload is not a choice
+        crmSelectedFunnelId = picked;
         updateCrmFunnelBoardTitle();
         renderCrmFunnelBoard();
       });
