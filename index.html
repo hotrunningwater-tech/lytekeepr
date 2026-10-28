@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=51">
+<link rel="stylesheet" href="styles.css?v=52">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team11">
 </head>
@@ -325,6 +325,7 @@
               <button class="demo-reset-tab" type="button" id="crmFunnelsTabBtn" role="tab" aria-selected="false">Funnels</button>
             </div>
           </div>
+          <span class="crm-funnel-brand-tag" id="crmFunnelBrandTag" title="The brand this funnel belongs to; its contacts take it. Change it in Edit funnel." hidden></span>
           <button class="btn btn-remove document-viewer-close" id="closeCrmPanelBtn" type="button">Close</button>
         </div>
 
@@ -376,7 +377,6 @@
               <h2 id="crmFunnelBoardTitle">Funnel</h2>
               <select class="crm-funnel-title-select" id="crmFunnelBoardSelect" aria-label="Funnel" hidden></select>
             </div>
-            <span class="crm-funnel-brand-tag" id="crmFunnelBrandTag" title="The brand this funnel belongs to; its contacts take it. Change it in Edit funnel." hidden></span>
             <div class="lks-search-pill crm-funnel-search" id="crmFunnelSearchPill" hidden><input type="search" id="crmFunnelSearchInput" placeholder="Search this funnel" autocomplete="off" aria-label="Search this funnel"></div>
             <button class="btn btn-secondary btn-small" type="button" id="crmFunnelDocsBtn" title="Documents Claude keeps for this funnel and its brand" hidden>Documents</button>
             <button class="btn btn-secondary btn-small" type="button" id="crmEditStagesBtn" hidden>Edit funnel</button>
