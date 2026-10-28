@@ -867,12 +867,15 @@ def outreach(person_id: int) -> dict:
     with store._conn() as conn:
         by_channel = {r["channel"]: dict(r) for r in conn.execute("SELECT * FROM leads WHERE person_id = ?", (person_id,))}
         out = []
+        from . import quiet
+        live = quiet.by_channel([int(person_id)]).get(int(person_id), {})
         for ch in dict.fromkeys([c for c in accts if c in leads.CHANNELS] + list(by_channel)):
             lead = by_channel.get(ch)
             out.append({"channel": ch, "label": leads.CHANNELS[ch]["label"], "lead_id": lead["id"] if lead else None,
                         "status": leads.label_for(ch, lead["status"]) if lead else "", "status_date": lead["status_date"] if lead else "",
                         "follow_up_date": lead["follow_up_date"] if lead else "", "options": leads.valid_labels(ch, conn),
-                        "asks_follow_up": [o for o in leads.valid_labels(ch, conn) if store.bucket_for(conn, ch, leads.resolve_status(ch, o, conn)) == "cold"]})
+                        "asks_follow_up": [o for o in leads.valid_labels(ch, conn) if store.bucket_for(conn, ch, leads.resolve_status(ch, o, conn)) == "cold"],
+                        "conversation": quiet.conversation(live.get(ch)) if lead and _talking(conn, ch, lead["status"]) else None})
         return {"channels": out}
 
 
@@ -933,14 +936,25 @@ def ensure_leads(person_ids: list) -> None:
                     pass                              # e.g. an Instagram account with no link yet
 
 
+def _talking(conn, channel: str, status: str) -> bool:
+    """Past outreach: they replied (or it went further: call booked, confirmed ...). From here the live conversation tells more than a status."""
+    return store.bucket_for(conn, channel, status) == "warm" or status in store.LATER_STATUSES
+
+
 def statuses_for(person_ids: list) -> dict:
+    """Each person's line per channel: the outreach status, or once they replied, the live conversation (waiting on you / them, since when)."""
     if not person_ids:
         return {}
+    from . import quiet
     ph = ",".join("?" for _ in person_ids)
     out: dict = {}
+    live = quiet.by_channel([int(i) for i in person_ids])
     with store._conn() as conn:
         for r in conn.execute(f"SELECT person_id, channel, status FROM leads WHERE person_id IN ({ph}) ORDER BY id", [int(i) for i in person_ids]):
-            out.setdefault(r["person_id"], []).append({"channel": r["channel"], "label": leads.CHANNELS[r["channel"]]["label"], "status": leads.label_for(r["channel"], r["status"])})
+            item = {"channel": r["channel"], "label": leads.CHANNELS[r["channel"]]["label"], "status": leads.label_for(r["channel"], r["status"])}
+            if _talking(conn, r["channel"], r["status"]):
+                item["conversation"] = quiet.conversation(live.get(r["person_id"], {}).get(r["channel"]))
+            out.setdefault(r["person_id"], []).append(item)
     return out
 
 

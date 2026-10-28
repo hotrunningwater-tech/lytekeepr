@@ -61,8 +61,13 @@
         : h('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: function () { window.lkOpenMove([personId]); } }, 'Move to funnel');
       if (funnelId) r.channels.forEach(function (c) {
         box.appendChild(h('div', { class: 'lks-outreach' }, [h('div', {}, [h('span', { class: 'crm-channel-tag crm-channel-tag-' + c.channel }, c.label),
-          h('b', {}, (!c.lead_id || c.status === 'new') ? 'Not started' : c.status),
-          c.status_date && c.lead_id ? h('span', { class: 'lks-note' }, 'since ' + c.status_date + (c.follow_up_date ? ' · follow-up ' + c.follow_up_date : '')) : null])]));
+          c.conversation
+            ? h('b', {}, 'In conversation · waiting on ' + c.conversation.waiting_on)
+            : h('b', {}, (!c.lead_id || c.status === 'new') ? 'Not started' : c.status),
+          c.conversation
+            ? h('span', { class: 'lks-note' }, (c.conversation.waiting_on === 'you' ? 'they wrote ' : 'you wrote ') + new Date(c.conversation.at + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                + (c.follow_up_date ? ' · follow-up ' + c.follow_up_date : ''))
+            : (c.status_date && c.lead_id ? h('span', { class: 'lks-note' }, 'since ' + c.status_date + (c.follow_up_date ? ' · follow-up ' + c.follow_up_date : '')) : null)])]));
       });
       box.appendChild(h('div', { class: 'lks-row', style: 'margin-top:8px' }, [go]));
     }).catch(function (e) { box.textContent = e.message; });

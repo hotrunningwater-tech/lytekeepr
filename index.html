@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=49">
+<link rel="stylesheet" href="styles.css?v=50">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team11">
 </head>
@@ -650,7 +650,7 @@
 
 <script src="chat.js"></script>
 <script src="lk-calendar/calendar.js?v=home8"></script>
-<script src="lk-calendar/settings.js?v=mail1"></script>
+<script src="lk-calendar/settings.js?v=mail2"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
 <script src="lk-calendar/home.js?v=18"></script>
@@ -1738,7 +1738,9 @@
                 tag.className = 'crm-channel-tag crm-channel-tag-' + st.channel;
                 tag.textContent = st.label;
                 line.appendChild(tag);
-                line.appendChild(document.createTextNode(st.status));
+                var cv = st.conversation;                    // past outreach: the live conversation, not a frozen status
+                line.appendChild(document.createTextNode(cv ? (cv.waiting_on === 'you' ? 'waiting on you' : 'waiting on them') + ' · ' + new Date(cv.at + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : st.status));
+                if (cv && cv.waiting_on === 'you') line.classList.add('is-waiting-you');
                 line.addEventListener('click', function (e) { e.stopPropagation(); window.lkContacts.openStatus(person.person_id, st.channel); });
                 card.appendChild(line);
               });

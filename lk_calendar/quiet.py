@@ -87,6 +87,60 @@ def last_touches(person_ids: list) -> dict:
     return best
 
 
+def by_channel(person_ids: list) -> dict:
+    """person_id -> channel -> {"in": newest from them, "out": newest from you}, each {"at", "how", "text"} or None:
+    the live state of each conversation (a status says how outreach went; this says who owes the next message)."""
+    from . import contacts
+    if not person_ids:
+        return {}
+    wanted, ids = set(person_ids), sorted(set(person_ids))
+    marks = ",".join("?" for _ in ids)
+    out: dict = {}
+
+    def offer(pid, ch, side, at, text=""):
+        if pid not in wanted or not at:
+            return
+        slot = out.setdefault(pid, {}).setdefault(ch, {"in": None, "out": None})
+        if slot[side] is None or _moment(at) > _moment(slot[side]["at"]):
+            slot[side] = {"at": at, "how": ch, "text": (text or "")[:SNIPPET]}
+
+    with contacts._crm() as conn:
+        for r in conn.execute(f"""SELECT m.person_id, m.channel, m.direction, m.message_text, m.timestamp FROM messages m
+                                  WHERE m.person_id IN ({marks}) AND m.timestamp = (SELECT MAX(x.timestamp) FROM messages x
+                                        WHERE x.person_id = m.person_id AND x.direction = m.direction AND x.channel = m.channel)""", ids):
+            offer(r["person_id"], r["channel"], "in" if r["direction"] == "incoming" else "out", r["timestamp"], r["message_text"])
+        owners: dict = {}
+        for r in conn.execute(f"""SELECT person_id, lower(trim(channel_identifier)) AS addr FROM channel_accounts
+                                  WHERE channel = 'email' AND channel_identifier LIKE '%@%' AND person_id IN ({marks})""", ids):
+            owners.setdefault(r["addr"], set()).add(r["person_id"])
+    if owners:
+        try:
+            from gmail import storage
+            for account_id in storage.list_account_ids():
+                for entry in storage.load_index(account_id).values():
+                    at = entry.get("receivedAt") or ""
+                    for pid in owners.get(((entry.get("from") or {}).get("email") or "").strip().lower(), ()):
+                        offer(pid, "email", "in", at, entry.get("snippet") or "")
+                    for t in entry.get("to") or []:
+                        for pid in owners.get(((t or {}).get("email") or "").strip().lower(), ()):
+                            offer(pid, "email", "out", at)
+        except Exception:
+            pass
+    return out
+
+
+def conversation(slot: dict | None) -> dict | None:
+    """{"waiting_on": "you" | "them", "at": when the last message was written} for one channel's conversation, or None."""
+    if not slot:
+        return None
+    msgs = [m for m in (slot.get("in"), slot.get("out")) if m]
+    if not msgs:
+        return None
+    last = max(msgs, key=lambda m: _moment(m["at"]))
+    return {"waiting_on": "you" if last is slot.get("in") else "them",
+            "at": datetime.fromtimestamp(_moment(last["at"]), store.TZ).date().isoformat()}
+
+
 def _follow_ups() -> dict:
     """person_id -> the date of their earliest open follow-up reminder (shown on the row: planned, or overdue = on you)."""
     with store._conn() as conn:
