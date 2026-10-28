@@ -1,6 +1,6 @@
 # Plan: fewer, clearer Claude tools
 
-Status: plan agreed, not built yet. Written 2026-10-28.
+Status: plan agreed, being built. Written 2026-10-28.
 
 ## Why
 
@@ -146,6 +146,14 @@ Used by **both** (stay normal): `save_meeting_prep`, `save_call_summary`, `get_c
 3. **Nothing changes for you:** the scheduled task prompt stays "call autopilot_queue and follow its instructions"; the queue tells the run to pass the key.
 
 Considered and not chosen: a second, separate connector for the run. It hides the tools completely, but you'd have to add and sign in to a second connector in Claude.
+
+---
+
+## Part 3: the contact page
+
+1. **"Coming up" box near the top** of a contact's page: their upcoming meetings (they're invited), tasks linked to them ("send Anna the demo"), and their outreach follow-up. Only today and later: a meeting whose time has passed never shows there, even if nobody marked it done.
+2. **"Back to People" button:** moved to the left, next to the name, and made easier to see (darker, filled), keeping its shape.
+3. Claude's `create_task` takes a `contact_id`, so "remind me to send Anna the demo" lands on Home and in Anna's "Coming up".
 
 ---
 
