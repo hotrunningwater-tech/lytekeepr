@@ -855,6 +855,51 @@ def lost_on_stage(person_id: int) -> list:
     return done
 
 
+def status_on_stage(person_id: int) -> dict:
+    """A card moved by hand: each channel's status follows the stage, forward only, so stage and status never disagree.
+    Lost -> "not interested"; In conversation -> "replied"; Confirmed / Onboarding / Completed -> those statuses. Uses the same
+    status -> stage links that move a card when a status changes (a renamed stage keeps them). Returns {channel: new status}."""
+    with _crm() as c:
+        row = c.execute("""SELECT fs.name, p.funnel_id FROM people p JOIN funnel_stages fs ON fs.stage_id = p.funnel_stage_id WHERE p.person_id = ?""",
+                        (int(person_id),)).fetchone()
+        if not row:
+            return {}
+        order = [r["name"].strip().lower() for r in c.execute("SELECT name FROM funnel_stages WHERE funnel_id = ? ORDER BY position", (row["funnel_id"],))]
+    stage = row["name"].strip().lower()
+    changed = {}
+    with store._conn() as conn:
+        links = [dict(r) for r in conn.execute("SELECT channel, status_key, stage_name FROM status_stages")]
+        leads_now = {r["channel"]: r["status"] for r in conn.execute("SELECT channel, status FROM leads WHERE person_id = ?", (int(person_id),))}
+
+    def stage_of(channel, status):
+        hit = next((l["stage_name"] for l in links if l["channel"] == channel and l["status_key"] == status), None)
+        if hit is None and status in store.LATER_STATUSES:
+            hit = store.LATER_STATUSES[status][0]
+        return (hit or "").strip().lower()
+
+    for ch in outreach(int(person_id))["channels"]:
+        channel = ch["channel"]
+        options = [l["status_key"] for l in links if l["channel"] == channel and l["stage_name"].strip().lower() == stage]
+        options += [k for k, v in store.LATER_STATUSES.items() if v[0].strip().lower() == stage and k not in options]
+        if not options:
+            continue
+        target = "done" if "done" in options else "replied" if "replied" in options else options[0]
+        current = leads_now.get(channel, "new")
+        if current == target:
+            continue
+        here = order.index(stage) if stage in order else -1
+        was = order.index(stage_of(channel, current)) if stage_of(channel, current) in order else -1
+        if target != "done" and was >= here:             # forward only: a status already further along stays
+            continue
+        set_outreach(int(person_id), channel, target)
+        changed[channel] = leads.label_for(channel, target)
+    return changed
+
+
+def lost_on_stage(person_id: int) -> list:
+    return list(status_on_stage(person_id))
+
+
 def sync_stages(person_ids: list) -> None:
     with store._conn() as conn:
         for pid in person_ids:

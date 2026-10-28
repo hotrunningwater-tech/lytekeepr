@@ -728,8 +728,8 @@ def crm_move_to_stage():
     finally:
         conn.close()
     from lk_calendar import contacts as lk_contacts
-    lost = lk_contacts.lost_on_stage(int(person_id))                # moved to Lost: "not interested" on each channel
-    return jsonify({"ok": True, **({"not_interested_on": lost} if lost else {})})
+    changed = lk_contacts.status_on_stage(int(person_id))          # the status follows the stage (Lost -> not interested, In conversation -> replied ...)
+    return jsonify({"ok": True, **({"statuses_set": changed} if changed else {})})
 
 
 @app.post("/api/crm/people/<int:person_id>/delete")

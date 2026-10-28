@@ -131,6 +131,12 @@ def review_leads(channels=("email", "linkedin"), reader=read_promise) -> dict:
             continue
         if not msgs:
             continue
+        bucket = buckets.get((lead["channel"], lead["status"]), "none")
+        if lead["status"] == "new" or bucket == "cold":     # any email from them since the outreach is a reply (not only the newest one)
+            since = date.fromisoformat(lead["status_date"] or "2000-01-01")
+            if any(m.get("direction") == "incoming" and _when(m["timestamp"]) and _when(m["timestamp"]).date() >= since for m in msgs):
+                leads.set_status(lead["id"], "replied")
+                out["replied"].append(lead["contact"])
         newest = msgs[-1]
         key = str(newest.get("message_id") or newest.get("id") or newest.get("timestamp"))
         with store._conn() as conn:
@@ -142,11 +148,6 @@ def review_leads(channels=("email", "linkedin"), reader=read_promise) -> dict:
         sent_at = _when(newest["timestamp"])
         if not sent_at:
             continue
-        incoming = newest.get("direction") == "incoming"
-        bucket = buckets.get((lead["channel"], lead["status"]), "none")
-        if incoming and (lead["status"] == "new" or bucket == "cold") and sent_at.date() >= date.fromisoformat(lead["status_date"] or "2000-01-01"):
-            leads.set_status(lead["id"], "replied")
-            out["replied"].append(lead["contact"])
         try:
             promise = reader(newest.get("message_text") or "", sent_at.date())
         except Exception:
