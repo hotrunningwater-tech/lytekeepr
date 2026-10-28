@@ -62,7 +62,7 @@
     $('homeDateLine').textContent = toUTC(today).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
     var overdue = (a.overdue || []).filter(function (e) { return !isMeeting(e); });
     var todays = (a.today || []).filter(function (e) { return !isMeeting(e) && !e.done; });
-    renderActions(overdue, todays, today);
+    renderActions(overdue, todays, today, a.upcoming || []);
     renderQuiet();
     renderFlags(today);
     renderNoBrand();
@@ -91,7 +91,20 @@
       onclick: function (ev) { ev.stopPropagation(); onToggle(); } }, done ? '✓' : '');
   }
   function markDone(e) {
-    return api('POST', '/api/calendar/events/' + e.id + '/done', { date: e.date, done: true }).then(load).catch(fail);
+    return api('POST', '/api/calendar/events/' + e.id + '/done', { date: e.date, done: true })
+      .then(function () { undoBar([{ id: e.id, date: e.date }], 'Marked done'); return load(); }).catch(fail);
+  }
+  // A few seconds to take back a "done": nothing is cleared without you seeing it
+  var undoTimer = null;
+  function undoBar(items, text) {
+    var bar = document.getElementById('hmUndoBar');
+    if (!bar) { bar = h('div', { id: 'hmUndoBar', class: 'hm-undo', role: 'status' }); document.body.appendChild(bar); }
+    fill(bar, [h('span', {}, text), h('button', { type: 'button', onclick: function () {
+      bar.hidden = true;
+      api('POST', '/api/calendar/events/done-bulk', { items: items, done: false }).then(load).catch(fail);
+    } }, 'Undo')]);
+    bar.hidden = false;
+    clearTimeout(undoTimer); undoTimer = setTimeout(function () { bar.hidden = true; }, 8000);
   }
   function itemRow(e, today, overdue) {
     var who = e.lead && e.lead.person_id;
@@ -102,7 +115,7 @@
     return h('div', { class: 'hm-row' }, [check(false, function () { markDone(e); }), h('div', { class: 'hm-main' }, [title, meta.length ? h('div', { class: 'hm-meta' }, meta) : null])]);
   }
   function groupRow(g, today) {
-    var key = 'g:' + g.channel;
+    var key = 'g:' + (g.section || '') + ':' + g.channel;
     var name = { linkedin: 'LinkedIn', instagram: 'Instagram', email: 'Email', other: 'Other' }[g.channel] || (g.channel.charAt(0).toUpperCase() + g.channel.slice(1));
     var label = name + ' · ' + g.members.length;
     var kinds = {}; g.members.forEach(function (m) { var k = kindOf(m); kinds[k] = (kinds[k] || 0) + 1; });
@@ -111,7 +124,11 @@
     var open = !!state.open[key];
     var all = h('button', { class: 'hm-mini', type: 'button', onclick: function (ev) {
       ev.stopPropagation();
-      api('POST', '/api/calendar/events/done-bulk', { items: g.members.map(function (m) { return { id: m.id, date: m.date }; }), done: true }).then(load).catch(fail);
+      var n = g.members.length;
+      if (n > 1 && !confirm('Mark all ' + n + ' ' + name + ' follow-ups done?')) return;      // one click never clears a whole group unasked
+      var items = g.members.map(function (m) { return { id: m.id, date: m.date }; });
+      api('POST', '/api/calendar/events/done-bulk', { items: items, done: true })
+        .then(function () { undoBar(items, n + ' marked done'); return load(); }).catch(fail);
     } }, 'All done');
     var row = h('div', { class: 'hm-row hm-group' }, [check(false, function () { all.click(); }, 'Mark all done'),
       h('div', { class: 'hm-main' }, [h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { state.open[key] = !open; render(); } }, (open ? '▾ ' : '▸ ') + label),
@@ -122,7 +139,7 @@
     if (open) wrap.appendChild(h('div', { class: 'hm-sub' }, g.members.map(function (m) { return itemRow(m, today, m.date < today); })));
     return wrap;
   }
-  function renderActions(overdue, todays, today) {
+  function renderActions(overdue, todays, today, coming) {
     var due = overdue.concat(todays);
     var own = due.filter(function (e) { return !e.lead; }), leads = due.filter(function (e) { return !!e.lead; });
     state.counts.Followups = leads.length; state.ownDue = own.length;
@@ -132,7 +149,19 @@
     } }, 'Move overdue to today') : null]);
     fill($('homeActions'), [late.length ? h('div', { class: 'hm-day hm-late' }, 'Overdue') : null].concat(late.map(function (e) { return itemRow(e, today, true); }),
       [h('div', { class: 'hm-day' }, 'Today')], now.length ? now.map(function (e) { return itemRow(e, today, false); }) : [h('p', { class: 'hm-empty' }, 'Nothing due today.')]));
-    fill($('homeFollowups'), fold(leads).map(function (it) { return it.group ? groupRow(it, today) : itemRow(it, today, it.date < today); }));
+    // Follow-ups in three parts: late, today, and the next 7 days (so a planned one is visible before its day)
+    function part(label, list, cls, section) {
+      if (!list.length) return [];
+      return [h('div', { class: 'hm-day' + (cls ? ' ' + cls : '') }, label)].concat(fold(list).map(function (it) {
+        if (it.group) { it.section = section; return groupRow(it, today); }
+        return itemRow(it, today, it.date < today);
+      }));
+    }
+    var fLate = leads.filter(function (e) { return e.date < today; }), fToday = leads.filter(function (e) { return e.date >= today; });
+    var fComing = (coming || []).filter(function (e) { return e.lead && !e.done && e.date > today; });
+    state.followComing = fComing.length;
+    var parts = part('Overdue', fLate, 'hm-late', 'late').concat(part('Today', fToday, '', 'today'), part('Coming up · next 7 days', fComing, '', 'coming'));
+    fill($('homeFollowups'), parts.length ? parts : [h('p', { class: 'hm-empty' }, 'No follow-ups due or coming up.')]);
   }
 
   /* ---------- needs a brand: contacts a sync or a one-click suggestion created without one; every contact belongs to a brand ---------- */
@@ -267,7 +296,7 @@
     rows.forEach(function (row) {
       var k = row.getAttribute('data-key'), n = domCount(k), chip = chips[k], b = chip.querySelector('b');
       if (b.textContent !== String(n)) b.textContent = n;              // only real changes (the counts sit inside what is watched)
-      var hide = !n && !KEEP_SHOWN[k]; if (chip.hidden !== hide) chip.hidden = hide;
+      var hide = !n && !KEEP_SHOWN[k] && !(k === 'Followups' && state.followComing); if (chip.hidden !== hide) chip.hidden = hide;   // planned follow-ups keep the chip, at 0 due
       if (!KEEP_SHOWN[k]) total += n;
     });
     window.lkHomeActionCount = total + (state.ownDue || 0);

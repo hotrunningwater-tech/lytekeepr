@@ -2932,3 +2932,6 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .lks-stages-modal #crmFunnelBrandSelect { width: 100%; }
 .lks-stages-modal #crmFunnelBrandField .lks-field-label { margin-top: 0; margin-bottom: 6px; }
 .lks-stages-modal #crmFunnelBrandField .lks-note { margin: 4px 0 0; }
+.hm-undo { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 1000; display: flex; align-items: center; gap: 14px;
+  background: var(--ink); color: #fff; padding: 10px 12px 10px 18px; border-radius: 999px; box-shadow: var(--shadow-panel); font-size: 13.5px; }
+.hm-undo button { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 999px; padding: 4px 12px; font: inherit; font-weight: 600; cursor: pointer; }
