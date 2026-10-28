@@ -1,6 +1,6 @@
 # Plan: fewer, clearer Claude tools
 
-Status: plan only, nothing built. Written 2026-10-28.
+Status: plan agreed, not built yet. Written 2026-10-28.
 
 ## Why
 
@@ -36,7 +36,7 @@ What the code actually does today:
 
 Stays separate (different job): `send_email` (sends a new email that isn't saved as a draft), `reply_email`.
 
-**For you to decide:** today a one-person draft (first store) can only be sent from the app (Home). Should `send_draft` also send those, or stay app-only?
+**Decided:** `send_draft` sends any saved draft, one person or several, after showing it and getting a yes.
 
 ### B. Reading messages and emails: 6 tools → 4
 
@@ -57,7 +57,7 @@ There's an inconsistency: three tools hide email text ("email text stays in Lyte
 | `email_thread` | **`email_thread`** (unchanged) |
 | `get_contact_history` | **`get_contact_history`** (unchanged; each email gets its id so Claude can open it with `email_thread`) |
 
-**For you to decide:** should email text be shown everywhere (consistent with `email_latest`), or hidden everywhere?
+**Decided:** email text is shown everywhere (Claude already reads it through `email_latest` and `email_thread`).
 
 ### C. Tasks, reminders, follow-ups: remove 1, decide 1
 
@@ -73,7 +73,7 @@ What the code actually does (they are **not** the same thing):
 | `create_task`, `create_reminder` | **`create_task`**: "remind me" becomes a task on Home. Claude stops using the LinkedIn follow-ups list (the app's own form there stays). |
 | the rest | unchanged |
 
-**For you to decide:** should a task be linkable to a contact (so "remind me about Anna's demo" shows on Anna's page too)? That's a small new feature, not just a merge.
+**Decided:** a task can be linked to a contact, so "remind me about Anna's demo" also shows on Anna's page.
 
 ### D. Meetings: remove 1, fix 1
 
