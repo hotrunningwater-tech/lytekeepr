@@ -327,11 +327,13 @@ TOOLS = [
                     "Then call search_contacts (no duplicates; update_contact if they exist), print back exactly what you will save "
                     "(name, company, job title, email, phone, links, brand, funnel if any, notes) and ask 'Add?'. Call this only after the user says yes, with "
                     "user_confirmed=true. An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'. From a business card photo "
-                    "or a voice note: read the details the same way, anything else said goes in notes.",
+                    "or a voice note: read the details the same way; what the user adds about them (e.g. 'met at the expo, decides with her partner') goes in notes. "
+                    "Notes hold only what the user tells you that LyteKeepr doesn't already keep: never summaries or copies of emails, LinkedIn or Instagram messages, call recordings or logged conversations (those are already in the contact's communication history).",
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string", "description": "The person's name; leave empty if only a handle is known"},
                                                       "company": {"type": "string"}, "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
                                                       "instagram": {"type": "string", "description": "Instagram handle like @name (or the instagram.com link)"},
-                                                      "linkedin": {"type": "string", "description": "LinkedIn profile link"}, "notes": {"type": "string"},
+                                                      "linkedin": {"type": "string", "description": "LinkedIn profile link"},
+                                                      "notes": {"type": "string", "description": "Only what the user said about them that isn't in an email, message, call or logged conversation. Usually empty."},
                                                       "brand": {"type": "string", "description": "REQUIRED: the brand (name or key, see list_brands). Ask the user which brand unless they said it; never guess. With no brands yet, tell them to create one first (Settings → Brands, or create_brand)."},
                                                       "user_confirmed": {"type": "boolean", "description": "true only after you printed the details and the user said yes"}},
                      "required": ["user_confirmed"]}, "read": False},
@@ -562,8 +564,8 @@ TOOLS = [
                                                       "user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}},
                      "required": ["company_id"]}},
     {"name": "add_contact_note", "title": "Add a note to a contact",
-     "description": (CONFIRM_RULE + " " + "A general note about a contact (not a conversation), dated and kept with them, e.g. 'prefers mornings', 'decides with her partner'. "
-                     "For something that was said in a call, meeting or talk, use log_conversation instead."),
+     "description": (CONFIRM_RULE + " " + "A note the user tells you about a contact, dated and kept with them, e.g. 'prefers mornings', 'decides with her partner'. "
+                     "Notes hold only what the user tells you that LyteKeepr doesn't already keep: never summaries or copies of emails, LinkedIn or Instagram messages, call recordings or logged conversations (those are already in the contact's communication history). A call, meeting or talk that nothing recorded goes in log_conversation instead."),
      "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "contact_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["contact_id", "text"]}, "read": False},
     {"name": "log_conversation", "title": "Log a call or conversation",
      "description": (CONFIRM_RULE + " " + "Record a phone call, meeting, in-person talk, video call or other conversation that no integration captured, in the contact's communication history "
