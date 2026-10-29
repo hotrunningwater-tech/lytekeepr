@@ -1300,7 +1300,21 @@ def _email_contact_info(message: dict) -> tuple[str, str, str] | None:
     to_list = message.get("to") or []
     label_ids = message.get("labelIds") or []
     direction = "outgoing" if "SENT" in label_ids else "incoming"
-    contact = (to_list[0] if to_list else {}) if direction == "outgoing" else from_obj
+    try:
+        from lk_calendar.relationships import _team_emails
+        team = _team_emails()                              # you (every mailbox) and your team members
+    except Exception:
+        team = set()
+    sender = (from_obj.get("email") or "").strip().lower()
+    if direction == "incoming" and sender in team:
+        direction = "outgoing"                             # a team member wrote it: it goes on the client(s) on it, marked from them
+    if direction == "outgoing":
+        outside = [t for t in to_list + (message.get("cc") or []) if (t.get("email") or "").strip().lower() not in team]
+        if team and not outside:
+            return None                                    # only you and your team on it: internal, on no contact
+        contact = outside[0] if outside else (to_list[0] if to_list else {})
+    else:
+        contact = from_obj
     contact_email = contact.get("email") or ""
     if not contact_email:
         return None
