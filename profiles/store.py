@@ -68,13 +68,18 @@ def _read_json(path: Path) -> dict | None:
         return None
     try:
         return json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
+    except json.JSONDecodeError:
         return None
+    # An OSError (e.g. "too many open files") is raised, never read as "no file": on 2026-10-29 that made the workspace
+    # list look empty, so it was rebuilt from scratch and lost which Google account the workspace uses.
 
 
 def _write_json(path: Path, payload: dict) -> None:
+    """Written to a temporary file, then swapped in: a crash mid-write never leaves a half-written or empty file."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2))
+    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+    tmp.write_text(json.dumps(payload, indent=2))
+    os.replace(tmp, path)
 
 
 def _slugify(value: str) -> str:

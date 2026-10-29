@@ -949,7 +949,9 @@ def status_on_stage(person_id: int, allow_back: bool = False) -> dict:
         was = order.index(stage_of(channel, current)) if stage_of(channel, current) in order else -1
         if target != "done" and was >= here and not allow_back:     # forward only, unless the card was moved back on purpose
             continue
-        set_outreach(int(person_id), channel, target)
+        with store._conn() as conn:
+            sent = store.bucket_for(conn, channel, target) == "cold"
+        set_outreach(int(person_id), channel, target, STAGE_FOLLOW_UP_DAYS if sent else None)    # moved to Contacted: reached out, follow up in 3 days
         changed[channel] = leads.label_for(channel, target)
     return changed
 
@@ -1124,7 +1126,8 @@ def apply_history_status(person_ids: list) -> None:
             logging.getLogger(__name__).exception("could not set the status from the messages already sent to person %s", pid)
 
 
-FIRST_EMAIL_FOLLOW_UP_DAYS = {True: 3, False: 7}      # in a funnel: 3 days; a contact in no funnel is less urgent: 7
+FIRST_EMAIL_FOLLOW_UP_DAYS = {True: 3, False: 7}
+STAGE_FOLLOW_UP_DAYS = 3                              # a card moved into a "sent" stage (e.g. Contacted) gets a follow-up      # in a funnel: 3 days; a contact in no funnel is less urgent: 7
 FIRST_EMAIL_RECENT_DAYS = 14                          # an older email found later (e.g. a first sync) starts nothing
 
 
