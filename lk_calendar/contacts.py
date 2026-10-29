@@ -706,7 +706,24 @@ def create_contact(data: dict, require_brand: bool = True) -> dict:
             _set_instagram(conn, pid, handle, str(data.get("name", "")) or "@" + handle)
         if brand:
             conn.execute("UPDATE people SET brand = ? WHERE person_id = ?", (brand, pid))
-        return contact_dict(conn, pid)
+        made = contact_dict(conn, pid)
+    if made and made.get("email"):
+        _attach_mailbox_emails(pid)
+        made = get_contact(pid) or made
+    return made
+
+
+def _attach_mailbox_emails(person_id: int) -> None:
+    """Emails with them already in the mailbox (waiting because they weren't a contact yet) go into their history now."""
+    import sys
+    srv = sys.modules.get("server")                    # the running app (it owns the mailbox-to-CRM step)
+    if srv is None or not hasattr(srv, "attach_mailbox_emails"):
+        return
+    try:
+        srv.attach_mailbox_emails(person_id)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("could not add the mailbox emails to the new contact")
 
 
 def update_contact(contact_id: int, data: dict) -> dict | None:
@@ -757,6 +774,8 @@ def update_contact(contact_id: int, data: dict) -> dict | None:
     except Exception:
         import logging
         logging.getLogger(__name__).exception("could not carry a contact change into the calendar")
+    if "email" in data and str(data.get("email") or "").strip():
+        _attach_mailbox_emails(contact_id)
     return result
 
 
@@ -1105,9 +1124,45 @@ def apply_history_status(person_ids: list) -> None:
             logging.getLogger(__name__).exception("could not set the status from the messages already sent to person %s", pid)
 
 
+FIRST_EMAIL_FOLLOW_UP_DAYS = {True: 3, False: 7}      # in a funnel: 3 days; a contact in no funnel is less urgent: 7
+FIRST_EMAIL_RECENT_DAYS = 14                          # an older email found later (e.g. a first sync) starts nothing
+
+
+def first_email_follow_up(person_id: int, sent_at: str | None = None) -> bool:
+    """You emailed a contact who has never written back (from LyteKeepr, Claude or your mail app): their email status becomes
+    "email sent" with a follow-up, 3 days if they're in a funnel, else 7. Not when they ever wrote to you, when their email
+    status is already past New, or for an email more than two weeks old. A reply clears it as usual. True when it set one."""
+    age = 0
+    if sent_at:
+        try:
+            when = datetime.fromisoformat(str(sent_at).replace("Z", "+00:00"))
+            age = max(0, (datetime.now(when.tzinfo) - when).days)
+            if age > FIRST_EMAIL_RECENT_DAYS:
+                return False
+        except ValueError:
+            pass
+    with _crm() as c:
+        row = c.execute("SELECT funnel_id FROM people WHERE person_id = ?", (int(person_id),)).fetchone()
+        if not row or c.execute("SELECT 1 FROM messages WHERE person_id = ? AND direction = 'incoming' LIMIT 1", (int(person_id),)).fetchone():
+            return False
+    with store._conn() as cal:
+        lead = cal.execute("SELECT status FROM leads WHERE person_id = ? AND channel = 'email'", (int(person_id),)).fetchone()
+    if lead is not None and lead["status"] != "new":
+        return False
+    try:
+        days = FIRST_EMAIL_FOLLOW_UP_DAYS[bool(row["funnel_id"])] - age      # counted from the day it was sent; already due = tomorrow
+        set_outreach(int(person_id), "email", "email sent", max(1, days))
+    except store.ValidationError:
+        return False
+    return True
+
+
 def mark_email_sent(person_id: int, follow_up_days: int | None = None) -> None:
     """After an email goes out: a person who is in a funnel gets the status "email sent" on the email channel (only from New: never downgrades).
-    follow_up_days (the user's answer for a batch): N > 0 = a follow-up in N days, 0 = none; None = not asked."""
+    follow_up_days (the user's answer for a batch): N > 0 = a follow-up in N days, 0 = none; None = not asked.
+    Not asked and a first email to someone who never wrote back: the first-email follow-up (3 or 7 days)."""
+    if follow_up_days is None and first_email_follow_up(person_id):
+        return
     with _crm() as conn:
         row = conn.execute("SELECT funnel_id FROM people WHERE person_id = ?", (person_id,)).fetchone()
     if not row or not row["funnel_id"]:

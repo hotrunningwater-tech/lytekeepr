@@ -1176,6 +1176,7 @@ def run_gmail_scan(since_date=None) -> dict:
     result["candidates"] = get_pending_candidates(account_id)
     from lk_calendar import promises, relationships
     promises.review_quietly()
+    _first_email_follow_ups()
     relationships.update_quietly()     # who is in touch with whom (addresses only): suggestions for opportunities          # new mail: replies switch leads to "replied"; a promised time ("next week") sets the follow-up
     return result
 
@@ -1252,6 +1253,7 @@ def gmail_save_candidates():
 
     from lk_calendar import promises, relationships
     promises.review_quietly()
+    _first_email_follow_ups()
     relationships.update_quietly()     # who is in touch with whom (addresses only): suggestions for opportunities          # emails just saved: replies and promised times update the follow-ups
     return jsonify(result)
 
@@ -1341,7 +1343,7 @@ def _crm_write_email(conn, message: dict) -> None:
     subject = message.get("subject") or ""
     body_text = message.get("textBody") or message.get("snippet") or ""
     full_text = f"Subject: {subject}\n\n{body_text}" if subject else body_text
-    crm_db.insert_message(
+    added = crm_db.insert_message(
         conn,
         person_id=person_id,
         account_id=account_id,
@@ -1353,6 +1355,60 @@ def _crm_write_email(conn, message: dict) -> None:
         timestamp=message.get("receivedAt") or message.get("sentAt") or "",
         external_message_id=message.get("id"),
     )
+    if added and direction == "outgoing":                  # checked once this batch is committed (_first_email_follow_ups)
+        _NEW_OUTGOING.append((person_id, message.get("receivedAt") or message.get("sentAt") or ""))
+
+
+_NEW_OUTGOING: list = []
+
+
+def _first_email_follow_ups() -> None:
+    """Emails just saved that you sent: a first email to a contact who never wrote back gets its follow-up (3 days in a funnel, else 7)."""
+    from lk_calendar import contacts as lk_contacts
+    while _NEW_OUTGOING:
+        person_id, sent_at = _NEW_OUTGOING.pop(0)
+        try:
+            lk_contacts.first_email_follow_up(person_id, sent_at)
+        except Exception:
+            app.logger.exception("first-email follow-up failed")
+
+
+def attach_mailbox_emails(person_id: int) -> int:
+    """A contact was just added (or got an email address): emails with them already in the mailbox, still waiting for review
+    because they weren't a contact then, go into their history now. Returns how many."""
+    from gmail import storage as gmail_storage
+    c = crm_db.get_connection()
+    try:
+        addrs = {str(r[0]).strip().lower() for r in c.execute(
+            "SELECT channel_identifier FROM channel_accounts WHERE person_id = ? AND channel = 'email' AND channel_identifier LIKE '%@%'", (int(person_id),))}
+    finally:
+        c.close()
+    if not addrs:
+        return 0
+    now = datetime.now(timezone.utc).isoformat()
+    moved = 0
+    crm_conn = crm_db.get_connection()
+    try:
+        for account_id in gmail_storage.list_account_ids():
+            scan_state, touched = gmail_storage.load_scan_state(account_id), False
+            for mid in list(gmail_storage.get_pending_review_ids(account_id)):
+                message = gmail_storage.load_pending(account_id, mid)
+                info = _email_contact_info(message) if message else None
+                if not info or info[0].strip().lower() not in addrs:
+                    continue
+                gmail_storage.save_message(account_id, message)
+                gmail_storage.upsert_index_entry(account_id, message)
+                _crm_write_email(crm_conn, message)
+                scan_state[mid] = {**scan_state.get(mid, {}), "status": "saved", "isRelevant": True, "lastScannedAt": now}
+                gmail_storage.delete_pending(account_id, mid)
+                touched, moved = True, moved + 1
+            if touched:
+                gmail_storage.save_scan_state(account_id, scan_state)
+        crm_conn.commit()
+    finally:
+        crm_conn.close()
+    _first_email_follow_ups()
+    return moved
 
 
 @app.post("/api/gmail/save-message")
@@ -1426,6 +1482,7 @@ def gmail_save_message():
         payload["failed_ids"] = failed_ids
     from lk_calendar import promises, relationships
     promises.review_quietly()
+    _first_email_follow_ups()
     relationships.update_quietly()     # who is in touch with whom (addresses only): suggestions for opportunities          # emails just saved: replies and promised times update the follow-ups
     return jsonify(payload)
 
