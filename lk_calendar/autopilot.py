@@ -160,7 +160,8 @@ def queue() -> dict:
                         "use": "your private notes and the prep (get_meeting_notes)" if e["meeting_status"] == "completed"
                                else "nothing: a short, friendly 'sorry we missed each other, want to pick another time?'"})
     out["run_key"] = new_run_key()
-    out["instructions"]["run_key"] = "Pass this run_key to save_message_review, save_onboarding and save_followup_draft: they work only inside a scheduled run."
+    out["instructions"]["run_key"] = ("Pass this run_key to save_message_review, save_onboarding and save_followup_draft (they work only inside a scheduled run), "
+                                     "and to save_meeting_prep and save_call_summary (with it they save right away; in a chat they show the user first).")
     return out
 
 

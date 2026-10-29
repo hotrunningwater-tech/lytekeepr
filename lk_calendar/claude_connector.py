@@ -184,12 +184,10 @@ def _strip_google(items: list) -> list:
     return out
 
 
-# Tools that save text the user dictated (speech-to-text: typos, repeats, corrections on the fly). The text must be cleaned up, shown and approved first.
-CONFIRM_TEXT_TOOLS = {"update_company": "add_note", "doc_create": "content", "doc_write": "text", "tab_create": "content", "add_contact_note": "text", "log_conversation": "text",
-                      "write_meeting_notes": "text", "edit_contact_record": "text", "set_meeting_agenda": "text"}
-CONFIRM_RULE = ("BEFORE SAVING: the user dictates by voice, with typos, repeated words and corrections on the fly. First write the cleaned-up text "
-                "(typos fixed, repeats removed, their corrections applied, their meaning and wording kept, nothing invented), show it in the chat, "
-                "and ask if it is good to save. Call this only after they say yes, with exactly that text and user_approved_text=true.")
+# Tools that save text the user dictated (speech-to-text: typos, repeats, corrections on the fly): the text is cleaned up before the first call,
+# and that first call shows it (SHOW_RULE below).
+CONFIRM_RULE = ("DICTATED TEXT: the user dictates by voice, with typos, repeated words and corrections on the fly. Pass the cleaned-up text "
+                "(typos fixed, repeats removed, their corrections applied, their meaning and wording kept, nothing invented).")
 
 
 TOOLS = [
@@ -208,11 +206,9 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}, "read": False},
     {"name": "create_funnel", "title": "Create a funnel",
      "description": "Create a new sales funnel. It needs a name and a brand (everyone put in the funnel takes its brand): ask for whichever the user didn't say; never guess the brand. "
-                    "It starts with the standard stages (New lead, Contacted, In conversation, Confirmed, Onboarding, Completed, Lost); they can be changed later in the app (Edit funnel). "
-                    "Print back the name and brand, ask 'Create?', and call with user_confirmed=true only after the user says yes.",
-     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "brand": {"type": "string", "description": "The brand the user named (name or key, see list_brands)"},
-                                                      "user_confirmed": {"type": "boolean", "description": "true only after you printed the name and brand and the user said yes"}},
-                     "required": ["name", "brand", "user_confirmed"]}, "read": False},
+                    "It starts with the standard stages (New lead, Contacted, In conversation, Confirmed, Onboarding, Completed, Lost); they can be changed later in the app (Edit funnel).",
+     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "brand": {"type": "string", "description": "The brand the user named (name or key, see list_brands)"}},
+                     "required": ["name", "brand"]}, "read": False},
     {"name": "set_funnel_brand", "title": "Set a funnel's brand",
      "description": "Make a funnel belong to a brand. Everyone in the funnel takes that brand, and their follow-ups are filed under it. Empty brand clears the funnel's brand.",
      "inputSchema": {"type": "object", "properties": {"funnel_id": {"type": "integer"}, "brand": {"type": "string", "description": "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
@@ -324,9 +320,7 @@ TOOLS = [
     # --- added for everyday phone use: the same actions the three LyteKeepr AI chats have ---
     {"name": "create_contact", "title": "Add a contact",
      "description": "Add a new contact. It needs a name or a company, a way to reach them (email, phone, LinkedIn or Instagram) and a brand: ask for what's missing first. "
-                    "Then call search_contacts (no duplicates; update_contact if they exist), print back exactly what you will save "
-                    "(name, company, job title, email, phone, links, brand, funnel if any, notes) and ask 'Add?'. Call this only after the user says yes, with "
-                    "user_confirmed=true. An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'. From a business card photo "
+                    "Then call search_contacts first (no duplicates; update_contact if they exist). An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'. From a business card photo "
                     "or a voice note: read the details the same way; what the user adds about them (e.g. 'met at the expo, decides with her partner') goes in notes. "
                     "Notes hold only what the user tells you that LyteKeepr doesn't already keep: never summaries or copies of emails, LinkedIn or Instagram messages, call recordings or logged conversations (those are already in the contact's communication history).",
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string", "description": "The person's name; leave empty if only a handle is known"},
@@ -334,9 +328,8 @@ TOOLS = [
                                                       "instagram": {"type": "string", "description": "Instagram handle like @name (or the instagram.com link)"},
                                                       "linkedin": {"type": "string", "description": "LinkedIn profile link"},
                                                       "notes": {"type": "string", "description": "Only what the user said about them that isn't in an email, message, call or logged conversation. Usually empty."},
-                                                      "brand": {"type": "string", "description": "REQUIRED: the brand (name or key, see list_brands). Ask the user which brand unless they said it; never guess. With no brands yet, tell them to create one first (Settings → Brands, or create_brand)."},
-                                                      "user_confirmed": {"type": "boolean", "description": "true only after you printed the details and the user said yes"}},
-                     "required": ["user_confirmed"]}, "read": False},
+                                                      "brand": {"type": "string", "description": "REQUIRED: the brand (name or key, see list_brands). Ask the user which brand unless they said it; never guess. With no brands yet, tell them to create one first (Settings → Brands, or create_brand)."}},
+                     "required": []}, "read": False},
     {"name": "update_contact", "title": "Update a contact",
      "description": "Change a contact's details. Only the fields given change. Notes go through add_contact_note.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "name": {"type": "string"}, "company": {"type": "string"},
@@ -362,10 +355,10 @@ TOOLS = [
                      "required": ["contact_id", "channel", "status"]}, "read": False},
     {"name": "remove_follow_ups", "title": "Remove follow-ups", "destructive": True,
      "description": "Remove open follow-ups for ONE contact ('this one isn't needed') or for everyone in ONE funnel ('we've stopped working that funnel'). "
-                    "ALWAYS call with preview=true first, tell the user how many and list who, and remove (preview=false) only after their yes. "
+                    "The first call shows how many and who. "
                     "'Reply to' ones (people waiting on the user) stay unless the user says to include them. To see what follow-ups there are, use get_agenda.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "funnel": {"type": "string", "description": "Funnel name or id"},
-                                                      "include_replies": {"type": "boolean"}, "preview": {"type": "boolean", "default": True}}}},
+                                                      "include_replies": {"type": "boolean"}}}},
     {"name": "set_follow_up_date", "title": "Set follow-up date", "description": "Move the outreach follow-up for a contact to a date. The lead_id per channel is in get_contact under outreach (set_outreach_status creates one if missing).",
      "inputSchema": {"type": "object", "properties": {"lead_ids": {"type": "array", "items": {"type": "integer"}}, "date": {"type": "string", "description": "YYYY-MM-DD"}},
                      "required": ["lead_ids", "date"]}, "read": False},
@@ -405,13 +398,13 @@ TOOLS = [
     {"name": "write_meeting_notes", "title": "Write private meeting notes",
      "description": (CONFIRM_RULE + " " + "Add to the user's private notes on a meeting (prep plan, what was said, follow-ups). mode 'append' (the default) adds at the end and keeps "
                      "everything already written; use 'replace' only when the user asks to rewrite the whole note. Never sent to Google or the guests."),
-     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]}},
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]}},
                      "required": ["item_id", "text"]}, "read": False},
     {"name": "set_meeting_agenda", "title": "Write the meeting's description (guests see it)", "destructive": True,
-     "description": (CONFIRM_RULE + " " + "Write into the Google Calendar description of a meeting the user organized, e.g. an agenda. THE GUESTS SEE IT. First show the user the exact text "
-                     "and get a clear yes. mode 'append' (default) adds below the current description; 'replace' rewrites it. notify=true also emails the guests "
+     "description": (CONFIRM_RULE + " " + "Write into the Google Calendar description of a meeting the user organized, e.g. an agenda. THE GUESTS SEE IT. "
+                     "mode 'append' (default) adds below the current description; 'replace' rewrites it. notify=true also emails the guests "
                      "about the change (default false). Private prep goes in write_meeting_notes instead, never here."),
-     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]},
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}, "mode": {"type": "string", "enum": ["append", "replace"]},
                                                       "notify": {"type": "boolean"}}, "required": ["item_id", "text"]}, "read": False},
     {"name": "set_meeting_recording", "title": "Record a meeting with Fathom (on/off)",
      "description": "Switch Fathom recording on or off for a meeting already in the calendar (item_id from get_agenda or list_calendar). Only when the user asks.",
@@ -473,7 +466,7 @@ TOOLS = [
     {"name": "doc_create", "title": "Create a document",
      "description": (CONFIRM_RULE + " " + "Create a document at the top of a brand or funnel, or in a folder (folder_id), optionally with text and named tabs. "
                      "A funnel must have a brand first. If it's unclear where it belongs, ask."),
-     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "title": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "folder_id": {"type": "integer"}, "content": {"type": "string"},
+     "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "folder_id": {"type": "integer"}, "content": {"type": "string"},
                                                       "tabs": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "content": {"type": "string"}}, "required": ["name"]}}},
                      "required": ["title"]}, "read": False},
     {"name": "doc_write", "title": "Write in a document",
@@ -481,7 +474,7 @@ TOOLS = [
                      "'append' adds at the end (the default, e.g. saving what was just discussed); 'replace_section' replaces one # heading's part (section = its words or number); "
                      "'find_replace' replaces one exact passage (find must appear exactly once); 'replace' replaces the whole text. "
                      "Before 'replace', 'replace_section' or 'find_replace', the old text is kept as a previous version. Read first, then change only what was asked."),
-     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "doc_id": {"type": "integer"}, "text": {"type": "string"}, "tab": {"type": "string"},
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "text": {"type": "string"}, "tab": {"type": "string"},
                                                       "mode": {"type": "string", "enum": ["append", "replace_section", "find_replace", "replace"]},
                                                       "section": {"type": "string"}, "find": {"type": "string"}}, "required": ["doc_id", "text"]}, "read": False},
     {"name": "doc_update", "title": "Rename or move a document",
@@ -493,7 +486,7 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}}, "required": ["doc_id"]}, "read": False},
     {"name": "tab_create", "title": "Add a tab to a document",
      "description": CONFIRM_RULE + " " + "Add a named tab to a document, optionally with text (e.g. 'Save what we discussed into a new tab called Partnerships'). position 1 = first.",
-     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "doc_id": {"type": "integer"}, "name": {"type": "string"}, "content": {"type": "string"}, "position": {"type": "integer"}},
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "name": {"type": "string"}, "content": {"type": "string"}, "position": {"type": "integer"}},
                      "required": ["doc_id", "name"]}, "read": False},
     {"name": "tab_update", "title": "Rename or reorder a tab",
      "description": "Rename a tab and/or move it (position 1 = first). To change its text use doc_write with tab.",
@@ -560,24 +553,23 @@ TOOLS = [
     {"name": "update_company", "title": "Update a company",
      "description": CONFIRM_RULE + " (This applies to add_note.) " + "Change a company's name or website, or add a note to it (added at the end, nothing is replaced). To put a contact in a company, use update_contact with company.",
      "inputSchema": {"type": "object", "properties": {"company_id": {"type": "integer"}, "name": {"type": "string"}, "website": {"type": "string"},
-                                                      "add_note": {"type": "string"},
-                                                      "user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}},
+                                                      "add_note": {"type": "string"}},
                      "required": ["company_id"]}},
     {"name": "add_contact_note", "title": "Add a note to a contact",
      "description": (CONFIRM_RULE + " " + "A note the user tells you about a contact, dated and kept with them, e.g. 'prefers mornings', 'decides with her partner'. "
                      "Notes hold only what the user tells you that LyteKeepr doesn't already keep: never summaries or copies of emails, LinkedIn or Instagram messages, call recordings or logged conversations (those are already in the contact's communication history). A call, meeting or talk that nothing recorded goes in log_conversation instead."),
-     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "contact_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["contact_id", "text"]}, "read": False},
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["contact_id", "text"]}, "read": False},
     {"name": "log_conversation", "title": "Log a call or conversation",
      "description": (CONFIRM_RULE + " " + "Record a phone call, meeting, in-person talk, video call or other conversation that no integration captured, in the contact's communication history "
                      "(e.g. 'I just spoke with John: the customer hasn't approved the color, don't proceed with the order'). Write what was said in the user's words; "
                      "when = when it happened (default now); add other_contact_ids if more people were in it, and opportunity_id when it was about one."),
-     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "contact_id": {"type": "integer"}, "type": {"type": "string", "enum": ["phone call", "meeting", "in person", "video call", "other"]},
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "type": {"type": "string", "enum": ["phone call", "meeting", "in person", "video call", "other"]},
                                                       "text": {"type": "string"}, "when": {"type": "string", "description": "YYYY-MM-DD or YYYY-MM-DD HH:MM"},
                                                       "opportunity_id": {"type": "integer"}, "other_contact_ids": {"type": "array", "items": {"type": "integer"}}},
                      "required": ["contact_id", "text"]}, "read": False},
     {"name": "edit_contact_record", "title": "Edit a note or logged conversation",
      "description": CONFIRM_RULE + " " + "Change the text, date or type of a note or logged conversation (record_id comes from get_contact, the histories or search_contact_notes).",
-     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean", "description": "true only after the user approved the cleaned-up text shown in the chat"}, "record_id": {"type": "integer"}, "text": {"type": "string"}, "when": {"type": "string"},
+     "inputSchema": {"type": "object", "properties": {"record_id": {"type": "integer"}, "text": {"type": "string"}, "when": {"type": "string"},
                                                       "type": {"type": "string"}, "opportunity_id": {"type": "integer"}}, "required": ["record_id"]}, "read": False},
     {"name": "delete_contact_record", "title": "Delete a note or logged conversation", "destructive": True,
      "description": "Delete a note or logged conversation. Only when the user asks.",
@@ -666,6 +658,23 @@ RUN_ONLY_TOOLS = {        # name -> what Claude is told when it reaches for one 
     "save_onboarding": "Nothing was saved: this is for the scheduled run only. In a chat, write the welcome email and save it with save_email_draft when the user asks; reminders with create_task.",
     "save_followup_draft": "Nothing was saved: this is for the scheduled run only. In a chat, save an email draft with save_email_draft when the user asks.",
 }
+SENDS = {"send_email", "reply_email", "send_draft"}          # these show the email itself (_send_preview)
+SHOWN_FIRST = {t["name"] for t in TOOLS if not t["read"]} - SENDS - set(RUN_ONLY_TOOLS)
+RUN_MAY_SKIP = {"save_meeting_prep", "save_call_summary"}    # also the scheduled run's: nobody to ask there, so its run key is enough
+SHOW_RULE = ("SHOWN FIRST: call first WITHOUT confirm_code. Nothing is done: you get show_the_user, exactly what LyteKeepr will do (who, what, "
+             "old → new, the full text). Show it to the user word for word, then ask 'Do it? yes / no'. Only after their yes, call again with the "
+             "same details and that confirm_code. If anything differs, nothing is done and you get the new version to show.")
+
+for _t in TOOLS:
+    if _t["name"] in SHOWN_FIRST:
+        props = _t["inputSchema"].setdefault("properties", {})
+        for gone in ("user_confirmed", "user_approved_text", "preview"):            # replaced by the showing below
+            props.pop(gone, None)
+        _t["inputSchema"]["required"] = [r for r in _t["inputSchema"].get("required", []) if r in props]
+        props["confirm_code"] = {"type": "string", "description": "From the first call, only after the user said yes to exactly what it showed"}
+        if _t["name"] in RUN_MAY_SKIP:
+            props["run_key"] = {"type": "string", "description": "Scheduled run only: the run_key from autopilot_queue (then nothing is shown first)"}
+        _t["description"] = _t["description"] + " " + SHOW_RULE
 
 
 def _run_tool(call, name: str, args: dict):
@@ -675,16 +684,22 @@ def _run_tool(call, name: str, args: dict):
             raise ValueError((data or {}).get("error") or f"LyteKeepr answered with an error ({status})")
         return data
 
-    field = CONFIRM_TEXT_TOOLS.get(name)
-    dictated = field and ((args.get(field) or "").strip() or (name == "doc_create" and any((t.get("content") or "").strip() for t in args.get("tabs") or [])))
-    if dictated and args.get("user_approved_text") is not True:
-        return {"saved": False, "do_this_first": "Nothing was saved. Show the user the cleaned-up text in the chat and ask if it is good to save. "
-                                                  "When they say yes, call again with that exact text and user_approved_text=true."}
+    def run_key_ok():
+        return bool(args.get("run_key")) and need(*call("GET", "/api/calendar/autopilot/run-key?" + urllib.parse.urlencode({"key": str(args["run_key"])}))).get("ok")
 
-    if name in RUN_ONLY_TOOLS:                       # the scheduled run's own saves: only with the key autopilot_queue handed out
-        ok = need(*call("GET", "/api/calendar/autopilot/run-key?" + urllib.parse.urlencode({"key": str(args.get("run_key") or "")}))).get("ok")
-        if not ok:
-            return {"saved": False, "message": RUN_ONLY_TOOLS[name]}
+    if name in RUN_ONLY_TOOLS and not run_key_ok():  # the scheduled run's own saves: only with the key autopilot_queue handed out
+        return {"saved": False, "message": RUN_ONLY_TOOLS[name]}
+
+    if name in SHOWN_FIRST and not (name in RUN_MAY_SKIP and run_key_ok()):      # every change: shown exactly, done only with that code
+        stop = _precheck(call, need, name, args)
+        if stop:
+            return stop
+        shown = _change_preview(call, need, name, args)
+        given = str(args.get("confirm_code") or "").strip()
+        if given != shown["confirm_code"]:
+            if given:
+                shown["message"] = "Nothing was done: this is not exactly what the user saw (or it changed since). Show this version and ask again."
+            return shown
 
     if name == "find":
         text = str(args.get("query") or "").strip()
@@ -711,17 +726,7 @@ def _run_tool(call, name: str, args: dict):
     if name == "create_brand":
         return need(*call("POST", "/api/crm/brands", {"name": args.get("name", "")}))["brand"]
     if name == "create_funnel":
-        fname = str(args.get("name") or "").strip()
-        if not fname:
-            raise ValueError("The funnel needs a name: ask the user.")
-        key = _brand_key(call, need, args.get("brand"))
-        if not key:
-            raise ValueError("The funnel needs a brand: ask the user which one (see list_brands).")
-        existing = need(*call("GET", "/api/crm/funnels"))["funnels"]
-        if any(f["name"].strip().lower() == fname.lower() for f in existing):
-            raise ValueError(f"There is already a funnel called '{fname}'. Ask the user for another name.")
-        if args.get("user_confirmed") is not True:
-            return {"created": False, "do_this_first": f"Nothing was created. Print back: funnel '{fname}', brand {key}, standard stages; ask 'Create?' and call again with user_confirmed=true after they say yes."}
+        fname, key = str(args["name"]).strip(), _brand_key(call, need, args.get("brand"))       # checked in _precheck
         made = need(*call("POST", "/api/crm/funnels", {"name": fname, "brand": key}))
         return {"created": True, "funnel_id": made["funnel_id"], "name": fname, "brand": key}
     if name == "set_funnel_brand":
@@ -802,8 +807,6 @@ def _run_tool(call, name: str, args: dict):
     if name == "save_message_review":
         return need(*call("POST", "/api/calendar/inbox/review", {k: args.get(k) or [] for k in ("reviewed", "flags", "follow_ups")}))
     if name == "save_email_draft":
-        if not _asked_to_save(args.get("user_said")):                     # only when the user asked for it
-            return {"saved": False, "message": "Nothing was saved: drafts are saved only when the user asks ('save it'). You may ask them: 'Save it as a draft?'"}
         ids = [int(i) for i in (args.get("contact_ids") or ([args["contact_id"]] if args.get("contact_id") else []))]
         if len(ids) == 1 and not args.get("funnel") and not args.get("as_reply"):     # one person: their own draft
             return need(*call("PUT", f"/api/crm/people/{ids[0]}/draft", {"subject": args.get("subject", ""), "body": args.get("body", "")}))
@@ -849,18 +852,6 @@ def _run_tool(call, name: str, args: dict):
     if name == "mark_task_done":
         return need(*call("POST", f"/api/calendar/events/{int(args['task_id'])}/done", {"date": args["date"], "done": bool(args.get("done", True))}))
     if name == "create_contact":
-        missing = []                                            # the app's own minimum, checked before anything is shown or confirmed
-        if not (str(args.get("name") or "").strip() or str(args.get("company") or "").strip()):
-            missing.append("a name or a company")
-        if not any(str(args.get(k) or "").strip() for k in ("email", "phone", "linkedin", "instagram", "profile_url")):
-            missing.append("a way to reach them (an email, a phone number, or a LinkedIn or Instagram link)")
-        if not str(args.get("brand") or "").strip():
-            missing.append("the brand")
-        if missing:
-            return {"saved": False, "missing": missing, "ask_the_user": "To add this contact, LyteKeepr still needs " + " and ".join(missing) + ". Ask the user for it first."}
-        if args.get("user_confirmed") is not True:             # the details are printed back and confirmed before anything is added
-            return {"saved": False, "do_this_first": "Nothing was added. Print back exactly what you will save (name, company, email, phone, links, brand, "
-                                                     "funnel, notes), ask 'Add?', and call again with user_confirmed=true after they say yes."}
         body = {k: args[k] for k in ("name", "company", "job_title", "email", "phone", "instagram", "notes", "brand") if args.get(k)}
         if args.get("linkedin") or args.get("profile_url"):
             body["url"] = args.get("linkedin") or args.get("profile_url")
@@ -903,16 +894,7 @@ def _run_tool(call, name: str, args: dict):
             body["follow_up_days"] = int(args["follow_up_days"])
         return need(*call("POST", f"/api/calendar/people/{int(args['contact_id'])}/outreach", body))
     if name == "remove_follow_ups":
-        body = {"contact_id": args.get("contact_id"), "include_replies": bool(args.get("include_replies")), "preview": args.get("preview", True) is not False}
-        if args.get("funnel") and not args.get("contact_id"):
-            want = str(args["funnel"]).strip().lower()
-            funnels = need(*call("GET", "/api/crm/funnels"))["funnels"]
-            hit = [f for f in funnels if str(f["funnel_id"]) == want or f["name"].strip().lower() == want] or \
-                  [f for f in funnels if want in f["name"].strip().lower()]
-            if len(hit) != 1:
-                raise ValueError("Which funnel? The funnels are: " + ", ".join(f["name"] for f in funnels))
-            body["funnel_id"] = hit[0]["funnel_id"]
-            body["funnel"] = hit[0]["name"]
+        body = {**_follow_ups_body(call, need, args), "preview": False}
         out = need(*call("POST", "/api/calendar/follow-ups/clear", body))
         if body.get("funnel"):
             out["funnel"] = body["funnel"]
@@ -1209,6 +1191,208 @@ def _confirmed(args: dict, shown: dict) -> bool:
     if given and given != shown["confirm_code"]:
         shown["message"] = "Nothing was sent: the email changed since the user saw it. Show this version and ask again."
     return bool(given) and given == shown["confirm_code"]
+
+
+def _precheck(call, need, name: str, args: dict):
+    """A missing or wrong detail is said before anything is shown, so the user never says yes to something that can't be done."""
+    if name == "create_contact":
+        missing = []                                            # the app's own minimum
+        if not (str(args.get("name") or "").strip() or str(args.get("company") or "").strip()):
+            missing.append("a name or a company")
+        if not any(str(args.get(k) or "").strip() for k in ("email", "phone", "linkedin", "instagram", "profile_url")):
+            missing.append("a way to reach them (an email, a phone number, or a LinkedIn or Instagram link)")
+        if not str(args.get("brand") or "").strip():
+            missing.append("the brand")
+        if missing:
+            return {"saved": False, "missing": missing, "ask_the_user": "To add this contact, LyteKeepr still needs " + " and ".join(missing) + ". Ask the user for it first."}
+    if name == "create_funnel":
+        fname = str(args.get("name") or "").strip()
+        if not fname:
+            raise ValueError("The funnel needs a name: ask the user.")
+        if not _brand_key(call, need, args.get("brand")):
+            raise ValueError("The funnel needs a brand: ask the user which one (see list_brands).")
+        if any(f["name"].strip().lower() == fname.lower() for f in need(*call("GET", "/api/crm/funnels"))["funnels"]):
+            raise ValueError(f"There is already a funnel called '{fname}'. Ask the user for another name.")
+    if name == "save_email_draft" and not _asked_to_save(args.get("user_said")):           # only when the user asked for it
+        return {"saved": False, "message": "Nothing was saved: drafts are saved only when the user asks ('save it'). You may ask them: 'Save it as a draft?'"}
+    return None
+
+
+def _follow_ups_body(call, need, args: dict) -> dict:
+    body = {"contact_id": args.get("contact_id"), "include_replies": bool(args.get("include_replies"))}
+    if args.get("funnel") and not args.get("contact_id"):
+        want = str(args["funnel"]).strip().lower()
+        funnels = need(*call("GET", "/api/crm/funnels"))["funnels"]
+        hit = [f for f in funnels if str(f["funnel_id"]) == want or f["name"].strip().lower() == want] or \
+              [f for f in funnels if want in f["name"].strip().lower()]
+        if len(hit) != 1:
+            raise ValueError("Which funnel? The funnels are: " + ", ".join(f["name"] for f in funnels))
+        body["funnel_id"], body["funnel"] = hit[0]["funnel_id"], hit[0]["name"]
+    return body
+
+
+SHOW_SKIP = {"confirm_code", "confirmed", "user_confirmed", "user_approved_text", "run_key", "preview", "user_said"}
+SHOW_LABELS = {"date": "Date", "time": "Time", "start_date": "Date", "title": "Title", "notes": "Notes", "text": "Text", "body": "Body", "subject": "Subject",
+               "add_note": "Note added", "content": "Text", "involved": "Still involved", "record": "Record with Fathom", "to": "Move to",
+               "follow_up_days": "Follow-up in days", "with_contents": "Delete everything inside too", "include_replies": "Include 'Reply to' ones",
+               "mode": "How", "notify": "Email the guests about it", "invite": "Invites emailed to", "google_meet": "Google Meet link",
+               "record_with_fathom": "Record with Fathom", "duration_min": "Minutes", "as_reply": "As a reply in their thread", "done": "Done"}
+SHOW_OLD = {"date": "start_date", "time": "start_time", "linkedin": "url", "profile_url": "url", "involved": "active", "record": "expect_recording"}
+SHOW_NOTES = {
+    "book_meeting": "Google Calendar emails an invite to everyone invited.",
+    "cancel_meeting": "The meeting is removed from the calendar, Google Calendar included.",
+    "set_meeting_agenda": "The guests see this text in the invite.",
+    "doc_delete": "The document is deleted.",
+    "tab_delete": "The tab and its text are deleted.",
+    "delete_contact_record": "The note or logged conversation is deleted.",
+    "delete_goal": "The goal is deleted.",
+    "discard_draft": "The draft is discarded (nothing is sent).",
+    "draft_linkedin_message": "Nothing is sent: it waits on Home for you to press Send.",
+}
+
+
+def _change_preview(call, need, name: str, args: dict) -> dict:
+    """Exactly what this call would do, in plain words with real names (not ids), and a code that only matches this change on this data."""
+    def get(path):
+        st, d = call("GET", path)
+        return d if st < 400 and isinstance(d, dict) else None
+
+    def contact(cid):
+        c = get(f"/api/calendar/contacts/{int(cid)}")
+        if not c:
+            return f"contact #{cid} (not found)", {}
+        bits = [c.get("display") or c.get("name") or c.get("company") or f"contact #{cid}"]
+        if c.get("email"):
+            bits.append(f"<{c['email']}>")
+        if c.get("company") and c.get("company") != bits[0]:
+            bits.append(f"({c['company']})")
+        return " ".join(bits), {**c, "name": c.get("name"), "funnel": c.get("funnel_name"), "stage": c.get("stage_name")}
+
+    def item(iid):
+        e = get(f"/api/calendar/events/{int(iid)}")
+        if not e or not e.get("start_date"):
+            return f"item #{iid} (not found)", {}
+        when = e["start_date"] + ("" if e.get("untimed") else f" {e['start_time']}")
+        return f"'{e['title']}', {when}", e
+
+    lines, current = [f"What: {next(t['title'] for t in TOOLS if t['name'] == name)}"], {}
+    a = {k: v for k, v in args.items() if k not in SHOW_SKIP and v not in (None, "", [])}
+    shown_ids = set()
+    for key, label in (("contact_id", "Contact"), ("introduced_by_contact_id", "Introduced by")):
+        if a.get(key):
+            text, data = contact(a[key])
+            lines.append(f"{label}: {text}")
+            current = current or data
+            shown_ids.add(key)
+    for key in ("item_id", "task_id"):
+        if a.get(key):
+            text, current = item(a[key])
+            lines.append(f"Calendar item: {text}")
+            shown_ids.add(key)
+    for key in ("contact_ids", "other_contact_ids", "add_contact_ids", "remove_contact_ids"):
+        if a.get(key):
+            label = {"contact_ids": "To", "other_contact_ids": "Also with", "add_contact_ids": "Add people", "remove_contact_ids": "Take out"}[key]
+            lines.append(f"{label}: " + "; ".join(contact(i)[0] for i in a[key]))
+            shown_ids.add(key)
+    if a.get("opportunity_id"):
+        o = get(f"/api/crm/opportunities/{int(a['opportunity_id'])}") or {}
+        lines.append(f"Opportunity: {o.get('name') or '#' + str(a['opportunity_id'])}" + (f" (stage {o['stage']})" if o.get("stage") else ""))
+        current = current or {"stage": o.get("stage")}
+        shown_ids.add("opportunity_id")
+    if a.get("doc_id"):
+        d = get(f"/api/crm/docs/{int(a['doc_id'])}") or {}
+        lines.append(f"Document: {d.get('title') or '#' + str(a['doc_id'])}")
+        current = current or d
+        shown_ids.add("doc_id")
+    for key, label in (("folder_id", "Folder"), ("parent_id", "Into folder")):
+        if a.get(key):
+            f = get(f"/api/crm/docs/folders/{int(a[key])}") or {}
+            lines.append(f"{label}: {f.get('name') or '#' + str(a[key])}")
+            current = current or (f if key == "folder_id" else {})
+            shown_ids.add(key)
+    if a.get("funnel_id"):
+        f = next((x for x in need(*call("GET", "/api/crm/funnels"))["funnels"] if x["funnel_id"] == int(a["funnel_id"])), {})
+        lines.append(f"Funnel: {f.get('name') or '#' + str(a['funnel_id'])}")
+        shown_ids.add("funnel_id")
+    if a.get("stage_id"):
+        stage = None
+        for f in need(*call("GET", "/api/crm/funnels"))["funnels"]:
+            board = get(f"/api/crm/funnels/{f['funnel_id']}/board") or {}
+            stage = next((f"{s['name']} (funnel {f['name']})" for s in board.get("stages") or [] if s.get("stage_id") == int(a["stage_id"])), stage)
+        lines.append(f"Stage: {stage or '#' + str(a['stage_id'])}")
+        shown_ids.add("stage_id")
+    if a.get("call_id"):
+        c = (get(f"/api/calls/{int(a['call_id'])}") or {}).get("call") or {}
+        lines.append(f"Call: {c.get('title') or '#' + str(a['call_id'])}, {str(c.get('started_at') or '')[:16].replace('T', ' ')}")
+        shown_ids.add("call_id")
+    if a.get("company_id"):
+        current = get(f"/api/calendar/companies/{int(a['company_id'])}") or {}
+        lines.append(f"Company: {current.get('name') or '#' + str(a['company_id'])}")
+        shown_ids.add("company_id")
+    if a.get("record_id"):
+        r = get(f"/api/crm/records/{int(a['record_id'])}") or {}
+        lines.append(f"{(r.get('kind') or 'note').capitalize()} on {', '.join(p['name'] for p in r.get('people') or []) or '#' + str(a['record_id'])}, "
+                     f"{str(r.get('happened_at') or r.get('created_at') or '')[:10]}:\n{r.get('text') or ''}")
+        current = r
+        shown_ids.add("record_id")
+    if a.get("goal_id"):
+        ov = need(*call("GET", "/api/calendar/goals"))
+        g = next((x for k in ("today_goals", "week_goals", "earlier_open") for x in ov.get(k) or [] if x.get("goal_id") == int(a["goal_id"])), {})
+        lines.append(f"Goal: {g.get('text') or '#' + str(a['goal_id'])}")
+        current = g
+        shown_ids.add("goal_id")
+    if a.get("suggestion_id"):
+        sg = next((x for x in need(*call("GET", "/api/crm/suggestions"))["suggestions"] if x["suggestion_id"] == int(a["suggestion_id"])), {})
+        lines.append(f"Suggestion: {sg.get('name') or ''} <{sg.get('email') or ''}>" + (f", for {sg['opportunity']}" if sg.get("opportunity") else "")
+                     + (f" ({sg['reason']})" if sg.get("reason") else ""))
+        shown_ids.add("suggestion_id")
+    if a.get("lead_ids"):
+        for lid in a["lead_ids"]:
+            l = get(f"/api/calendar/leads/{int(lid)}") or {}
+            lines.append(f"Follow-up: {contact(l['person_id'])[0] if l.get('person_id') else l.get('contact') or '#' + str(lid)} ({l.get('channel') or '?'}), "
+                         f"now {l.get('follow_up_date') or 'none'}")
+        shown_ids.add("lead_ids")
+    if a.get("draft"):
+        d = _drafts_tool(call, need, "open_draft", {"draft": a["draft"]})
+        to = d.get("to") or ", ".join(p.get("name") or p.get("email") or "" for p in d.get("will_send_to") or [])
+        lines.append(f"Draft {a['draft']}: to {to or '?'}, subject '{d.get('subject') or ''}'")
+        current = d
+        shown_ids.add("draft")
+    if name == "remove_follow_ups":
+        out = need(*call("POST", "/api/calendar/follow-ups/clear", {**_follow_ups_body(call, need, args), "preview": True}))
+        lines.append(f"Removes {out['count']} follow-up(s)" + (f" in funnel {args.get('funnel')}" if args.get("funnel") and not args.get("contact_id") else "")
+                     + (":" if out["count"] else " (there are none)"))
+        lines += [f"- {f['contact']}, {f['channel']}, due {f['due']}" + (" (reply)" if f["kind"] == "reply" else "") for f in out["follow_ups"]]
+        shown_ids |= {"funnel", "include_replies"}
+    if name == "move_overdue":
+        ag = need(*call("GET", "/api/calendar/agenda"))
+        late = [e for e in ag.get("overdue") or [] if e.get("repeat", "none") == "none"]
+        lines.append(f"Moves {len(late)} overdue item(s) to {a.get('to', 'today')}:")
+        lines += [f"- {e.get('title')} (was {e.get('date') or e.get('start_date')})" for e in late]
+        shown_ids.add("to")
+    if name == "move_contact_stage" and current:
+        lines.append(f"Now: {current.get('funnel') or 'no funnel'}" + (f", {current['stage']}" if current.get("stage") else ""))
+
+    for k, v in a.items():                                  # what is set, with the old value where there is one
+        if k in shown_ids or k.endswith("_id"):
+            continue
+        label = SHOW_LABELS.get(k, k.replace("_", " ").capitalize())
+        new = ", ".join(str(x) if not isinstance(x, dict) else json.dumps(x, ensure_ascii=False) for x in v) if isinstance(v, list) else \
+            json.dumps(v, ensure_ascii=False) if isinstance(v, dict) else ("yes" if v is True else "no" if v is False else str(v))
+        old = current.get(SHOW_OLD.get(k, k)) if name.startswith(("update_", "edit_", "set_", "move_", "doc_update", "folder_update", "tab_update")) else None
+        old = ("yes" if old else "no") if isinstance(old, bool) or (isinstance(old, int) and isinstance(v, bool)) else old
+        if "\n" in new or len(new) > 80:
+            lines.append(f"{label}:" + (f"\n(was:)\n{old}\n(becomes:)" if old not in (None, "") and str(old) != new else "") + f"\n{new}")
+        elif old not in (None, "") and str(old) != new:
+            lines.append(f"{label}: {old} → {new}")
+        else:
+            lines.append(f"{label}: {new}")
+    if name in SHOW_NOTES:
+        lines.append(SHOW_NOTES[name])
+    text = "\n".join(lines)
+    code = hashlib.sha256(json.dumps([name, a, text], sort_keys=True, default=str).encode()).hexdigest()[:10]
+    return {"done": False, "show_the_user": text, "then_ask": "Do it? yes / no", "confirm_code": code,
+            "rule": "Show show_the_user word for word. Do it only after the user's yes, calling again with the same details and this confirm_code."}
 
 
 def _draft_ref(text) -> tuple:

@@ -1,6 +1,6 @@
 # Plan: Claude shows every change before making it
 
-Status: approved 2026-10-29.
+Status: built 2026-10-29 (55 tools shown first, plus the 3 email sends that already were; tests in tests/test_connector_tools.py).
 
 ## Why
 

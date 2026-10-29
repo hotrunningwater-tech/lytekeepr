@@ -631,6 +631,12 @@ def register(app):
         x = b()
         return create_folder(x.get("name", ""), x.get("brand"), x.get("funnel_id"), x.get("parent_id"))
 
+    @app.get("/api/crm/docs/folders/<int:folder_id>")
+    @guarded
+    def docs_folder_get(folder_id):
+        with _crm() as conn:
+            return _folder(conn, folder_id)
+
     @app.put("/api/crm/docs/folders/<int:folder_id>")
     @guarded
     def docs_folder_update(folder_id):

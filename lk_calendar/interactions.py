@@ -323,6 +323,12 @@ def register(app):
     def records_person_history(person_id):
         return {"history": person_history(person_id)}
 
+    @app.get("/api/crm/records/<int:record_id>")
+    @guarded
+    def records_get(record_id):
+        with _crm() as conn:
+            return _row(conn, _record(conn, record_id))
+
     @app.put("/api/crm/records/<int:record_id>")
     @guarded
     def records_edit(record_id):

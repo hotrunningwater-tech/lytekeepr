@@ -99,6 +99,27 @@ def create_event():
     return jsonify(event), 201
 
 
+@bp.get("/api/calendar/events/<int:event_id>")
+def get_event(event_id):
+    event = store.get_event(event_id)
+    if event and event["lead_ref"].startswith("lead:"):
+        with store._conn() as conn:
+            row = conn.execute("SELECT * FROM leads WHERE id = ?", (int(event["lead_ref"][5:] or 0),)).fetchone()
+        event["lead"] = dict(row) if row else None
+    if not event or not access.can_event(event):
+        return jsonify({"error": "not found"}), 404
+    return jsonify(event)
+
+
+@bp.get("/api/calendar/leads/<int:lead_id>")
+def get_lead(lead_id):
+    with store._conn() as conn:
+        row = conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
+    if not row or not (access.can_person(row["person_id"]) if row["person_id"] else access.is_full()):
+        return jsonify({"error": "not found"}), 404
+    return jsonify(dict(row))
+
+
 @bp.put("/api/calendar/events/<int:event_id>")
 def update_event(event_id):
     event = store.update_event(event_id, _payload())

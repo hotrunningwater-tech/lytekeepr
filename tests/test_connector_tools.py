@@ -50,5 +50,60 @@ class ToolListTest(unittest.TestCase):
             out = claude_connector._run_tool(call, name, {"run_key": "nope", "contact_id": 1, "reviewed": [], "subject": "s", "body": "b"})
             self.assertFalse(out.get("saved"), name)
 
+    def test_every_change_is_shown_first(self):
+        """No tool that adds, changes or deletes does anything without the code from showing exactly that change (the Katie/Vicky rule)."""
+        def call(method, path, body=None):
+            if method != "GET" and not (path.endswith("/follow-ups/clear") and (body or {}).get("preview")):
+                raise AssertionError(f"changed something before the user saw it: {method} {path}")
+            return 200, {"funnels": [{"funnel_id": 1, "name": "Pilot"}], "brands": [{"key": "nexy", "name": "Nexy"}], "overdue": [], "suggestions": [],
+                         "count": 0, "follow_ups": [], "ok": False,
+                         "drafts": [{"draft_id": 1, "kind": "manual", "to_email": "a@b.c", "subject": "s", "body": "b"}]}
+        args = {"contact_id": 1, "item_id": 1, "task_id": 1, "opportunity_id": 1, "doc_id": 1, "folder_id": 1, "record_id": 1, "goal_id": 1, "call_id": 1,
+                "company_id": 1, "suggestion_id": 1, "stage_id": 1, "lead_ids": [1], "draft": "one:1", "name": "New name", "brand": "nexy", "title": "t",
+                "date": "2026-11-02", "text": "hello", "stage": "Contacted", "email": "x@y.z", "user_said": "save it", "tab": "Main", "status": "completed"}
+        for name in sorted(claude_connector.SHOWN_FIRST):
+            out = claude_connector._run_tool(call, name, dict(args))
+            self.assertIn("show_the_user", out, name)
+            self.assertTrue(out["confirm_code"], name)
+            wrong = claude_connector._run_tool(call, name, {**args, "confirm_code": "nope"})
+            self.assertIn("show_the_user", wrong, name)                    # a code for something else does nothing
+            other = claude_connector._run_tool(call, name, {**args, "title": "something else", "text": "else", "date": "2026-12-01"})
+            if {"title", "text", "date"} & set(claude_connector.TOOLS[[t["name"] for t in claude_connector.TOOLS].index(name)]["inputSchema"]["properties"]):
+                self.assertNotEqual(other["confirm_code"], out["confirm_code"], name)
+
+    def test_change_runs_with_its_code(self):
+        writes = []
+        def call(method, path, body=None):
+            if method != "GET":
+                writes.append((method, path, body))
+                return 201, {"id": 7, "title": "Send Anna the demo"}
+            return 200, {"display": "Anna Lee", "email": "anna@newco.com", "brand": "nexy", "brands": [{"key": "nexy", "name": "Nexy"}]}
+        args = {"title": "Send Anna the demo", "date": "2026-11-02", "contact_id": 3}
+        shown = claude_connector._run_tool(call, "create_task", args)
+        self.assertIn("Anna Lee <anna@newco.com>", shown["show_the_user"])
+        self.assertEqual(writes, [])
+        claude_connector._run_tool(call, "create_task", {**args, "confirm_code": shown["confirm_code"]})
+        self.assertEqual(len(writes), 1)
+
+    def test_reads_never_ask(self):
+        reads = {t["name"] for t in claude_connector.TOOLS if t["read"]}
+        self.assertFalse(reads & claude_connector.SHOWN_FIRST)
+        self.assertEqual(claude_connector.SHOWN_FIRST | reads | claude_connector.SENDS | set(claude_connector.RUN_ONLY_TOOLS),
+                         {t["name"] for t in claude_connector.TOOLS})
+
+    def test_scheduled_run_saves_prep_with_its_key(self):
+        writes = []
+        def call(method, path, body=None):
+            if "run-key" in path:
+                return 200, {"ok": "good" in path}
+            if method != "GET":
+                writes.append(path)
+            return 200, {"ok": True}
+        out = claude_connector._run_tool(call, "save_meeting_prep", {"item_id": 1, "text": "prep", "run_key": "bad"})
+        self.assertIn("show_the_user", out)
+        claude_connector._run_tool(call, "save_meeting_prep", {"item_id": 1, "text": "prep", "run_key": "good"})
+        self.assertEqual(writes, ["/api/calendar/events/1/prep"])
+
+
 if __name__ == "__main__":
     unittest.main()
