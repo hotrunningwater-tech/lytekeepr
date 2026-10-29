@@ -186,7 +186,7 @@ def _strip_google(items: list) -> list:
 
 # Tools that save text the user dictated (speech-to-text: typos, repeats, corrections on the fly). The text must be cleaned up, shown and approved first.
 CONFIRM_TEXT_TOOLS = {"update_company": "add_note", "doc_create": "content", "doc_write": "text", "tab_create": "content", "add_contact_note": "text", "log_conversation": "text",
-                      "write_meeting_notes": "text", "edit_contact_record": "text", "set_meeting_agenda": "text", "reply_email": "text"}
+                      "write_meeting_notes": "text", "edit_contact_record": "text", "set_meeting_agenda": "text"}
 CONFIRM_RULE = ("BEFORE SAVING: the user dictates by voice, with typos, repeated words and corrections on the fly. First write the cleaned-up text "
                 "(typos fixed, repeats removed, their corrections applied, their meaning and wording kept, nothing invented), show it in the chat, "
                 "and ask if it is good to save. Call this only after they say yes, with exactly that text and user_approved_text=true.")
@@ -548,12 +548,12 @@ TOOLS = [
                     "out of every several-people draft.",
      "inputSchema": {"type": "object", "properties": {"draft": {"type": "string", "description": "The draft from list_drafts, e.g. 'one:12' (to one person) or 'group:3' (several people, or a reply)"}, "contact_id": {"type": "integer"}}}},
     {"name": "send_draft", "title": "Send an email draft", "destructive": True,
-     "description": "Send a saved draft exactly as saved. First show it (open_draft: the text and everyone it goes to) and get the user's clear yes to send; "
-                    "ask once: follow up in 3 days, another number of days, or no follow-up (0). Several people are sent one by one, about a minute apart, "
-                    "on its own (open_draft shows progress); the first failure stops it. Each email is saved on the contact.",
+     "description": "Send a saved draft exactly as saved. Ask once: follow up in 3 days, another number of days, or no follow-up (0). Several people are sent "
+                    "one by one, about a minute apart, on its own (open_draft shows progress); the first failure stops it. Each email is saved on the contact. "
+                    + "SENDING: call first WITHOUT confirm_code. Nothing is sent: you get show_the_user, the email exactly as LyteKeepr will send it (to, cc, bcc, in reply to, subject, body). Show it to the user word for word, then ask 'Send? yes / no'. Only after their yes, call again with the same details and that confirm_code. If anything changed, nothing is sent and you get the new version to show.",
      "inputSchema": {"type": "object", "properties": {"draft": {"type": "string", "description": "The draft from list_drafts, e.g. 'one:12' (to one person) or 'group:3' (several people, or a reply)"}, "follow_up_days": {"type": "integer", "minimum": 0, "maximum": 365},
-                                                      "user_confirmed": {"type": "boolean", "description": "true only after the user saw it and said to send it"}},
-                     "required": ["draft", "follow_up_days", "user_confirmed"]}},
+                                                      "confirm_code": {"type": "string", "description": "From the first call, only after the user said yes to exactly that email"}},
+                     "required": ["draft", "follow_up_days"]}},
     {"name": "get_company", "title": "Company overview",
      "description": "One company (company_id from a contact's details or search_contacts): name, website, notes, its people (with funnel and stage), its opportunities, and the recent history of everyone there (newest first).",
      "inputSchema": {"type": "object", "properties": {"company_id": {"type": "integer"}}, "required": ["company_id"]}, "read": True},
@@ -600,11 +600,13 @@ TOOLS = [
                      "required": ["opportunity_id"]}, "read": True},
     # --- emails saved in LyteKeepr (the LyteKeepr tab); the admin sees all, team members only with "Sees my emails" and only their contacts' ---
     {"name": "reply_email", "title": "Reply to an email", "destructive": True,
-     "description": (CONFIRM_RULE + " " + "Reply inside the thread of one saved email (email_id from search_messages or last_exchange), or of a contact's latest email (contact): "
-                     "it goes from the user's Gmail as 'Re: <subject>' to the sender (or, if the user wrote the last one, to its recipients), and is saved on the contact. "
-                     "Show the user who it goes to, the subject and the exact reply first; send only after their yes."),
-     "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean"}, "email_id": {"type": "string"}, "contact": {"type": "string"},
-                                                      "text": {"type": "string", "description": "The reply"}}, "required": ["text"]}, "read": False},
+     "description": ("Reply inside the thread of one saved email (email_id from search_messages or last_exchange), or of a contact's latest email (contact: "
+                     "their email address is safest; a name must match exactly one contact). It goes as 'Re: <subject>' to that email's sender (or, if the "
+                     "user wrote it, to its recipients) and is saved on the contact. Clean up dictated text first. " + "SENDING: call first WITHOUT confirm_code. Nothing is sent: you get show_the_user, the email exactly as LyteKeepr will send it (to, cc, bcc, in reply to, subject, body). Show it to the user word for word, then ask 'Send? yes / no'. Only after their yes, call again with the same details and that confirm_code. If anything changed, nothing is sent and you get the new version to show."),
+     "inputSchema": {"type": "object", "properties": {"email_id": {"type": "string"}, "contact": {"type": "string"},
+                                                      "text": {"type": "string", "description": "The reply"},
+                                                      "confirm_code": {"type": "string", "description": "From the first call, only after the user said yes to exactly that email"}},
+                     "required": ["text"]}, "read": False},
     {"name": "email_thread", "title": "A whole email thread",
      "description": "Every saved email of one conversation, oldest first, in full (email_id or thread_id from search_messages or last_exchange). For deep reading or summaries only.",
      "inputSchema": {"type": "object", "properties": {"email_id": {"type": "string"}, "thread_id": {"type": "string"}}}, "read": True},
@@ -636,10 +638,11 @@ TOOLS = [
     {"name": "dismiss_suggestion", "title": "Dismiss a suggestion", "description": "Dismiss a suggestion; it will not come back.",
      "inputSchema": {"type": "object", "properties": {"suggestion_id": {"type": "integer"}}, "required": ["suggestion_id"]}, "read": False},
     {"name": "send_email", "title": "Send an email", "destructive": True,
-     "description": ("Send a real email from the user's Gmail to one contact (to their saved email address). FIRST show the user the full email in the chat "
-                     "(to, subject, body) and ask; call this only after they clearly say to send it, with exactly that text. Never send without that yes. "
-                     "It is saved on the contact and their status becomes 'email sent' with the usual follow-up. A saved draft is sent with send_draft instead."),
-     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name of the contact"}, "subject": {"type": "string"}, "body": {"type": "string"}},
+     "description": ("Send a new email to one contact (to their saved email address). It is saved on the contact. A saved draft is sent with send_draft, "
+                     "a reply in a thread with reply_email. " + "SENDING: call first WITHOUT confirm_code. Nothing is sent: you get show_the_user, the email exactly as LyteKeepr will send it (to, cc, bcc, in reply to, subject, body). Show it to the user word for word, then ask 'Send? yes / no'. Only after their yes, call again with the same details and that confirm_code. If anything changed, nothing is sent and you get the new version to show."),
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "The contact's name or email address (one contact must match)"},
+                                                      "subject": {"type": "string"}, "body": {"type": "string"},
+                                                      "confirm_code": {"type": "string", "description": "From the first call, only after the user said yes to exactly that email"}},
                      "required": ["contact", "subject", "body"]}, "read": False},
     {"name": "draft_linkedin_message", "title": "Draft a LinkedIn message",
      "description": "Write a LinkedIn message to one contact and leave it in LyteKeepr for the user to send. NOTHING is sent until they press Send now in LyteKeepr.",
@@ -1074,7 +1077,13 @@ def _run_tool(call, name: str, args: dict):
             out = [r for r in out if all(w in (r.get("text") or "").lower() or w in (r.get("title") or "").lower() for w in words)]
         return {**extra, "history": out[-200:]}
     if name == "reply_email":
-        return need(*call("POST", "/api/crm/email/reply", {k: args[k] for k in ("text", "email_id", "contact") if args.get(k)}))
+        body = {k: args[k] for k in ("text", "email_id", "contact") if args.get(k)}
+        plan = need(*call("POST", "/api/crm/email/reply", {**body, "preview": True}))
+        shown = _send_preview(plan, call)
+        if not _confirmed(args, shown):
+            return shown
+        body["email_id"] = plan["email_id"]                 # exactly the email that was shown
+        return need(*call("POST", "/api/crm/email/reply", body))
     if name == "email_thread":
         return need(*call("GET", "/api/crm/email/thread?" + urllib.parse.urlencode({k: args[k] for k in ("email_id", "thread_id") if args.get(k)})))
     if name == "list_goals":
@@ -1152,10 +1161,17 @@ def _run_tool(call, name: str, args: dict):
         out["searched"] = f"{ch or 'email, LinkedIn and Instagram'}, last {days} days" + (f", contact {args.get('contact')}" if args.get("contact") else "") \
                           + (f", words '{args.get('query')}'" if args.get("query") else "")
         return out
-    if name == "send_email":                       # the user approved it in the chat and in the Claude app's Allow prompt
+    if name == "send_email":
         out = need(*call("POST", "/api/claude/home/draft_email_message", {"person_name": args["contact"], "subject": args["subject"], "body": args["body"]}))
         if out.get("status") != "pending_confirmation":
-            return out                              # e.g. no such contact, or no email address: nothing was sent
+            return out                              # e.g. no such contact, two contacts match, or no email address: nothing was sent
+        p = (need(*call("GET", "/api/email/send-pending")) or {}).get("pending") or {}
+        plan = {"to": [p.get("to_email") or out.get("to_email")], "to_names": [p.get("person_name") or out.get("person_name")], "cc": [], "bcc": [],
+                "subject": p.get("subject", args["subject"]), "body": p.get("body", args["body"])}
+        shown = _send_preview(plan, call)
+        if not _confirmed(args, shown):
+            call("POST", "/api/email/send-pending/cancel")
+            return shown
         return need(*call("POST", "/api/email/send-pending/confirm"))
     if name == "draft_linkedin_message":
         out = need(*call("POST", "/api/claude/home/draft_linkedin_message", {"person_name": args["contact"], "message_text": args["text"]}))
@@ -1163,6 +1179,36 @@ def _run_tool(call, name: str, args: dict):
             out["next_step"] = "Nothing was sent. Open LyteKeepr (Home) and press Send now."
         return out
     raise ValueError(f"Unknown tool: {name}")
+
+
+def _send_preview(plan: dict, call) -> dict:
+    """The email exactly as it will go out, for the user to see before any yes, and a code that only matches this exact email."""
+    names = plan.get("to_names") or []
+    to = [f"{names[i]} <{a}>" if i < len(names) and names[i] and names[i] != a else a for i, a in enumerate(plan.get("to") or [])]
+    lines = ["To: " + (", ".join(to) or "(nobody)"),
+             "Cc: " + (", ".join(plan.get("cc") or []) or "nobody"),
+             "Bcc: " + (", ".join(plan.get("bcc") or []) or "nobody")]
+    r = plan.get("in_reply_to")
+    if r:
+        rname = r.get("from_name") or next((names[i] for i, a in enumerate(plan.get("to") or []) if a == r.get("from") and i < len(names)), "")
+        who = f"{rname} <{r.get('from')}>" if rname else r.get("from")
+        lines.append(f"In reply to: {who}, {str(r.get('date') or '')[:16].replace('T', ' ')}, \"{r.get('subject')}\"")
+    if plan.get("people_count") is not None:
+        lines.append(f"Each person gets their own copy ({plan['people_count']} people)")
+    lines += ["Subject: " + (plan.get("subject") or "(none)"), "", plan.get("body") or ""]
+    text = "\n".join(lines)
+    code = hashlib.sha256(json.dumps([plan.get("to"), plan.get("cc"), plan.get("bcc"), plan.get("subject"), plan.get("body"),
+                                      (r or {}).get("from"), (r or {}).get("date"), plan.get("ref")], sort_keys=True).encode()).hexdigest()[:10]
+    return {"sent": False, "show_the_user": text, "then_ask": "Send? yes / no", "confirm_code": code,
+            "rule": "Show show_the_user word for word. Send only after the user's yes, calling again with this confirm_code."}
+
+
+def _confirmed(args: dict, shown: dict) -> bool:
+    """Send only with the code of exactly what the user was shown; anything different is shown again instead."""
+    given = str(args.get("confirm_code") or "").strip()
+    if given and given != shown["confirm_code"]:
+        shown["message"] = "Nothing was sent: the email changed since the user saw it. Show this version and ask again."
+    return bool(given) and given == shown["confirm_code"]
 
 
 def _draft_ref(text) -> tuple:
@@ -1236,8 +1282,10 @@ def _drafts_tool(call, need, name, args):
         if name == "discard_draft":
             need(*call("POST", f"/api/calendar/autopilot/drafts/{did}/dismiss", {}))
             return {"discarded": [f"one:{did}"]}
-        if args.get("user_confirmed") is not True:
-            return {"sent": False, "do_this_first": "Nothing was sent. Show the user the draft (open_draft), ask whether to send it and about the follow-up, and call again with user_confirmed=true after their yes."}
+        shown = _send_preview({"to": [d.get("to_email")], "to_names": [d.get("title", "").replace("Email to ", "")], "cc": [], "bcc": [],
+                               "subject": d.get("subject"), "body": d.get("body"), "ref": f"one:{did}"}, call)
+        if not _confirmed(args, shown):
+            return shown
         return need(*call("POST", f"/api/calendar/autopilot/drafts/{did}/send", {"follow_up_days": int(args["follow_up_days"])}))
     if name == "open_draft":
         out = need(*call("GET", f"/api/calendar/funnel-drafts/{did}"))
@@ -1251,8 +1299,18 @@ def _drafts_tool(call, need, name, args):
     if name == "discard_draft":
         need(*call("DELETE", f"/api/calendar/funnel-drafts/{did}"))
         return {"discarded": [f"group:{did}"]}
-    if args.get("user_confirmed") is not True:
-        return {"sent": False, "do_this_first": "Nothing was sent. Show the user the draft and everyone it goes to (open_draft), ask whether to send and about the follow-up, and call again with user_confirmed=true after their yes."}
+    pv = need(*call("GET", f"/api/calendar/funnel-drafts/{did}"))
+    people = pv.get("will_send_to") or []
+    sample = pv.get("sample_copy") or {}
+    plan = {"to": [p["email"] for p in people], "to_names": [p["name"] for p in people], "cc": [], "bcc": [], "people_count": len(people),
+            "subject": sample.get("subject") or pv.get("subject"), "body": sample.get("body") or pv.get("body"), "ref": f"group:{did}"}
+    shown = _send_preview(plan, call)
+    if pv.get("skipped"):
+        shown["show_the_user"] += "\n\nNot sent to: " + "; ".join(f"{x['name']} ({x['reason']})" for x in pv["skipped"])
+    if len(people) > 1:
+        shown["show_the_user"] = shown["show_the_user"].replace("Subject:", f"(this is {people[0]['name']}'s copy; each copy has their own first name)\nSubject:", 1)
+    if not _confirmed(args, shown):
+        return shown
     return need(*call("POST", f"/api/calendar/funnel-drafts/{did}/send", {"follow_up_days": int(args["follow_up_days"])}))
 
 

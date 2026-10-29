@@ -45,11 +45,17 @@ def contact_addresses(contact) -> tuple:
         if not access.can_person(int(c)):
             raise ValueError("You don't have access to that contact.")
         found = [contacts.get_contact(int(c))]
-    else:
-        found = [x for x in contacts.list_contacts(c, limit=5) if access.can_person(x["id"])]
+    else:                                             # by name (or company): names and addresses only, never notes; two people = ask
+        from assistant.contact_lookup import find_people
+        ids = list(dict.fromkeys(m["person_id"] for m in find_people(c, email_only=True) if access.can_person(m["person_id"])))
+        if len(ids) > 1:
+            who = [contacts.get_contact(i) or {} for i in ids[:8]]
+            raise ValueError(f"More than one contact matches '{c}': " + "; ".join(f"{w.get('display')} ({w.get('email')})" for w in who)
+                             + ". Ask the user which one (or use the email address).")
+        found = [contacts.get_contact(ids[0])] if ids else []
     found = [x for x in found if x]
     if not found:
-        raise ValueError(f"No contact matching '{c}'.")
+        raise ValueError(f"No contact with an email address matching '{c}'.")
     p = found[0]
     with contacts._crm() as conn:
         addrs = {r[0].strip().lower() for r in conn.execute(
@@ -187,7 +193,7 @@ def message(email_id) -> dict:
     raise ValueError("No such email among the ones you can see.")
 
 
-def reply(text: str, email_id=None, contact=None) -> dict:
+def reply(text: str, email_id=None, contact=None, preview: bool = False) -> dict:
     """Reply in the thread of one saved email (or of the contact's latest email): Re: subject, to its sender (or, for your own email,
     to its recipients), sent from the admin's Gmail and saved on the contact like any sent email. The admin only."""
     from . import users
@@ -223,6 +229,17 @@ def reply(text: str, email_id=None, contact=None) -> dict:
         message_id = headers.get("message-id")
     subject = e.get("subject") or ""
     subject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+    if preview:                                       # exactly what would go out, worked out here (not by Claude): shown before any yes
+        from . import contacts
+        with contacts._crm() as conn:
+            def who(addr):
+                r = conn.execute("""SELECT p.name FROM channel_accounts a JOIN people p ON p.person_id = a.person_id
+                                    WHERE a.channel = 'email' AND lower(a.channel_identifier) = ? LIMIT 1""", (addr,)).fetchone()
+                return (r[0] if r and r[0] else "") or ""
+            to_names = [who(t) for t in to]
+        return {"to": to, "to_names": to_names, "cc": [], "bcc": [], "subject": subject, "body": text.strip(), "email_id": mid,
+                "in_reply_to": {"from": _addr(e.get("from")), "from_name": (e.get("from") or {}).get("name") or "", "date": e.get("receivedAt") or "",
+                                "subject": e.get("subject") or ""}}
     from assistant import email_send_flow
     name = ((e.get("from") or {}).get("name") if sender not in me else "") or to[0]
     result = email_send_flow.send_email(None, name, ", ".join(to), subject, text.strip(), thread=(e.get("threadId"), message_id) if message_id else None)
@@ -235,7 +252,7 @@ def register(app):
     @app.post("/api/crm/email/reply")
     def email_reply_route():
         b = request.get_json(silent=True) or {}
-        return run(reply, b.get("text", ""), b.get("email_id"), b.get("contact"))
+        return run(reply, b.get("text", ""), b.get("email_id"), b.get("contact"), bool(b.get("preview")))
 
     def run(fn, *a):
         try:
