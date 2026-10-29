@@ -360,11 +360,11 @@ TOOLS = [
                                                       "status": {"type": "string"},
                                                       "follow_up_days": {"type": "integer", "minimum": 0, "maximum": 365, "description": "After a send: days until the follow-up, 0 = none"}},
                      "required": ["contact_id", "channel", "status"]}, "read": False},
-    {"name": "clear_follow_ups", "title": "Clear follow-ups", "destructive": True,
-     "description": "Mark open outreach follow-ups done in bulk, to clean up a pile: filter by channel, brand, how overdue (older_than_days) or contact. "
-                    "ALWAYS call with preview=true first, tell the user how many and which, and clear (preview=false) only after they say yes. 'Reply to' tasks are left alone unless include_replies.",
-     "inputSchema": {"type": "object", "properties": {"channel": {"type": "string", "enum": ["linkedin", "instagram", "email"]}, "brand": {"type": "string"},
-                                                      "older_than_days": {"type": "integer", "minimum": 0}, "contact_id": {"type": "integer"},
+    {"name": "remove_follow_ups", "title": "Remove follow-ups", "destructive": True,
+     "description": "Remove open follow-ups for ONE contact ('this one isn't needed') or for everyone in ONE funnel ('we've stopped working that funnel'). "
+                    "ALWAYS call with preview=true first, tell the user how many and list who, and remove (preview=false) only after their yes. "
+                    "'Reply to' ones (people waiting on the user) stay unless the user says to include them. To see what follow-ups there are, use get_agenda.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "funnel": {"type": "string", "description": "Funnel name or id"},
                                                       "include_replies": {"type": "boolean"}, "preview": {"type": "boolean", "default": True}}}},
     {"name": "set_follow_up_date", "title": "Set follow-up date", "description": "Move the outreach follow-up for a contact to a date. The lead_id per channel is in get_contact under outreach (set_outreach_status creates one if missing).",
      "inputSchema": {"type": "object", "properties": {"lead_ids": {"type": "array", "items": {"type": "integer"}}, "date": {"type": "string", "description": "YYYY-MM-DD"}},
@@ -899,12 +899,21 @@ def _run_tool(call, name: str, args: dict):
         if args.get("follow_up_days") is not None:
             body["follow_up_days"] = int(args["follow_up_days"])
         return need(*call("POST", f"/api/calendar/people/{int(args['contact_id'])}/outreach", body))
-    if name == "clear_follow_ups":
-        body = {k: args.get(k) for k in ("channel", "brand", "older_than_days", "contact_id", "include_replies")}
-        body["preview"] = args.get("preview", True) is not False
-        if body["brand"]:
-            body["brand"] = _brand_key(call, need, body["brand"])
-        return need(*call("POST", "/api/calendar/follow-ups/clear", body))
+    if name == "remove_follow_ups":
+        body = {"contact_id": args.get("contact_id"), "include_replies": bool(args.get("include_replies")), "preview": args.get("preview", True) is not False}
+        if args.get("funnel") and not args.get("contact_id"):
+            want = str(args["funnel"]).strip().lower()
+            funnels = need(*call("GET", "/api/crm/funnels"))["funnels"]
+            hit = [f for f in funnels if str(f["funnel_id"]) == want or f["name"].strip().lower() == want] or \
+                  [f for f in funnels if want in f["name"].strip().lower()]
+            if len(hit) != 1:
+                raise ValueError("Which funnel? The funnels are: " + ", ".join(f["name"] for f in funnels))
+            body["funnel_id"] = hit[0]["funnel_id"]
+            body["funnel"] = hit[0]["name"]
+        out = need(*call("POST", "/api/calendar/follow-ups/clear", body))
+        if body.get("funnel"):
+            out["funnel"] = body["funnel"]
+        return out
     if name == "set_follow_up_date":
         return [need(*call("PUT", f"/api/calendar/leads/{int(i)}", {"follow_up_date": args["date"]})) for i in args["lead_ids"]]
     if name == "update_calendar_item":

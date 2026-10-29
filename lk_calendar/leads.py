@@ -372,24 +372,26 @@ def set_status(lead_id: int, status_text: str, batch: str | None = None, follow_
     return lead
 
 
-def clear_follow_ups(channel=None, brand=None, older_than_days=None, contact_id=None, include_replies=False, preview=True) -> dict:
-    """Clean up a pile of open outreach follow-ups: mark them done (the leads and contacts stay). preview=True only counts.
-    Only the follow-ups this person may see. 'Reply to' tasks stay unless include_replies."""
-    from . import access
-    today = store.now_local().date()
+def clear_follow_ups(contact_id=None, funnel_id=None, include_replies=False, preview=True) -> dict:
+    """Remove open outreach follow-ups (marked done; the leads and contacts stay) for ONE contact, or for everyone in ONE funnel
+    (e.g. a funnel you've stopped working). Never by age or channel across everything. preview=True only lists them.
+    Only the follow-ups this person may see. 'Reply to' tasks (people waiting on you) stay unless include_replies."""
+    from . import access, contacts
+    if not contact_id and not funnel_id:
+        raise store.ValidationError("Say whose follow-ups: one contact or one funnel.")
+    with contacts._crm() as c:
+        if contact_id:
+            people = {int(contact_id)}
+        else:
+            people = {r[0] for r in c.execute("SELECT person_id FROM people WHERE funnel_id = ?", (int(funnel_id),))}
+        names = {r[0]: r[1] for r in c.execute("SELECT person_id, name FROM people")} if people else {}
     with store._conn() as conn:
         rows = conn.execute("""SELECT e.*, l.channel AS lead_channel, l.person_id, l.contact FROM events e JOIN leads l ON e.lead_ref = 'lead:' || l.id
                                WHERE e.source = 'auto' AND NOT EXISTS (SELECT 1 FROM completions c WHERE c.event_id = e.id AND c.occ_date = e.start_date)""").fetchall()
         picked = []
         for r in rows:
             e = dict(r)
-            if channel and e["lead_channel"] != channel:
-                continue
-            if brand and e["project"] != brand:
-                continue
-            if contact_id and e["person_id"] != int(contact_id):
-                continue
-            if older_than_days is not None and e["start_date"] > (today - timedelta(days=int(older_than_days))).isoformat():
+            if e["person_id"] not in people:
                 continue
             if not include_replies and e["title"].lower().startswith("reply to"):
                 continue
@@ -400,11 +402,9 @@ def clear_follow_ups(channel=None, brand=None, older_than_days=None, contact_id=
         if not preview:
             for e in picked:
                 conn.execute("INSERT OR IGNORE INTO completions VALUES (?, ?)", (e["id"], e["start_date"]))
-    by_channel: dict = {}
-    for e in picked:
-        by_channel[e["lead_channel"]] = by_channel.get(e["lead_channel"], 0) + 1
-    return {"preview": bool(preview), "count": len(picked), "cleared": 0 if preview else len(picked), "by_channel": by_channel,
-            "examples": [e["title"] for e in picked[:10]]}
+    who = [{"contact": names.get(e["person_id"]) or e["contact"], "channel": e["lead_channel"], "due": e["start_date"],
+            "kind": "reply" if e["title"].lower().startswith("reply to") else "follow-up"} for e in picked]
+    return {"preview": bool(preview), "count": len(picked), "removed": 0 if preview else len(picked), "follow_ups": who}
 
 
 def choose_follow_up(lead_id: int, days: int, batch: str | None = None) -> dict | None:

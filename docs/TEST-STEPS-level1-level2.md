@@ -67,9 +67,13 @@ b. Choose **In 2 days** → Save.
 c. Tell Claude: *"I sent Anna another email."*
 ✅ Works if: Claude asks "follow up in 3 days, other days, or no?". Answer **no**, and no new follow-up appears.
 
-**11. (Phone) Clearing follow-ups**
-Ask Claude: *"How many Instagram follow-ups are older than a week? Clear them."*
-✅ Works if: Claude tells you the number first and clears only after your yes; the Follow-ups count on Home drops by that number.
+**11. (Phone) Follow-ups, day to day**
+a. Ask Claude: *"What follow-ups do we have?"*
+✅ Works if: it lists them by name (overdue, today, coming up).
+b. About one of them: *"This one isn't needed, remove it."*
+✅ Works if: Claude says which one, removes only that one after your yes, and it's gone from Home → Follow-ups.
+c. *"Those are done for good: remove the follow-ups for the whole [funnel] funnel."*
+✅ Works if: Claude tells you how many and who first, removes them only after your yes, and they're gone from Home → Follow-ups.
 
 ---
 

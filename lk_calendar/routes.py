@@ -175,9 +175,11 @@ def update_lead(lead_id):
 @bp.post("/api/calendar/follow-ups/clear")
 def follow_ups_clear():
     d = _payload()
-    return jsonify(leads.clear_follow_ups(d.get("channel") or None, d.get("brand") or None,
-                                          d.get("older_than_days") if d.get("older_than_days") not in (None, "") else None,
-                                          d.get("contact_id") or None, bool(d.get("include_replies")), d.get("preview", True) is not False))
+    try:
+        return jsonify(leads.clear_follow_ups(d.get("contact_id") or None, d.get("funnel_id") or None, bool(d.get("include_replies")),
+                                              d.get("preview", True) is not False))
+    except store.ValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @bp.get("/api/calendar/people/<int:person_id>/outreach")
