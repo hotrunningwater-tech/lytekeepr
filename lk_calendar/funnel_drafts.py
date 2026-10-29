@@ -160,7 +160,7 @@ def _summary(d: dict, conn) -> dict:
     return {"draft_id": d["draft_id"], "funnel": d["funnel_name"], "stage": d["stage_name"], "subject": d["subject"], "status": d["status"],
             "recipients": len(d["recipients"]), "sent": sent, "greets_by_name": "{{first_name}}" in (d["subject"] + d["body"]),
             "as_reply": bool(d.get("as_reply")), "contact_ids": d["recipients"],
-            "updated_at": d["updated_at"]}
+            "created_at": d["created_at"], "updated_at": d["updated_at"]}
 
 
 # ------------------------------------------------------------------ drafts

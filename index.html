@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=55">
+<link rel="stylesheet" href="styles.css?v=57">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team11">
 </head>
@@ -390,6 +390,7 @@
 
       <div id="crmPersonDetailView" class="document-viewer" hidden>
         <div class="document-viewer-header">
+          <button class="btn crm-back-btn" id="closeCrmPersonDetailBtn" type="button">← Back</button>
           <div class="document-viewer-heading">
             <span class="block-label">CONTACT</span>
             <h1 id="crmPersonDetailName">Person</h1>
@@ -398,7 +399,6 @@
           <div class="card-actions">
             <button class="btn btn-secondary btn-small" type="button" id="crmEditPersonBtn">Edit</button>
             <button class="btn btn-remove btn-small" type="button" id="crmDeletePersonBtn">Delete</button>
-            <button class="btn btn-remove document-viewer-close" id="closeCrmPersonDetailBtn" type="button">Back</button>
           </div>
         </div>
 
@@ -411,6 +411,8 @@
               <div id="crmPersonDetailOpportunities"></div>
               <p class="crm-detail-field lks-note" id="crmPersonDetailFollowup"></p>
             </div>
+            <!-- what's ahead with them: meetings they're invited to, tasks about them, follow-ups (never a meeting that has passed) -->
+            <div class="preview-section crm-detail-card lks-coming-up" id="crmPersonComingUp" hidden></div>
             <!-- the details (read-only until Edit) -->
             <div class="preview-section crm-detail-card" id="crmPersonDetailEditor"></div>
             <div class="preview-section crm-detail-card" id="crmPersonDetailNotes"></div>
@@ -2880,7 +2882,7 @@
         .then(function (person) {
           if (!person || person.error) return;
           if (crmPersonDetailView.hidden) crmBackTo = currentViewOrigin();       // opened from somewhere else: remember where
-          closeCrmPersonDetailBtn.textContent = 'Back to ' + crmBackTo.label;
+          closeCrmPersonDetailBtn.textContent = '← Back to ' + crmBackTo.label;
           closeAllCasePanels();
           var calPanel = document.getElementById('calendarPanel');               // opened from the Calendar: it steps aside ("Back to Calendar" returns)
           if (calPanel && !calPanel.hidden) {
@@ -2927,8 +2929,44 @@
           crmPersonDetailMessagesExpanded = false;
           renderCrmPersonDetailMessages();
           loadCrmPersonCalls(personId, person.messages || []);
+          loadCrmPersonComingUp(personId);
         })
         .catch(function () {});
+    }
+    // Coming up with this contact: only what's ahead (a passed meeting never shows); overdue tasks and follow-ups still do
+    function loadCrmPersonComingUp(personId) {
+      var box = document.getElementById('crmPersonComingUp');
+      box.hidden = true;
+      fetch('/api/crm/people/' + personId + '/coming-up').then(function (r) { return r.json(); }).then(function (d) {
+        if (crmCurrentPersonId !== personId) return;
+        var items = (d.meetings || []).map(function (m) { return { kind: 'Meeting', title: m.title, date: m.date, time: m.time }; })
+          .concat((d.tasks || []).map(function (t) { return { kind: 'Task', title: t.title, date: t.date, time: t.time, overdue: t.overdue }; }))
+          .concat((d.follow_ups || []).map(function (f) { return { kind: 'Follow-up', title: f.title, date: f.date, time: f.time, overdue: f.overdue }; }))
+          .sort(function (a, b) { return (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')); });
+        box.innerHTML = '';
+        if (!items.length) return;
+        var head = document.createElement('span');
+        head.className = 'block-label';
+        head.textContent = 'Coming up';
+        box.appendChild(head);
+        items.forEach(function (it) {
+          var row = document.createElement('div');
+          row.className = 'lks-cu-row';
+          var when = document.createElement('span');
+          when.className = 'lks-cu-when' + (it.overdue ? ' lks-cu-late' : '');
+          var d0 = new Date(it.date + 'T00:00:00');
+          when.textContent = (it.overdue ? 'Overdue · ' : '') + d0.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + (it.time ? ' · ' + it.time : '');
+          var kind = document.createElement('span');
+          kind.className = 'lks-cu-kind';
+          kind.textContent = it.kind;
+          var title = document.createElement('span');
+          title.className = 'lks-cu-title';
+          title.textContent = it.title;
+          row.appendChild(when); row.appendChild(kind); row.appendChild(title);
+          box.appendChild(row);
+        });
+        box.hidden = false;
+      }).catch(function () {});
     }
     // "Back" returns to wherever the contact was opened from: Home, the People or Companies list, a funnel, LinkedIn or the Calendar.
     var crmBackTo = { tab: 'crm', sub: 'people', label: 'CRM' };

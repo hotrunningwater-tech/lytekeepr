@@ -186,7 +186,7 @@ def _strip_google(items: list) -> list:
 
 # Tools that save text the user dictated (speech-to-text: typos, repeats, corrections on the fly). The text must be cleaned up, shown and approved first.
 CONFIRM_TEXT_TOOLS = {"update_company": "add_note", "doc_create": "content", "doc_write": "text", "tab_create": "content", "add_contact_note": "text", "log_conversation": "text",
-                      "write_meeting_notes": "text", "edit_contact_record": "text", "set_meeting_agenda": "text", "update_contact": "add_note", "reply_email": "text"}
+                      "write_meeting_notes": "text", "edit_contact_record": "text", "set_meeting_agenda": "text", "reply_email": "text"}
 CONFIRM_RULE = ("BEFORE SAVING: the user dictates by voice, with typos, repeated words and corrections on the fly. First write the cleaned-up text "
                 "(typos fixed, repeats removed, their corrections applied, their meaning and wording kept, nothing invented), show it in the chat, "
                 "and ask if it is good to save. Call this only after they say yes, with exactly that text and user_approved_text=true.")
@@ -251,13 +251,14 @@ TOOLS = [
     {"name": "list_calendar", "title": "Calendar items", "description": "Meetings (including Google Calendar ones, with guests), tasks and reminders between two dates (inclusive). Use it to find a meeting by person or date; item_id = id.",
      "inputSchema": {"type": "object", "properties": {"start_date": {"type": "string", "description": "YYYY-MM-DD"}, "end_date": {"type": "string", "description": "YYYY-MM-DD"}},
                      "required": ["start_date", "end_date"]}, "read": True},
-    {"name": "autopilot_queue", "title": "Autopilot: work to do",
+    {"name": "autopilot_queue", "title": "Scheduled run: work to do",
      "description": "The scheduled autopilot run's work list (every 2 hours). `instructions` says what to do with each section: follow it for every item, "
                     "save with the tools it names, then stop. Do not ask the user anything; nothing here is ever sent.",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
-    {"name": "save_message_review", "title": "Save message review",
-     "description": "After reading the new_messages from autopilot_queue: the keys read, the few clear flags, and times leads gave for the next contact. Call once per run. Nothing is sent.",
+    {"name": "save_message_review", "title": "Scheduled run: save message review",
+     "description": "Scheduled run only, never in a chat. After reading the new_messages from autopilot_queue: the keys read, the few clear flags, and times leads gave for the next contact. Call once per run. Nothing is sent.",
      "inputSchema": {"type": "object", "properties": {
+         "run_key": {"type": "string", "description": "The run_key autopilot_queue gave this run"}, 
          "reviewed": {"type": "array", "items": {"type": "string"}, "description": "Every item key read on this run"},
          "flags": {"type": "array", "items": {"type": "object", "properties": {
              "key": {"type": "string"}, "kind": {"type": "string", "enum": ["interested", "waiting", "commitment"]},
@@ -266,14 +267,14 @@ TOOLS = [
              "required": ["key", "kind", "summary"]}},
          "follow_ups": {"type": "array", "items": {"type": "object", "properties": {
              "contact_id": {"type": "integer"}, "date": {"type": "string"}, "quote": {"type": "string"}}, "required": ["contact_id", "date"]}}},
-         "required": ["reviewed"]}},
-    {"name": "save_onboarding", "title": "Save onboarding",
-     "description": "For a newly won contact (autopilot_queue newly_won): a welcome email draft (NOT sent; it waits on Home) and onboarding reminders for the user. "
+         "required": ["reviewed", "run_key"]}},
+    {"name": "save_onboarding", "title": "Scheduled run: save onboarding",
+     "description": "Scheduled run only, never in a chat. For a newly won contact (autopilot_queue newly_won): a welcome email draft (NOT sent; it waits on Home) and onboarding reminders for the user. "
                     "Body without a subject line, signed 'Best,' and [Your Name]. Leave subject/body empty when the contact has no email.",
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"},
+     "inputSchema": {"type": "object", "properties": {"run_key": {"type": "string", "description": "The run_key autopilot_queue gave this run"}, "contact_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"},
                                                       "reminders": {"type": "array", "items": {"type": "object", "properties": {
                                                           "title": {"type": "string"}, "days_from_now": {"type": "integer", "minimum": 0, "maximum": 180}},
-                                                          "required": ["title"]}}}, "required": ["contact_id"]}},
+                                                          "required": ["title"]}}}, "required": ["contact_id", "run_key"]}},
     {"name": "set_stage_won", "title": "Mark a funnel stage as Won",
      "description": "Mark (or unmark) a funnel stage as the won-deal stage; reaching it starts onboarding on the next autopilot run. People already in it are treated as existing customers. Admin only. stage_id from get_funnel.",
      "inputSchema": {"type": "object", "properties": {"stage_id": {"type": "integer"}, "won": {"type": "boolean", "default": True}}, "required": ["stage_id"]}},
@@ -286,9 +287,6 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"},
                                                       "replace": {"type": "boolean", "description": "true only after the user said to redo an existing prep"}},
                      "required": ["item_id", "text"]}},
-    {"name": "save_meeting_brief", "title": "Save meeting prep (old name)",
-     "description": "Same as save_meeting_prep (kept for scheduled runs set up earlier). Never replaces an existing prep.",
-     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "text": {"type": "string"}}, "required": ["item_id", "text"]}},
     {"name": "save_call_summary", "title": "Save call summary",
      "description": "Save a call's summary on the call (shows on the contact and on Home under Calls to review). Whenever you summarize a recorded call for the user, "
                     "save it here too. If the answer says it already has a summary, warn the user and save again with replace=true only after they say yes.",
@@ -300,11 +298,11 @@ TOOLS = [
      "description": "Put a contact on a recorded call that nobody was matched to (an impromptu Zoom, a call that moved to Telegram). Only after the user confirmed who it was. "
                     "The call then shows in that contact's history.",
      "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}, "contact_id": {"type": "integer"}}, "required": ["call_id", "contact_id"]}},
-    {"name": "save_followup_draft", "title": "Save follow-up draft",
-     "description": "Save a follow-up email draft after a meeting (autopilot): call_id for a recorded call, or item_id for a meeting with no recording. "
+    {"name": "save_followup_draft", "title": "Scheduled run: save follow-up draft",
+     "description": "Scheduled run only, never in a chat (there, save_email_draft). Save a follow-up email draft after a meeting (autopilot): call_id for a recorded call, or item_id for a meeting with no recording. "
                     "Goes to the first contact on it with an email. NOT sent: the user reviews it on Home and sends it themselves. Body without a subject line; sign off with 'Best,' and [Your Name].",
-     "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}, "item_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"}},
-                     "required": ["subject", "body"]}},
+     "inputSchema": {"type": "object", "properties": {"run_key": {"type": "string", "description": "The run_key autopilot_queue gave this run"}, "call_id": {"type": "integer"}, "item_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"}},
+                     "required": ["subject", "body", "run_key"]}},
     {"name": "calls_to_review", "title": "Calls to review", "description": "Recorded calls with a transcript not summarized yet, and meetings that passed with no recording (possible no-shows).",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "get_call", "title": "Call transcript", "description": "One recorded call (from Fathom): who was on it (contacts), the summary if any, and the full transcript. Before summarizing: if contacts is empty, "
@@ -312,14 +310,14 @@ TOOLS = [
                     "with link_call_to_contact after they confirm. Then summarize and save the summary with save_call_summary.",
      "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}}, "required": ["call_id"]}, "read": True},
     {"name": "create_task", "title": "Create a task",
-     "description": "Add a task (shows on the user's Home, under Actions needed when due today, otherwise under Tasks; the calendar shows only meetings). Use for follow-ups too (e.g. 'Follow up with Sara about pricing'). Today or later only.",
+     "description": "Add a task or reminder for the user ('remind me to send Anna the demo on Friday'): it shows on Home (under Actions when due, otherwise under Tasks). "
+                    "When it is about a contact, give contact_id: it then also shows in 'Coming up' on their page. Today or later only. "
+                    "Something a contact said or wants ('she wants a demo') is a note (add_contact_note), not a task.",
      "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
                                                       "time": {"type": "string", "description": "HH:MM, 24-hour; leave out for no specific time"},
-                                                      "notes": {"type": "string"}, "brand": {"type": "string", "description": "Which brand the task is for; default LyteKeepr. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
+                                                      "notes": {"type": "string"}, "contact_id": {"type": "integer", "description": "The contact it is about, if any"},
+                                                      "brand": {"type": "string", "description": "Which brand the task is for; default: the contact's brand, else LyteKeepr. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
                      "required": ["title", "date"]}, "read": False},
-    {"name": "create_reminder", "title": "Create a reminder", "description": "A reminder that shows on the LyteKeepr Home page under 'Action needed' from its due date.",
-     "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}, "due_date": {"type": "string", "description": "YYYY-MM-DD"}},
-                     "required": ["text", "due_date"]}, "read": False},
     {"name": "mark_task_done", "title": "Mark a task done", "description": "Mark a LyteKeepr task done (or not done) on a given date. Get the id from get_agenda or list_calendar.",
      "inputSchema": {"type": "object", "properties": {"task_id": {"type": "integer"}, "date": {"type": "string", "description": "YYYY-MM-DD of that occurrence"},
                                                       "done": {"type": "boolean", "default": True}}, "required": ["task_id", "date"]}, "read": False},
@@ -338,12 +336,10 @@ TOOLS = [
                                                       "user_confirmed": {"type": "boolean", "description": "true only after you printed the details and the user said yes"}},
                      "required": ["user_confirmed"]}, "read": False},
     {"name": "update_contact", "title": "Update a contact",
-     "description": "Change a contact's details, or add a note (add_note is saved as a dated note, like add_contact_note). Only the fields given change.",
+     "description": "Change a contact's details. Only the fields given change. Notes go through add_contact_note.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "name": {"type": "string"}, "company": {"type": "string"},
                                                       "job_title": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"},
                                                       "instagram": {"type": "string", "description": "Instagram handle like @name"}, "linkedin": {"type": "string", "description": "LinkedIn profile link"},
-                                                      "add_note": {"type": "string", "description": "A note to add. Clean it up, show it and get a yes first, then set user_approved_text=true."},
-                                                      "user_approved_text": {"type": "boolean"},
                                                       "brand": {"type": "string", "description": "Give the contact this brand ('' removes it). A contact in a branded funnel keeps the funnel's brand: "
                                                                                                  "change the funnel's brand or move them instead. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
                      "required": ["contact_id"]}, "read": False},
@@ -376,15 +372,20 @@ TOOLS = [
                                                       "time": {"type": "string", "description": "HH:MM"}, "notes": {"type": "string"}}, "required": ["item_id"]}, "read": False},
     {"name": "move_overdue", "title": "Move overdue items", "description": "Move every overdue one-off task and follow-up to today or tomorrow.",
      "inputSchema": {"type": "object", "properties": {"to": {"type": "string", "enum": ["today", "tomorrow"]}}, "required": ["to"]}, "read": False},
-    {"name": "set_meeting_status", "title": "Meeting status", "description": "Mark a meeting scheduled, completed, no_show or cancelled, and optionally save your notes on it.",
-     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "status": {"type": "string", "enum": ["scheduled", "completed", "no_show", "cancelled"]},
-                                                      "notes": {"type": "string"}}, "required": ["item_id", "status"]}, "read": False},
-    {"name": "check_reply", "title": "Did they reply?", "description": "Did this contact write back after your last message? Works on LinkedIn, Instagram and email (for email only the date is shared, not the text).",
-     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name of the contact"},
-                                                      "channel": {"type": "string", "enum": ["", "linkedin", "instagram", "email"]}}, "required": ["contact"]}, "read": True},
-    {"name": "search_messages", "title": "Search messages", "description": "Search LinkedIn and Instagram message history, for one contact or everyone.",
-     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "query": {"type": "string"}, "channel": {"type": "string", "enum": ["", "linkedin", "instagram"]},
-                                                      "since_days": {"type": "integer", "default": 30}}}, "read": True},
+    {"name": "set_meeting_status", "title": "Meeting status", "description": "Mark a meeting scheduled, completed, no_show or cancelled. Notes on it go through write_meeting_notes.",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "status": {"type": "string", "enum": ["scheduled", "completed", "no_show", "cancelled"]}}, "required": ["item_id", "status"]}, "read": False},
+    {"name": "last_exchange", "title": "Did they reply? (last messages)",
+     "description": "The everyday 'did she reply?' / 'what did he say back?': the contact's last message and the user's last message to them, in full, on "
+                    "email, LinkedIn or Instagram (channel narrows it), and whether they wrote back after the user's last one.",
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name, contact id or email address"},
+                                                      "channel": {"type": "string", "enum": ["", "email", "linkedin", "instagram"]}}, "required": ["contact"]}, "read": True},
+    {"name": "search_messages", "title": "Search messages and emails",
+     "description": "Search emails, LinkedIn and Instagram messages, for one contact or everyone: words, channel, and how far back. Newest first, with a "
+                    "preview; open a whole email conversation with email_thread (email_id). Emails also come from people who are not contacts yet "
+                    "(not_saved: true; admin only). Promotions, social and automated mail are not kept, so they never show.",
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "query": {"type": "string"},
+                                                      "channel": {"type": "string", "enum": ["", "email", "linkedin", "instagram"]},
+                                                      "since_days": {"type": "integer", "default": 30}, "in_body": {"type": "boolean", "description": "Emails: also search the full text (slower)"}}}, "read": True},
     {"name": "book_meeting", "title": "Book a meeting",
      "description": ("Create a real meeting in the user's Google Calendar (their chosen meetings calendar) and email the invites from Google. "
                      "Adds a Google Meet link and marks it to be recorded by Fathom. Leave record_with_fathom out: it is always on unless the user explicitly says "
@@ -417,8 +418,6 @@ TOOLS = [
      "description": "Delete a meeting from the user's own Google Calendar; Google emails a cancellation to the people invited. Confirm with the user first. The id comes from get_agenda or list_calendar.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}}, "required": ["item_id"]}, "read": False},
     # --- opportunities: a second kind of funnel entry (one shared deal/project with several people); contacts stay contacts ---
-    {"name": "find_opportunities", "title": "Find opportunities", "description": "Find opportunities (shared deals, projects, partnerships) by name, company or a participant's name. These are NOT contacts.",
-     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}, "read": True},
     {"name": "get_opportunity", "title": "Opportunity details",
      "description": ("Everything about one opportunity: funnel and stage, the lead (primary=true, if any), every participant with company, active or not, "
                      "who introduced them, the history of changes, notes, tasks, and each active participant's latest messages and calls. "
@@ -526,35 +525,33 @@ TOOLS = [
                                                       "body": {"type": "string"},
                                                       "user_said": {"type": "string", "description": "The user's own words asking to save (quote them)"}},
                      "required": ["body", "user_said"]}},
-    {"name": "list_drafts", "title": "Email drafts", "description": "Every saved, unsent email draft: to one person (by contact) and to several people (draft_id), with status for groups (draft, sending, stopped, sent).",
-     "inputSchema": {"type": "object", "properties": {}}, "read": True},
-    {"name": "get_email_draft", "title": "Open a person's email draft", "description": "A contact's saved, unsent draft to them alone (or none). Several-people drafts: preview_group_draft.",
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
-    {"name": "discard_email_draft", "title": "Discard an email draft", "destructive": True,
-     "description": "Only when the user asks: delete a contact's draft to them alone, and take them out of any several-people draft.",
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}},
-    {"name": "list_unsent_drafts", "title": "Drafts waiting 2+ days", "description": "Every draft unsent for 2 days or more, including the scheduled run's.",
-     "inputSchema": {"type": "object", "properties": {}}, "read": True},
-    {"name": "update_group_draft", "title": "Change a several-people draft",
-     "description": "Change a several-people draft's subject or text, add or remove people, switch reply on or off, or take everyone of another stage. Show the new preview.",
-     "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}, "subject": {"type": "string"}, "body": {"type": "string"},
+    {"name": "list_drafts", "title": "Email drafts",
+     "description": "THE list of saved, unsent email drafts, all of them: to one person, to several people, replies, and the scheduled run's follow-up and "
+                    "welcome drafts, newest first, each with who it is for, the subject and how many days it has been waiting. Use it for any 'what drafts do I have?'.",
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer", "description": "Only drafts that include this contact"}}}, "read": True},
+    {"name": "open_draft", "title": "Open an email draft",
+     "description": "One draft in full: subject, text, who it goes to (for several people: each person, who is skipped and why, and one person's copy), "
+                    "and, while it is being sent, the progress (sent, failed, left).",
+     "inputSchema": {"type": "object", "properties": {"draft": {"type": "string", "description": "The draft from list_drafts, e.g. 'one:12' (to one person) or 'group:3' (several people, or a reply)"}}, "required": ["draft"]}, "read": True},
+    {"name": "update_draft", "title": "Change an email draft",
+     "description": "Change a draft's subject or text; for a several-people draft also add or remove people, switch reply on or off, or take everyone of "
+                    "another stage. Show the user the result (open_draft).",
+     "inputSchema": {"type": "object", "properties": {"draft": {"type": "string", "description": "The draft from list_drafts, e.g. 'one:12' (to one person) or 'group:3' (several people, or a reply)"}, "subject": {"type": "string"}, "body": {"type": "string"},
                                                       "add_contact_ids": {"type": "array", "items": {"type": "integer"}},
                                                       "remove_contact_ids": {"type": "array", "items": {"type": "integer"}}, "stage": {"type": "string"},
                                                       "as_reply": {"type": "boolean"}},
-                     "required": ["draft_id"]}},
-    {"name": "preview_group_draft", "title": "Preview a several-people draft",
-     "description": "Before sending: the text, one person's copy, everyone it will go to, and who is skipped (no email, already got it, replied since).",
-     "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}, "required": ["draft_id"]}, "read": True},
-    {"name": "send_group_draft", "title": "Send a several-people draft", "destructive": True,
-     "description": "Only after showing preview_group_draft and the user saying yes to that list. Ask once for the whole batch: follow up in 3 days, another number "
-                    "of days, or no follow-up (0). Sends one by one, about a minute apart, on its own; returns at once. Each is saved on the contact. "
-                    "The first failure stops it. A one-person draft is sent with send_email instead.",
-     "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}, "follow_up_days": {"type": "integer", "minimum": 0, "maximum": 365}},
-                     "required": ["draft_id", "follow_up_days"]}},
-    {"name": "group_send_status", "title": "Several-people send progress", "description": "How a batch is going (the latest one if no draft_id): sent so far, who got it, who failed, who is left.",
-     "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}}, "read": True},
-    {"name": "delete_group_draft", "title": "Delete a several-people draft", "destructive": True,
-     "description": "Delete a several-people draft (not one being sent).", "inputSchema": {"type": "object", "properties": {"draft_id": {"type": "integer"}}, "required": ["draft_id"]}},
+                     "required": ["draft"]}},
+    {"name": "discard_draft", "title": "Discard an email draft", "destructive": True,
+     "description": "Only when the user asks. With draft: delete that draft (not one being sent). With contact_id: delete their own drafts and take them "
+                    "out of every several-people draft.",
+     "inputSchema": {"type": "object", "properties": {"draft": {"type": "string", "description": "The draft from list_drafts, e.g. 'one:12' (to one person) or 'group:3' (several people, or a reply)"}, "contact_id": {"type": "integer"}}}},
+    {"name": "send_draft", "title": "Send an email draft", "destructive": True,
+     "description": "Send a saved draft exactly as saved. First show it (open_draft: the text and everyone it goes to) and get the user's clear yes to send; "
+                    "ask once: follow up in 3 days, another number of days, or no follow-up (0). Several people are sent one by one, about a minute apart, "
+                    "on its own (open_draft shows progress); the first failure stops it. Each email is saved on the contact.",
+     "inputSchema": {"type": "object", "properties": {"draft": {"type": "string", "description": "The draft from list_drafts, e.g. 'one:12' (to one person) or 'group:3' (several people, or a reply)"}, "follow_up_days": {"type": "integer", "minimum": 0, "maximum": 365},
+                                                      "user_confirmed": {"type": "boolean", "description": "true only after the user saw it and said to send it"}},
+                     "required": ["draft", "follow_up_days", "user_confirmed"]}},
     {"name": "get_company", "title": "Company overview",
      "description": "One company (company_id from a contact's details or search_contacts): name, website, notes, its people (with funnel and stage), its opportunities, and the recent history of everyone there (newest first).",
      "inputSchema": {"type": "object", "properties": {"company_id": {"type": "integer"}}, "required": ["company_id"]}, "read": True},
@@ -588,7 +585,7 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "contact_id": {"type": "integer"}, "opportunity_id": {"type": "integer"},
                                                       "kind": {"type": "string", "enum": ["note", "conversation"]}}, "required": ["query"]}, "read": True},
     {"name": "get_contact_history", "title": "A contact's communication history",
-     "description": ("Everything that happened with one contact, oldest first: LinkedIn messages, emails (subject only), call recordings (summaries) and logged calls, "
+     "description": ("Everything that happened with one contact, oldest first: LinkedIn and Instagram messages, emails, call recordings (summaries) and logged calls, "
                      "meetings and conversations. Narrow with channels (e.g. ['linkedin','phone call']), query words, or since (YYYY-MM-DD)."),
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "channels": {"type": "array", "items": {"type": "string"}},
                                                       "query": {"type": "string"}, "since": {"type": "string"}}, "required": ["contact_id"]}, "read": True},
@@ -600,24 +597,14 @@ TOOLS = [
                                                       "channels": {"type": "array", "items": {"type": "string"}}, "query": {"type": "string"}, "since": {"type": "string"}},
                      "required": ["opportunity_id"]}, "read": True},
     # --- emails saved in LyteKeepr (the LyteKeepr tab); the admin sees all, team members only with "Sees my emails" and only their contacts' ---
-    {"name": "email_lookup", "title": "Look up emails",
-     "description": ("Quick: find saved emails by contact (name, id or address), words in subject/preview/sender, and since (YYYY-MM-DD). Returns who, when, subject, "
-                     "a short preview and whether it was from the user or to them, newest first. Enough for 'did he reply?'. in_body=true also searches "
-                     "inside the full text (slower). Searches the emails saved in LyteKeepr and, for the admin, the Primary-inbox emails from people who are not "
-                     "contacts yet (not_saved: true). Promotions, social and automated mail are not kept, so they never show."),
-     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "query": {"type": "string"}, "since": {"type": "string"},
-                                                      "in_body": {"type": "boolean"}, "limit": {"type": "integer"}}}, "read": True},
     {"name": "reply_email", "title": "Reply to an email", "destructive": True,
-     "description": (CONFIRM_RULE + " " + "Reply inside the thread of one saved email (email_id from email_lookup or email_latest), or of a contact's latest email (contact): "
+     "description": (CONFIRM_RULE + " " + "Reply inside the thread of one saved email (email_id from search_messages or last_exchange), or of a contact's latest email (contact): "
                      "it goes from the user's Gmail as 'Re: <subject>' to the sender (or, if the user wrote the last one, to its recipients), and is saved on the contact. "
                      "Show the user who it goes to, the subject and the exact reply first; send only after their yes."),
      "inputSchema": {"type": "object", "properties": {"user_approved_text": {"type": "boolean"}, "email_id": {"type": "string"}, "contact": {"type": "string"},
                                                       "text": {"type": "string", "description": "The reply"}}, "required": ["text"]}, "read": False},
-    {"name": "email_latest", "title": "Latest emails with a contact",
-     "description": "The last email from a contact and the user's last email to them, in full, and whether they replied after it. The everyday 'what did he say back?'.",
-     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name, contact id or email address"}}, "required": ["contact"]}, "read": True},
     {"name": "email_thread", "title": "A whole email thread",
-     "description": "Every saved email of one conversation, oldest first, in full (email_id or thread_id from email_lookup). For deep reading or summaries only.",
+     "description": "Every saved email of one conversation, oldest first, in full (email_id or thread_id from search_messages or last_exchange). For deep reading or summaries only.",
      "inputSchema": {"type": "object", "properties": {"email_id": {"type": "string"}, "thread_id": {"type": "string"}}}, "read": True},
     # --- goals and tasks on Home (each person's own; goals: today's and this week's) ---
     {"name": "list_goals", "title": "Goals", "description": ("The user's goals for today and this week (done or not, with ids), unfinished goals from earlier days, "
@@ -649,7 +636,7 @@ TOOLS = [
     {"name": "send_email", "title": "Send an email", "destructive": True,
      "description": ("Send a real email from the user's Gmail to one contact (to their saved email address). FIRST show the user the full email in the chat "
                      "(to, subject, body) and ask; call this only after they clearly say to send it, with exactly that text. Never send without that yes. "
-                     "It is saved on the contact and their status becomes 'email sent' with the usual follow-up."),
+                     "It is saved on the contact and their status becomes 'email sent' with the usual follow-up. A saved draft is sent with send_draft instead."),
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "Name of the contact"}, "subject": {"type": "string"}, "body": {"type": "string"}},
                      "required": ["contact", "subject", "body"]}, "read": False},
     {"name": "draft_linkedin_message", "title": "Draft a LinkedIn message",
@@ -669,6 +656,13 @@ def tool_list() -> list:
             for t in TOOLS]
 
 
+RUN_ONLY_TOOLS = {        # name -> what Claude is told when it reaches for one outside a scheduled run
+    "save_message_review": "Nothing was saved: this is for the scheduled run only (it starts with autopilot_queue).",
+    "save_onboarding": "Nothing was saved: this is for the scheduled run only. In a chat, write the welcome email and save it with save_email_draft when the user asks; reminders with create_task.",
+    "save_followup_draft": "Nothing was saved: this is for the scheduled run only. In a chat, save an email draft with save_email_draft when the user asks.",
+}
+
+
 def _run_tool(call, name: str, args: dict):
     """call(method, path, body) -> (status, json). Returns what Claude gets back."""
     def need(status, data):
@@ -681,6 +675,11 @@ def _run_tool(call, name: str, args: dict):
     if dictated and args.get("user_approved_text") is not True:
         return {"saved": False, "do_this_first": "Nothing was saved. Show the user the cleaned-up text in the chat and ask if it is good to save. "
                                                   "When they say yes, call again with that exact text and user_approved_text=true."}
+
+    if name in RUN_ONLY_TOOLS:                       # the scheduled run's own saves: only with the key autopilot_queue handed out
+        ok = need(*call("GET", "/api/calendar/autopilot/run-key?" + urllib.parse.urlencode({"key": str(args.get("run_key") or "")}))).get("ok")
+        if not ok:
+            return {"saved": False, "message": RUN_ONLY_TOOLS[name]}
 
     if name == "find":
         text = str(args.get("query") or "").strip()
@@ -739,7 +738,7 @@ def _run_tool(call, name: str, args: dict):
         emails = [m for m in detail.get("messages") or [] if m.get("channel") == "email"]
         detail["messages"] = [m for m in detail.get("messages") or [] if m.get("channel") != "email"]
         if emails:
-            detail["emails"] = f"{len(emails)} email(s) with them in LyteKeepr: read them with email_lookup (contact) and email_thread."
+            detail["emails"] = f"{len(emails)} email(s) with them in LyteKeepr: read them with last_exchange, search_messages (channel email) or get_contact_history."
         st_c, card = call("GET", f"/api/calendar/contacts/{pid}")
         if st_c < 400 and card.get("company_id"):
             detail["company_id"] = card["company_id"]          # for get_company / update_company
@@ -749,6 +748,9 @@ def _run_tool(call, name: str, args: dict):
         status, opps = call("GET", f"/api/crm/people/{pid}/opportunities")
         if status < 400:
             detail["opportunities"] = opps.get("opportunities", [])
+        status, upcoming = call("GET", f"/api/crm/people/{pid}/coming-up")
+        if status < 400:
+            detail["coming_up"] = upcoming                      # meetings they're invited to, tasks about them, follow-ups (only what's ahead)
         status, calls = call("GET", f"/api/calls/person/{pid}")
         detail["calls"] = [{"call_id": c.get("call_id"), "title": c.get("title"), "date": c.get("started_at"), "status": c.get("status"),
                             "summary": c.get("summary"), "has_transcript": c.get("has_transcript")} for c in (calls or {}).get("calls", [])] if status < 400 else []
@@ -803,37 +805,8 @@ def _run_tool(call, name: str, args: dict):
         body = {"contact_ids": ids or None, "funnel": args.get("funnel"), "stage": args.get("stage"), "subject": args.get("subject", ""),
                 "body": args.get("body", ""), "as_reply": bool(args.get("as_reply"))}
         return need(*call("POST", "/api/calendar/funnel-drafts", body))              # several people (or a reply): one draft for all of them
-    if name == "list_drafts":
-        mine = [d for d in need(*call("GET", "/api/calendar/autopilot/drafts")).get("drafts", []) if d.get("kind") == "manual"]
-        return {"to_one_person": [{"contact_id": d["person_id"], "to": d["to_email"], "subject": d["subject"], "saved": d["created_at"]} for d in mine],
-                "to_several_people": need(*call("GET", "/api/calendar/funnel-drafts")).get("drafts", [])}
-    if name == "get_email_draft":
-        return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/draft"))
-    if name == "list_unsent_drafts":
-        return need(*call("GET", "/api/calendar/autopilot/unsent"))
-    if name == "discard_email_draft":
-        pid = int(args["contact_id"])
-        out = {"discarded": False}
-        d = need(*call("GET", f"/api/crm/people/{pid}/draft")).get("draft")
-        if d:
-            need(*call("POST", f"/api/calendar/autopilot/drafts/{d['draft_id']}/dismiss", {}))
-            out = {"discarded": True, "draft_id": d["draft_id"]}
-        for g in need(*call("GET", "/api/calendar/funnel-drafts")).get("drafts", []):
-            if g["status"] in ("draft", "stopped") and pid in (g.get("contact_ids") or []):
-                need(*call("PUT", f"/api/calendar/funnel-drafts/{g['draft_id']}", {"remove_contact_ids": [pid]}))
-                out.setdefault("removed_from_group_drafts", []).append(g["draft_id"])
-        return out if (out.get("discarded") or out.get("removed_from_group_drafts")) else {"discarded": False, "message": "This contact has no saved draft."}
-    if name == "update_group_draft":
-        return need(*call("PUT", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}",
-                          {k: args.get(k) for k in ("subject", "body", "add_contact_ids", "remove_contact_ids", "stage", "as_reply") if args.get(k) is not None}))
-    if name == "preview_group_draft":
-        return need(*call("GET", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}"))
-    if name == "send_group_draft":
-        return need(*call("POST", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}/send", {"follow_up_days": int(args["follow_up_days"])}))
-    if name == "group_send_status":
-        return need(*call("GET", "/api/calendar/funnel-drafts/status" + (f"?draft_id={int(args['draft_id'])}" if args.get("draft_id") else "")))
-    if name == "delete_group_draft":
-        return need(*call("DELETE", f"/api/calendar/funnel-drafts/{int(args['draft_id'])}"))
+    if name in ("list_drafts", "open_draft", "update_draft", "discard_draft", "send_draft"):
+        return _drafts_tool(call, need, name, args)
     if name == "get_company":
         return need(*call("GET", f"/api/calendar/companies/{int(args['company_id'])}/overview"))
     if name == "update_company":
@@ -848,9 +821,8 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("POST", "/api/calendar/autopilot/onboarding", {k: args.get(k) for k in ("contact_id", "subject", "body", "reminders")}))
     if name == "set_stage_won":
         return need(*call("POST", f"/api/crm/funnels/stages/{int(args['stage_id'])}/won", {"won": args.get("won", True) is not False}))
-    if name in ("save_meeting_prep", "save_meeting_brief"):
-        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/prep",
-                          {"text": args.get("text", ""), "replace": name == "save_meeting_prep" and args.get("replace") is True}))
+    if name == "save_meeting_prep":
+        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/prep", {"text": args.get("text", ""), "replace": args.get("replace") is True}))
     if name == "save_call_summary":
         return need(*call("PUT", f"/api/calls/{int(args['call_id'])}/summary", {"summary": args.get("summary", ""), "replace": args.get("replace") is True,
                                                                                "no_contact": args.get("no_contact") is True}))
@@ -861,11 +833,14 @@ def _run_tool(call, name: str, args: dict):
     if name == "get_call":
         return need(*call("GET", f"/api/calls/{int(args['call_id'])}"))["call"]
     if name == "create_task":
-        body = {"title": str(args.get("title") or "").strip(), "project": _brand_key(call, need, args.get("brand")) or "lytekeepr", "kind": "task", "start_date": args.get("date"),
-                "start_time": args.get("time") or "08:00", "untimed": not args.get("time"), "notes": str(args.get("notes") or "")}
+        brand, ref = _brand_key(call, need, args.get("brand")), ""
+        if args.get("contact_id"):
+            card = need(*call("GET", f"/api/calendar/contacts/{int(args['contact_id'])}"))
+            ref = f"contact:{int(args['contact_id'])}"                   # also shows in Coming up on their page
+            brand = brand or card.get("brand") or None
+        body = {"title": str(args.get("title") or "").strip(), "project": brand or "lytekeepr", "kind": "task", "start_date": args.get("date"),
+                "start_time": args.get("time") or "08:00", "untimed": not args.get("time"), "notes": str(args.get("notes") or ""), "lead_ref": ref}
         return need(*call("POST", "/api/calendar/events", body))
-    if name == "create_reminder":
-        return need(*call("POST", "/api/reminders", {"text": args.get("text"), "due_date": args.get("due_date")}))
     if name == "mark_task_done":
         return need(*call("POST", f"/api/calendar/events/{int(args['task_id'])}/done", {"date": args["date"], "done": bool(args.get("done", True))}))
     if name == "create_contact":
@@ -894,10 +869,6 @@ def _run_tool(call, name: str, args: dict):
             body["brand"] = args["brand"]
         if args.get("linkedin") or args.get("profile_url"):
             body["url"] = args.get("linkedin") or args.get("profile_url")
-        if args.get("add_note"):                     # a dated note of its own (see add_contact_note)
-            need(*call("POST", f"/api/crm/people/{pid}/notes", {"text": args["add_note"]}))
-            if not body:
-                return {"id": pid, "note_added": True}
         if not body:
             raise ValueError("Nothing to change.")
         c = need(*call("PUT", f"/api/calendar/contacts/{pid}", body))
@@ -944,8 +915,6 @@ def _run_tool(call, name: str, args: dict):
     if name == "move_overdue":
         return need(*call("POST", "/api/calendar/overdue/move", {"to": args.get("to", "today")}))
     if name == "set_meeting_status":
-        if args.get("notes"):                          # added to the private notes, never replacing them
-            need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/private-notes", {"text": args["notes"], "mode": "append"}))
         return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/meeting", {"meeting_status": args["status"]}))
     if name == "book_meeting":
         body = {"title": args["title"], "start_date": args["date"], "start_time": args["time"], "duration_min": int(args.get("duration_min") or 30),
@@ -966,11 +935,6 @@ def _run_tool(call, name: str, args: dict):
         return {"item_id": ev.get("id"), "title": ev.get("title"), "record_with_fathom": bool(ev.get("expect_recording"))}
     if name == "cancel_meeting":
         return need(*call("DELETE", f"/api/calendar/meetings/{int(args['item_id'])}"))
-    if name == "find_opportunities":
-        found = need(*call("GET", "/api/crm/opportunities?q=" + urllib.parse.quote(str(args.get("query") or ""))))["opportunities"]
-        if not found and str(args.get("query") or "").strip():
-            return _did_you_mean(_close_matches(call, need, args["query"], ("opportunity", "funnel")))
-        return found
     if name == "get_opportunity":
         o = need(*call("GET", f"/api/crm/opportunities/{int(args['opportunity_id'])}"))
         o.pop("stages", None)
@@ -980,7 +944,7 @@ def _run_tool(call, name: str, args: dict):
             st, d = call("GET", f"/api/crm/people/{p['contact_id']}")
             msgs = sorted((d or {}).get("messages") or [], key=lambda m: m.get("timestamp") or "")[-3:] if st < 400 else []
             p["latest_messages"] = [{"channel": m.get("channel"), "direction": m.get("direction"), "when": m.get("timestamp"),
-                                     **({} if m.get("channel") == "email" else {"text": (m.get("message_text") or "")[:400]})} for m in msgs]   # email text stays in LyteKeepr
+                                     "text": (m.get("message_text") or "")[:400]} for m in msgs]
             st, c = call("GET", f"/api/calls/person/{p['contact_id']}")
             p["calls"] = [{"title": x.get("title"), "date": x.get("started_at"), "summary": x.get("summary")} for x in (c or {}).get("calls", []) if x.get("call_id")][:3] if st < 400 else []
         return o
@@ -1085,8 +1049,6 @@ def _run_tool(call, name: str, args: dict):
         out = []
         for m in items:
             text = m.get("message_text") or ""
-            if m.get("channel") == "email":              # email text stays in LyteKeepr: the subject only
-                text = text.split("\n\n", 1)[0] if text.startswith("Subject: ") else ""
             row = {"when": m.get("timestamp"), "channel": m.get("channel"), "direction": m.get("direction"), "text": text}
             if m.get("logged"):
                 row.update({"record_id": m.get("record_id"), "logged_by": m.get("sender"), "people": [p["name"] for p in m.get("people") or []],
@@ -1100,14 +1062,8 @@ def _run_tool(call, name: str, args: dict):
             words = [w for w in str(args["query"]).lower().split() if w]
             out = [r for r in out if all(w in (r.get("text") or "").lower() or w in (r.get("title") or "").lower() for w in words)]
         return {**extra, "history": out[-200:]}
-    if name == "email_lookup":
-        q = {"contact": args.get("contact") or "", "q": args.get("query") or "", "since": args.get("since") or "",
-             "in_body": "1" if args.get("in_body") else "0", "limit": args.get("limit") or 20}
-        return need(*call("GET", "/api/crm/email/lookup?" + urllib.parse.urlencode({k: v for k, v in q.items() if v not in ("", None)})))
     if name == "reply_email":
         return need(*call("POST", "/api/crm/email/reply", {k: args[k] for k in ("text", "email_id", "contact") if args.get(k)}))
-    if name == "email_latest":
-        return need(*call("GET", "/api/crm/email/latest?" + urllib.parse.urlencode({"contact": args.get("contact", "")})))
     if name == "email_thread":
         return need(*call("GET", "/api/crm/email/thread?" + urllib.parse.urlencode({k: args[k] for k in ("email_id", "thread_id") if args.get(k)})))
     if name == "list_goals":
@@ -1158,17 +1114,32 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("POST", f"/api/crm/suggestions/{int(args['suggestion_id'])}/accept", {}))
     if name == "dismiss_suggestion":
         return need(*call("POST", f"/api/crm/suggestions/{int(args['suggestion_id'])}/dismiss", {}))
-    if name == "check_reply":
-        out = need(*call("POST", "/api/claude/home/check_reply", {"query": args.get("contact", ""), "channel": args.get("channel", "")}))
-        for k in ("their_last_message", "your_last_message"):          # email text stays in LyteKeepr: only when and where
-            if isinstance(out.get(k), dict) and (out[k].get("channel") or "") == "email":
-                out[k] = {kk: vv for kk, vv in out[k].items() if kk != "text"}
+    if name == "last_exchange":
+        ch = args.get("channel") or ""
+        out = need(*call("POST", "/api/claude/home/check_reply", {"query": args.get("contact", ""), "channel": ch}))
+        if ch in ("", "email"):
+            st, em = call("GET", "/api/crm/email/latest?" + urllib.parse.urlencode({"contact": args.get("contact", "")}))
+            if st < 400 and ((em or {}).get("last_from_them") or (em or {}).get("last_from_you")):
+                out["emails_in_full"] = em                # the whole last emails both ways, with their email_id
         return out
     if name == "search_messages":
-        out = need(*call("POST", "/api/claude/home/search_crm_messages", {"person_name": args.get("contact") or None, "query": args.get("query") or None,
-                                                                         "channel": args.get("channel") or None, "since_days": args.get("since_days") or 30, "limit": 50}))
-        out["results"] = [m for m in out.get("results") or [] if (m.get("channel") or "").lower() != "email"]      # emails are not shared with Claude yet
-        out["count"] = len(out["results"])
+        ch = args.get("channel") or ""
+        days = int(args.get("since_days") or 30)
+        out = {"results": []}
+        if ch in ("", "linkedin", "instagram"):
+            r = need(*call("POST", "/api/claude/home/search_crm_messages", {"person_name": args.get("contact") or None, "query": args.get("query") or None,
+                                                                          "channel": ch or None, "since_days": days, "limit": 50}))
+            out["results"] = [m for m in r.get("results") or [] if (m.get("channel") or "").lower() != "email"]      # emails come from the mailbox below
+        if ch in ("", "email"):
+            since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            q = {"contact": args.get("contact") or "", "q": args.get("query") or "", "since": since, "in_body": "1" if args.get("in_body") else "0", "limit": 30}
+            st, r = call("GET", "/api/crm/email/lookup?" + urllib.parse.urlencode({k: v for k, v in q.items() if v not in ("", None)}))
+            if st < 400:
+                out["emails"] = (r or {}).get("emails") or []
+            elif not out["results"]:
+                need(st, r)
+        out["searched"] = f"{ch or 'email, LinkedIn and Instagram'}, last {days} days" + (f", contact {args.get('contact')}" if args.get("contact") else "") \
+                          + (f", words '{args.get('query')}'" if args.get("query") else "")
         return out
     if name == "send_email":                       # the user approved it in the chat and in the Claude app's Allow prompt
         out = need(*call("POST", "/api/claude/home/draft_email_message", {"person_name": args["contact"], "subject": args["subject"], "body": args["body"]}))
@@ -1181,6 +1152,97 @@ def _run_tool(call, name: str, args: dict):
             out["next_step"] = "Nothing was sent. Open LyteKeepr (Home) and press Send now."
         return out
     raise ValueError(f"Unknown tool: {name}")
+
+
+def _draft_ref(text) -> tuple:
+    """'one:12' / 'group:3' -> ('one', 12)."""
+    m = re.fullmatch(r"\s*(one|group)\s*:\s*(\d+)\s*", str(text or ""))
+    if not m:
+        raise ValueError("Give the draft as list_drafts shows it, e.g. 'one:12' or 'group:3'.")
+    return m.group(1), int(m.group(2))
+
+
+def _days_since(stamp) -> int:
+    try:
+        t = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+        return max(0, (datetime.now(t.tzinfo) - t).days)
+    except ValueError:
+        return 0
+
+
+ONE_KINDS = {"manual": "to one person", "call": "scheduled run: follow-up after a call", "happened": "scheduled run: follow-up after a meeting",
+             "no_show": "scheduled run: after a no-show", "welcome": "scheduled run: welcome email"}
+
+
+def _drafts_tool(call, need, name, args):
+    """Both kinds of draft behind one set of tools: 'one:<id>' (one person, not a reply) and 'group:<id>' (several people, or a reply)."""
+    if name == "list_drafts":
+        want = int(args["contact_id"]) if args.get("contact_id") else None
+        ones = [d for d in need(*call("GET", "/api/calendar/autopilot/drafts")).get("drafts", []) if want is None or d.get("person_id") == want]
+        groups = [g for g in need(*call("GET", "/api/calendar/funnel-drafts")).get("drafts", [])
+                  if g["status"] in ("draft", "sending", "stopped") and (want is None or want in (g.get("contact_ids") or []))]
+        out = [{"draft": f"one:{d['draft_id']}", "kind": ONE_KINDS.get(d.get("kind"), "to one person"), "to": d.get("title") or d.get("to_email"),
+                "contact_id": d.get("person_id"), "subject": d.get("subject"), "saved": d.get("created_at"), "days_waiting": _days_since(d.get("created_at"))} for d in ones]
+        out += [{"draft": f"group:{g['draft_id']}", "kind": "reply" if g.get("as_reply") and g["recipients"] == 1 else "several people",
+                 "people": g["recipients"], "contact_ids": g.get("contact_ids"), "funnel": g.get("funnel") or None, "stage": g.get("stage") or None,
+                 "subject": g.get("subject"), "status": g["status"], "sent_so_far": g.get("sent"),
+                 "saved": g.get("created_at") or g.get("updated_at"), "days_waiting": _days_since(g.get("created_at") or g.get("updated_at"))} for g in groups]
+        out.sort(key=lambda x: str(x.get("saved") or ""), reverse=True)
+        if not out:
+            return {"drafts": [], "message": "No saved, unsent drafts at all" + (" for this contact." if want else ".")}
+        return {"drafts": out}
+    if name == "discard_draft" and not args.get("draft"):
+        if not args.get("contact_id"):
+            raise ValueError("Give draft or contact_id.")
+        pid = int(args["contact_id"])
+        out = {"discarded": []}
+        for d in need(*call("GET", "/api/calendar/autopilot/drafts")).get("drafts", []):
+            if d.get("person_id") == pid:
+                need(*call("POST", f"/api/calendar/autopilot/drafts/{d['draft_id']}/dismiss", {}))
+                out["discarded"].append(f"one:{d['draft_id']}")
+        for g in need(*call("GET", "/api/calendar/funnel-drafts")).get("drafts", []):
+            if g["status"] in ("draft", "stopped") and pid in (g.get("contact_ids") or []):
+                if g.get("contact_ids") == [pid]:
+                    need(*call("DELETE", f"/api/calendar/funnel-drafts/{g['draft_id']}"))
+                    out["discarded"].append(f"group:{g['draft_id']}")
+                else:
+                    need(*call("PUT", f"/api/calendar/funnel-drafts/{g['draft_id']}", {"remove_contact_ids": [pid]}))
+                    out.setdefault("taken_out_of", []).append(f"group:{g['draft_id']}")
+        return out if (out["discarded"] or out.get("taken_out_of")) else {"discarded": [], "message": "This contact has no saved drafts."}
+    kind, did = _draft_ref(args.get("draft"))
+    if kind == "one":
+        d = next((x for x in need(*call("GET", "/api/calendar/autopilot/drafts")).get("drafts", []) if x["draft_id"] == did), None)
+        if not d:
+            raise ValueError(f"There is no waiting draft one:{did} (list_drafts shows them).")
+        if name == "open_draft":
+            return {"draft": f"one:{did}", "kind": ONE_KINDS.get(d.get("kind"), "to one person"), "to": d.get("to_email"), "contact_id": d.get("person_id"),
+                    "subject": d.get("subject"), "body": d.get("body"), "saved": d.get("created_at")}
+        if name == "update_draft":
+            if any(args.get(k) for k in ("add_contact_ids", "remove_contact_ids", "stage")) or args.get("as_reply") is not None:
+                raise ValueError("A one-person draft only changes its subject or text. For more people, save a new draft with save_email_draft.")
+            d = need(*call("PUT", f"/api/calendar/autopilot/drafts/{did}", {k: args[k] for k in ("subject", "body") if args.get(k) is not None}))
+            return {"draft": f"one:{did}", "subject": d.get("subject"), "body": d.get("body")}
+        if name == "discard_draft":
+            need(*call("POST", f"/api/calendar/autopilot/drafts/{did}/dismiss", {}))
+            return {"discarded": [f"one:{did}"]}
+        if args.get("user_confirmed") is not True:
+            return {"sent": False, "do_this_first": "Nothing was sent. Show the user the draft (open_draft), ask whether to send it and about the follow-up, and call again with user_confirmed=true after their yes."}
+        return need(*call("POST", f"/api/calendar/autopilot/drafts/{did}/send", {"follow_up_days": int(args["follow_up_days"])}))
+    if name == "open_draft":
+        out = need(*call("GET", f"/api/calendar/funnel-drafts/{did}"))
+        st, prog = call("GET", f"/api/calendar/funnel-drafts/status?draft_id={did}")
+        if st < 400 and (prog or {}).get("status") in ("sending", "stopped", "sent"):
+            out["progress"] = prog
+        return {"draft": f"group:{did}", **out}
+    if name == "update_draft":
+        return need(*call("PUT", f"/api/calendar/funnel-drafts/{did}",
+                          {k: args.get(k) for k in ("subject", "body", "add_contact_ids", "remove_contact_ids", "stage", "as_reply") if args.get(k) is not None}))
+    if name == "discard_draft":
+        need(*call("DELETE", f"/api/calendar/funnel-drafts/{did}"))
+        return {"discarded": [f"group:{did}"]}
+    if args.get("user_confirmed") is not True:
+        return {"sent": False, "do_this_first": "Nothing was sent. Show the user the draft and everyone it goes to (open_draft), ask whether to send and about the follow-up, and call again with user_confirmed=true after their yes."}
+    return need(*call("POST", f"/api/calendar/funnel-drafts/{did}/send", {"follow_up_days": int(args["follow_up_days"])}))
 
 
 # ------------------------------------------------------------------ routes

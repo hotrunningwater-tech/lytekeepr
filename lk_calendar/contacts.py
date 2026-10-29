@@ -567,6 +567,9 @@ def delete_calendar_links(contact_id: int) -> int:
             cal.execute("DELETE FROM events WHERE lead_ref = ?", (f"lead:{lid}",))
             cal.execute("DELETE FROM lead_history WHERE lead_id = ?", (lid,))
             cal.execute("DELETE FROM leads WHERE id = ?", (lid,))
+        for ev in cal.execute("SELECT id FROM events WHERE lead_ref = ?", (f"contact:{contact_id}",)).fetchall():     # tasks linked to them
+            cal.execute("DELETE FROM completions WHERE event_id = ?", (ev["id"],))
+        cal.execute("DELETE FROM events WHERE lead_ref = ?", (f"contact:{contact_id}",))
     return len(ids)
 
 

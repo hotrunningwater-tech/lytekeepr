@@ -1,6 +1,6 @@
 # Plan: fewer, clearer Claude tools
 
-Status: plan agreed, being built. Written 2026-10-28.
+Status: built (2026-10-28); 101 → 92 tools. Written 2026-10-28.
 
 ## Why
 

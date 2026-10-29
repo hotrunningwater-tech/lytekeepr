@@ -52,7 +52,12 @@ CREATE TABLE IF NOT EXISTS autopilot_drafts (
     state TEXT NOT NULL DEFAULT 'waiting',   -- waiting | dismissed
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS autopilot_run_keys (     -- handed out by the queue: the run-only save tools work only with one
+    run_key TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL
+);
 """
+RUN_KEY_HOURS = 3
 
 
 class AutopilotError(ValueError):
@@ -154,7 +159,27 @@ def queue() -> dict:
                         "contacts": [{"contact_id": g["person_id"], "name": g["contact_name"]} for g in guests],
                         "use": "your private notes and the prep (get_meeting_notes)" if e["meeting_status"] == "completed"
                                else "nothing: a short, friendly 'sorry we missed each other, want to pick another time?'"})
+    out["run_key"] = new_run_key()
+    out["instructions"]["run_key"] = "Pass this run_key to save_message_review, save_onboarding and save_followup_draft: they work only inside a scheduled run."
     return out
+
+
+def new_run_key() -> str:
+    import secrets
+    key = secrets.token_urlsafe(12)
+    now = datetime.now()
+    with _conn() as conn:
+        conn.execute("DELETE FROM autopilot_run_keys WHERE created_at < ?", ((now - timedelta(hours=RUN_KEY_HOURS)).isoformat(timespec="seconds"),))
+        conn.execute("INSERT INTO autopilot_run_keys VALUES (?, ?)", (key, now.isoformat(timespec="seconds")))
+    return key
+
+
+def run_key_ok(key) -> bool:
+    if not key:
+        return False
+    since = (datetime.now() - timedelta(hours=RUN_KEY_HOURS)).isoformat(timespec="seconds")
+    with _conn() as conn:
+        return bool(conn.execute("SELECT 1 FROM autopilot_run_keys WHERE run_key = ? AND created_at >= ?", (str(key), since)).fetchone())
 
 
 # ------------------------------------------------------------------ saving what Claude wrote
@@ -348,6 +373,40 @@ def review(draft_id: int) -> dict:
     return result                                    # it stays on Home until Dismiss, so closing the card loses nothing
 
 
+def update_draft(draft_id: int, subject=None, body=None) -> dict:
+    """Change the subject or text of a waiting one-person draft (Claude's update_draft)."""
+    _admin_only()
+    with _conn() as conn:
+        d = conn.execute("SELECT * FROM autopilot_drafts WHERE draft_id = ? AND state = 'waiting'", (draft_id,)).fetchone()
+        if not d:
+            raise AutopilotError("No such waiting draft.")
+        conn.execute("UPDATE autopilot_drafts SET subject = ?, body = ? WHERE draft_id = ?",
+                     (d["subject"] if subject is None else str(subject), d["body"] if body is None else str(body), draft_id))
+        return dict(conn.execute("SELECT * FROM autopilot_drafts WHERE draft_id = ?", (draft_id,)).fetchone())
+
+
+def send_draft(draft_id: int, follow_up_days=None) -> dict:
+    """Send a waiting one-person draft as it is (Claude's send_draft, after the user said yes). Sending marks it sent."""
+    from assistant import email_send_flow
+    _admin_only()
+    with _conn() as conn:
+        d = conn.execute("SELECT * FROM autopilot_drafts WHERE draft_id = ? AND state = 'waiting'", (draft_id,)).fetchone()
+    if not d:
+        raise AutopilotError("No such waiting draft.")
+    if not (d["to_email"] or "").strip():
+        raise AutopilotError("This draft has no email address to send to.")
+    name = d["to_email"]
+    if d["person_id"]:
+        from . import contacts
+        c = contacts.get_contact(d["person_id"]) or {}
+        name = c.get("name") or name
+    result = email_send_flow.send_email(d["person_id"], name, d["to_email"], d["subject"] or "", d["body"],
+                                        follow_up_days=None if follow_up_days is None else int(follow_up_days))
+    if result.get("status") != "sent":
+        raise AutopilotError(result.get("message") or "Not sent.")
+    return result
+
+
 def dismiss(draft_id: int) -> dict:
     _admin_only()
     with _conn() as conn:
@@ -370,6 +429,10 @@ def register(app):
     @app.get("/api/calendar/autopilot/prompt")
     def autopilot_prompt():
         return jsonify({"prompt": PROMPT, "every_hours": 2, "does": DOES})
+
+    @app.get("/api/calendar/autopilot/run-key")
+    def autopilot_run_key_check():
+        return jsonify({"ok": run_key_ok(request.args.get("key"))})
 
     @app.get("/api/calendar/autopilot/queue")
     def autopilot_queue():
@@ -404,6 +467,14 @@ def register(app):
     @app.post("/api/calendar/autopilot/drafts/<int:draft_id>/review")
     def autopilot_draft_review(draft_id):
         return run(review, draft_id)
+
+    @app.put("/api/calendar/autopilot/drafts/<int:draft_id>")
+    def autopilot_draft_update(draft_id):
+        return run(update_draft, draft_id, b().get("subject"), b().get("body"))
+
+    @app.post("/api/calendar/autopilot/drafts/<int:draft_id>/send")
+    def autopilot_draft_send(draft_id):
+        return run(send_draft, draft_id, b().get("follow_up_days"))
 
     @app.post("/api/calendar/autopilot/drafts/<int:draft_id>/dismiss")
     def autopilot_draft_dismiss(draft_id):

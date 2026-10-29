@@ -2934,3 +2934,14 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .lks-stages-modal #crmFunnelBrandField .lks-note { margin: 4px 0 0; }
 .hm-undo { display: flex; align-items: center; justify-content: space-between; gap: 14px; background: var(--ink); color: #fff; padding: 9px 10px 9px 16px; border-radius: 12px; font-size: 13.5px; }
 .hm-undo button { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 999px; padding: 4px 14px; font: inherit; font-weight: 600; cursor: pointer; flex: none; }
+.crm-back-btn { flex: none; align-self: center; background: var(--ink); color: #fff; border: 1px solid var(--ink); border-radius: var(--radius-pill); padding: 9px 18px; font-weight: 600; font-size: 13.5px; cursor: pointer; }
+.crm-back-btn:hover { background: var(--deep); border-color: var(--deep); }
+#crmPersonDetailView .document-viewer-header { flex-wrap: wrap; }
+#crmPersonDetailView .document-viewer-header .document-viewer-heading { flex: 1; min-width: 180px; }
+.lks-coming-up { display: flex; flex-direction: column; gap: 8px; }
+.lks-cu-row { display: grid; grid-template-columns: minmax(150px, auto) 80px 1fr; gap: 12px; align-items: baseline; font-size: 14px; }
+.lks-cu-when { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lks-cu-late { color: var(--coral); }
+.lks-cu-kind { color: var(--ink-soft); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.lks-cu-title { color: var(--ink); min-width: 0; }
+@media (max-width: 600px) { .lks-cu-row { grid-template-columns: 1fr; gap: 2px; } }
