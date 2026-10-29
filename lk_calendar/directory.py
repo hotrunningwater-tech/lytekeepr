@@ -67,9 +67,20 @@ def _path():
     return profiles.PROFILE_ROOT / "directory.db"
 
 
+class _ClosingConnection(sqlite3.Connection):
+    """`with _conn() as conn:` commits AND closes (the stock sqlite3 one never closes: every Claude request left
+    directory.db open until the server ran out of files and requests failed, e.g. Google looked disconnected)."""
+
+    def __exit__(self, *exc):
+        try:
+            return super().__exit__(*exc)
+        finally:
+            self.close()
+
+
 def _conn():
     profiles.PROFILE_ROOT.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(_path(), timeout=10)
+    conn = sqlite3.connect(_path(), timeout=10, factory=_ClosingConnection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(SCHEMA + CONSOLE_SCHEMA)
