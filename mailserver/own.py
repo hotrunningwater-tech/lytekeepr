@@ -154,24 +154,43 @@ def _q(folder: str) -> str:
     return '"' + folder.replace('"', '\\"') + '"'
 
 
-def _sent_folder(m, cfg) -> str:
-    if cfg.get("sent_folder"):
-        return cfg["sent_folder"]
+LIST_LINE = re.compile(r'^\((?P<flags>[^)]*)\)\s+(?:"(?:[^"\\]|\\.)*"|NIL)\s+(?P<name>.+)$')
+
+
+def _folder_names(m) -> list:
+    """(name, flags) of every folder. The name may come quoted ("Sent") or bare (Sent): both are handled."""
     typ, rows = m.list()
-    names = []
+    out = []
     for row in rows or []:
-        line = row.decode(errors="replace") if isinstance(row, bytes) else str(row)
-        name = line.rsplit(' "', 1)[-1].rstrip('"') if '"' in line else line.split()[-1]
-        names.append(name)
-        if "\\Sent" in line:
+        line = (row.decode(errors="replace") if isinstance(row, bytes) else str(row)).strip()
+        hit = LIST_LINE.match(line)
+        if not hit:
+            continue
+        name = hit.group("name").strip()
+        if len(name) >= 2 and name[0] == name[-1] == '"':
+            name = name[1:-1].replace('\\"', '"').replace('\\\\', '\\')
+        out.append((name, hit.group("flags")))
+    return out
+
+
+def _sent_folder(m, cfg) -> str:
+    """The Sent folder: the saved name if it still opens, else the one flagged \\Sent, else a usual name."""
+    saved = cfg.get("sent_folder")
+    if saved:
+        typ, _ = m.select(_q(saved), readonly=True)
+        if typ == "OK":
+            return saved
+    folders = _folder_names(m)
+    for name, flags in folders:
+        if "\\Sent" in flags:
             return name
+    names = {n for n, _ in folders}
     for n in SENT_NAMES:
         if n in names:
             return n
     return "Sent"
 
 
-# ------------------------------------------------------------------ an email in LyteKeepr's format
 def _dec(value) -> str:
     try:
         return str(make_header(decode_header(value or "")))
