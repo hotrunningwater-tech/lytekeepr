@@ -263,6 +263,8 @@ def scan(since_date: str | None = None) -> dict:
     known = set(scan_state) | set(storage.load_index(account))
     since = date.fromisoformat(since_date) if since_date else date.today() - timedelta(days=FIRST_SYNC_DAYS)
     new_ids, scanned, now = [], 0, datetime.now(timezone.utc).isoformat()
+    from lk_calendar.relationships import _team_emails
+    team = _team_emails() | {account}
     m = _imap(cfg)
     try:
         sent_name = _sent_folder(m, cfg)
@@ -297,6 +299,11 @@ def scan(since_date: str | None = None) -> dict:
                 known.add(msg["id"])
                 people = {msg["from"].get("email", "")} | {x["email"] for x in msg["to"] + msg["cc"]}
                 if people <= {account, ""}:                 # only you on it (a test, a note to self): not a contact's email
+                    continue
+                if people <= team | {""}:                   # only you and your team members: internal, never a new contact
+                    storage.upsert_scan_entry(account, msg["id"], {"status": "not_relevant", "isRelevant": False, "lastScannedAt": now,
+                                                                    "reason": "Only your team on it: internal, not a contact's email.",
+                                                                    "from": msg["from"], "subject": msg["subject"], "receivedAt": msg["receivedAt"], "snippet": msg["snippet"]})
                     continue
                 display = {"from": msg["from"], "subject": msg["subject"], "receivedAt": msg["receivedAt"], "snippet": msg["snippet"]}
                 if "CATEGORY_PROMOTIONS" in msg["labelIds"]:
@@ -368,6 +375,8 @@ def test(send_to_self: bool = True) -> dict:
     cfg = load()
     if not cfg:
         raise MailError("Save the connection first.")
+    from lk_calendar.relationships import _team_emails
+    team = _team_emails() | {account}
     m = _imap(cfg)
     try:
         sent_name = _sent_folder(m, cfg)

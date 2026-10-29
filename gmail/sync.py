@@ -113,6 +113,23 @@ def _list_history_ids(start_history_id: str):
     return candidate_ids, deleted_ids, newest_history_id
 
 
+def _team_addresses(account_id: str) -> set:
+    try:
+        from lk_calendar.relationships import _team_emails
+        return _team_emails() | {account_id.lower()}
+    except Exception:
+        return {account_id.lower()}
+
+
+def _internal_only(message: dict, team: set) -> bool:
+    """Everyone on the email (from, to, cc) is you or a team member."""
+    def addr(x):
+        return ((x or {}).get("email") or "").strip().lower() if isinstance(x, dict) else str(x or "").strip().lower()
+    people = {addr(message.get("from"))} | {addr(t) for t in (message.get("to") or []) + (message.get("cc") or [])}
+    people.discard("")
+    return bool(people) and people <= team
+
+
 def scan_for_candidates(since_date: str | None = None) -> dict:
     """since_date: optional "YYYY-MM-DD" override for this one scan (e.g. from
     a UI date picker) — takes priority over the .env default when given."""
@@ -236,8 +253,14 @@ def scan_for_candidates(since_date: str | None = None) -> dict:
         # doesn't fit LyteKeepr's general CRM purpose — it was silently
         # hiding real emails a CRM user would want to see.
         new_pending_ids = []
+        team = _team_addresses(account_id)
         for message in normalized_batch:
             mid = message["id"]
+            if _internal_only(message, team):        # only you and your team members on it: internal, never a new contact
+                storage.upsert_scan_entry(account_id, mid, {"status": "not_relevant", "isRelevant": False,
+                                                            "reason": "Only your team on it: internal, not a contact's email.",
+                                                            "lastScannedAt": now, "historyId": message.get("historyId", ""), **_display_fields(message)})
+                continue
             storage.save_pending(account_id, message)
             new_pending_ids.append(mid)
             storage.upsert_scan_entry(
