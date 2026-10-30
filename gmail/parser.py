@@ -2,8 +2,10 @@
 record shape. Pure data transformation — no HTTP calls, no storage."""
 
 import base64
+import re
 from datetime import datetime, timezone
 from email.utils import getaddresses, parsedate_to_datetime
+from html.parser import HTMLParser
 
 
 def _decode_body(data: str) -> str:
@@ -14,6 +16,48 @@ def _decode_body(data: str) -> str:
         return base64.urlsafe_b64decode(padded).decode("utf-8", errors="replace")
     except (ValueError, TypeError):
         return ""
+
+
+class _HtmlText(HTMLParser):
+    BREAKS = {"br", "p", "div", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote"}
+    SKIP = {"style", "script", "head", "title"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.out, self.links, self.skip = [], [], 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.SKIP:
+            self.skip += 1
+        elif tag in self.BREAKS:
+            self.out.append("\n")
+        if tag == "a":
+            self.links.append((dict(attrs).get("href") or "", len(self.out)))
+
+    def handle_endtag(self, tag):
+        if tag in self.SKIP:
+            self.skip = max(0, self.skip - 1)
+        elif tag == "a" and self.links:
+            href, start = self.links.pop()
+            label = "".join(self.out[start:]).strip()
+            if href.startswith(("http://", "https://")) and href not in label:
+                self.out.append(f" ({href})")
+        elif tag in self.BREAKS:
+            self.out.append("\n")
+
+    def handle_data(self, data):
+        if not self.skip:
+            self.out.append(data)
+
+
+def html_to_text(html: str) -> str:
+    """Plain text of an HTML email, keeping each link's address next to its words ("video (https://...)")."""
+    p = _HtmlText()
+    p.feed(re.sub(r"<!--.*?-->", "", html or "", flags=re.S))
+    text = "".join(p.out).replace("\xa0", " ").replace("\ufeff", "")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r" *\n *", "\n", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def _header(headers: list[dict], name: str) -> str:
@@ -97,7 +141,7 @@ def normalize_message(raw: dict, account_id: str) -> dict:
         "receivedAt": received_at,
         "sentAt": sent_at,
         "snippet": raw.get("snippet", ""),
-        "textBody": "\n".join(text_parts).strip(),
+        "textBody": "\n".join(text_parts).strip() or html_to_text("\n".join(html_parts)),
         "htmlBody": "\n".join(html_parts).strip(),
         "labelIds": label_ids,
         "isUnread": "UNREAD" in label_ids,

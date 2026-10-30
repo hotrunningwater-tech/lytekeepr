@@ -27,6 +27,7 @@ from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, getaddresses, make_msgid, parseaddr, parsedate_to_datetime
 
 from gmail import storage
+from gmail.parser import html_to_text
 from profiles.store import profile_component_dir
 
 log = logging.getLogger(__name__)
@@ -241,7 +242,7 @@ def normalize(raw: bytes, label: str, account: str) -> dict:
         (text if ctype == "text/plain" else html if ctype == "text/html" else []).append(body)
     text_body = "\n".join(text).strip()
     if not text_body and html:
-        text_body = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", "\n".join(html))).strip()
+        text_body = html_to_text("\n".join(html))
     labels = [label] + (["CATEGORY_PROMOTIONS"] if label == "INBOX" and _noise(msg) else [])
     return {"id": _hid(message_id), "threadId": _hid(root), "accountId": account, "historyId": "", "messageIdHeader": message_id,
             "from": (_addrs(msg.get("From")) or [{"name": "", "email": ""}])[0], "to": _addrs(msg.get("To")), "cc": _addrs(msg.get("Cc")),

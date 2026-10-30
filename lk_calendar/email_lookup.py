@@ -29,7 +29,8 @@ def _addr(x) -> str:
 def _body(full: dict) -> str:
     text = (full.get("textBody") or "").replace("\r\n", "\n").replace("\r", "\n")
     if not text.strip() and full.get("htmlBody"):
-        text = html.unescape(re.sub(r"<[^>]+>", " ", re.sub(r"(?is)<(style|script).*?</\1>", " ", full["htmlBody"])))
+        from gmail.parser import html_to_text
+        text = html_to_text(full["htmlBody"])
     text = re.sub(r"\n[ \t]+\n", "\n\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     return text[:MAX_BODY] + ("\n… (cut)" if len(text) > MAX_BODY else "")
