@@ -25,6 +25,10 @@
     state = { funnelId: funnelId, brand: brand || '', scope: 'funnel', tree: null, doc: null, tab: null };
     load();
   }
+  function openBrand(brand) {          // a brand's own documents, or Personal (no funnels)
+    state = { funnelId: null, brand: brand, scope: 'brand', tree: null, doc: null, tab: null, only: true };
+    load();
+  }
   function load() {
     var q = state.scope === 'funnel' ? 'funnel_id=' + state.funnelId : 'brand=' + encodeURIComponent(state.brand);
     api('/api/crm/docs/tree?' + q).then(function (t) { state.tree = t; state.doc = null; render(); })
@@ -45,7 +49,8 @@
         .concat(f.folders.map(function (x) { return folder(x, 1); }), f.documents.map(docRow)));
     }
     var kids = t.folders.map(function (f) { return folder(f, 0); }).concat(t.documents.map(docRow));
-    return kids.length ? kids : [h('p', { class: 'lks-note' }, 'No documents here yet. Ask Claude, e.g. “Create a Marketing Strategy document under this funnel.”')];
+    return kids.length ? kids : [h('p', { class: 'lks-note' }, state.brand === 'personal' ? 'No personal documents yet. Ask Claude, e.g. “Save this as a personal note: …”'
+                                                                     : 'No documents here yet. Ask Claude, e.g. “Create a Marketing Strategy document under this funnel.”')];
   }
 
   function docView(d) {
@@ -69,7 +74,7 @@
     else if (t.error) body = [h('p', { class: 'lks-note' }, t.error)];
     else if (state.doc) body = docView(state.doc);
     else body = [h('p', { class: 'lks-note' }, t.where)].concat(listing(t));
-    var switcher = state.brand ? h('div', { class: 'demo-reset-tabs' }, [
+    var switcher = state.brand && !state.only ? h('div', { class: 'demo-reset-tabs' }, [
       h('button', { type: 'button', class: 'demo-reset-tab' + (state.scope === 'funnel' ? ' is-active' : ''), onclick: function () { state.scope = 'funnel'; load(); } }, 'This funnel'),
       h('button', { type: 'button', class: 'demo-reset-tab' + (state.scope === 'brand' ? ' is-active' : ''), onclick: function () { state.scope = 'brand'; load(); } }, 'Brand documents')]) : null;
     C().modal(h('div', { class: 'lks-card lko-window lkd-window' }, [
@@ -78,5 +83,5 @@
       state.doc ? null : switcher].concat(body)));
   }
 
-  window.lkDocs = { open: open };
+  window.lkDocs = { open: open, openBrand: openBrand };
 })();

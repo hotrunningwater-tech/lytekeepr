@@ -457,11 +457,11 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "docs_list", "title": "List folders and documents",
      "description": "Folders (nested), documents and their tab names in one brand (its own documents, not its funnels') or one funnel. Give brand or funnel_id.",
-     "inputSchema": {"type": "object", "properties": {"brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}}}, "read": True},
+     "inputSchema": {"type": "object", "properties": {"brand": {"type": "string", "description": "Brand name or key (see list_brands), or 'personal' for the user's own Personal place (private to them, no funnels)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}}}, "read": True},
     {"name": "docs_search", "title": "Search documents",
      "description": ("Find folders, documents and tabs by name, and passages in their text. Narrow it with brand or funnel_id when known. "
                      "Name matches come first; text matches show a snippet. Then use doc_read."),
-     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"},
+     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands), or 'personal' for the user's own Personal place (private to them, no funnels)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"},
                                                       "names_only": {"type": "boolean", "description": "true = don't search the text"}}, "required": ["query"]}, "read": True},
     {"name": "doc_read", "title": "Read a document",
      "description": "A document's text and all its tabs; or just one tab (tab = name or id); or one section (a # heading, by its words or number) of the text or of a tab.",
@@ -469,7 +469,7 @@ TOOLS = [
     {"name": "doc_create", "title": "Create a document",
      "description": (CONFIRM_RULE + " " + "Create a document at the top of a brand or funnel, or in a folder (folder_id), optionally with text and named tabs. "
                      "A funnel must have a brand first. If it's unclear where it belongs, ask."),
-     "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "folder_id": {"type": "integer"}, "content": {"type": "string"},
+     "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands), or 'personal' for the user's own Personal place (private to them, no funnels)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "folder_id": {"type": "integer"}, "content": {"type": "string"},
                                                       "tabs": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "content": {"type": "string"}}, "required": ["name"]}}},
                      "required": ["title"]}, "read": False},
     {"name": "doc_write", "title": "Write in a document",
@@ -482,7 +482,7 @@ TOOLS = [
                                                       "section": {"type": "string"}, "find": {"type": "string"}}, "required": ["doc_id", "text"]}, "read": False},
     {"name": "doc_update", "title": "Rename or move a document",
      "description": "Rename a document, or move it into a folder (folder_id), or to the top of a brand or funnel (brand/funnel_id, or to_top=true for the top of where it is). Its text and tabs stay.",
-     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "title": {"type": "string"}, "folder_id": {"type": "integer"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"},
+     "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "title": {"type": "string"}, "folder_id": {"type": "integer"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands), or 'personal' for the user's own Personal place (private to them, no funnels)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"},
                                                       "to_top": {"type": "boolean"}}, "required": ["doc_id"]}, "read": False},
     {"name": "doc_delete", "title": "Delete a document", "destructive": True,
      "description": "Delete a document with its tabs. Only when the user asks; if it has a lot of text, confirm with the user first.",
@@ -500,10 +500,10 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"doc_id": {"type": "integer"}, "tab": {"type": "string", "description": "Tab name or id"}}, "required": ["doc_id", "tab"]}, "read": False},
     {"name": "folder_create", "title": "Create a folder",
      "description": "Create a folder at the top of a brand or funnel, or inside another folder (parent_id).",
-     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "parent_id": {"type": "integer"}}, "required": ["name"]}, "read": False},
+     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands), or 'personal' for the user's own Personal place (private to them, no funnels)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"}, "parent_id": {"type": "integer"}}, "required": ["name"]}, "read": False},
     {"name": "folder_update", "title": "Rename or move a folder",
      "description": "Rename a folder, or move it into another folder (parent_id) or to the top of a brand or funnel. Everything inside moves with it.",
-     "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "name": {"type": "string"}, "parent_id": {"type": "integer"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"},
+     "inputSchema": {"type": "object", "properties": {"folder_id": {"type": "integer"}, "name": {"type": "string"}, "parent_id": {"type": "integer"}, "brand": {"type": "string", "description": "Brand name or key (see list_brands), or 'personal' for the user's own Personal place (private to them, no funnels)"}, "funnel_id": {"type": "integer", "description": "A funnel (it brings its own brand)"},
                                                       "to_top": {"type": "boolean"}}, "required": ["folder_id"]}, "read": False},
     {"name": "folder_delete", "title": "Delete a folder", "destructive": True,
      "description": "Delete a folder. One with folders or documents inside is refused unless with_contents=true, which the user must confirm first.",
@@ -606,14 +606,30 @@ TOOLS = [
      "description": "Every saved email of one conversation, oldest first, in full (email_id or thread_id from search_messages or last_exchange). For deep reading or summaries only.",
      "inputSchema": {"type": "object", "properties": {"email_id": {"type": "string"}, "thread_id": {"type": "string"}}}, "read": True},
     # --- goals and tasks on Home (each person's own; goals: today's and this week's) ---
-    {"name": "list_goals", "title": "Goals", "description": ("The user's goals for today and this week (done or not, with ids), unfinished goals from earlier days, "
-                                                            "and goals teammates chose to share. Tasks are in get_agenda."),
-     "inputSchema": {"type": "object", "properties": {}}, "read": True},
-    {"name": "add_goal", "title": "Add a goal", "description": "Add a goal for today (period 'day') or this week (period 'week'). Short, as the user said it. shared=true shows it to the team.",
-     "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}, "period": {"type": "string", "enum": ["day", "week"]}, "shared": {"type": "boolean"}},
+    {"name": "list_goals", "title": "Goals", "description": ("The user's goals. With no level and no brand: today's and this week's (done or not, with ids), unfinished goals "
+                                                            "from earlier days, and goals teammates chose to share. With level and/or brand: every level (or that one) "
+                                                            "for that brand or Personal, each with its steps and when it was ticked off (done_at). "
+                                                            "Levels: year (long term, 1 year+), mid (mid term, 2-4 months), month (short term, about 1 month), week, day. "
+                                                            "brand 'all' = every brand and Personal. Tasks are in get_agenda."),
+     "inputSchema": {"type": "object", "properties": {"level": {"type": "string", "enum": ["year", "mid", "month", "week", "day"]},
+                                                      "brand": {"type": "string", "description": "A brand name or key, 'personal', or 'all'"}}}, "read": True},
+    {"name": "add_goal", "title": "Add a goal", "description": ("Add a goal, short, as the user said it. level: day (today), week (this week), month (short term, about 1 month), "
+                                                               "mid (mid term, 2-4 months) or year (long term, 1 year or more). For a brand or Personal: when it is "
+                                                               "unclear which, ask. target_date for month/mid/year (default 30/90/365 days from today). "
+                                                               "parent_goal_id makes it a step of a bigger goal (one level: a step has no steps; it takes the goal's brand). "
+                                                               "shared=true shows it to the team (brand goals, and daily/weekly ones)."),
+     "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}, "level": {"type": "string", "enum": ["day", "week", "month", "mid", "year"]},
+                                                      "brand": {"type": "string", "description": "A brand name or key, or 'personal' (default)"},
+                                                      "target_date": {"type": "string", "description": "YYYY-MM-DD, for month/mid/year"},
+                                                      "parent_goal_id": {"type": "integer"}, "shared": {"type": "boolean"}},
                      "required": ["text"]}, "read": False},
-    {"name": "update_goal", "title": "Change a goal", "description": "Tick a goal done (done=true) or reopen it, rename it, show it to the team or hide it (shared), or move an earlier unfinished daily goal to today (to_today=true).",
+    {"name": "update_goal", "title": "Change a goal", "description": ("Tick a goal done (done=true; the time is kept) or reopen it (the time is cleared), rename it, move it to "
+                                                                      "another level or target date, change its brand or Personal, show it to the team or hide it (shared), "
+                                                                      "or move an earlier unfinished daily goal to today (to_today=true)."),
      "inputSchema": {"type": "object", "properties": {"goal_id": {"type": "integer"}, "done": {"type": "boolean"}, "text": {"type": "string"}, "shared": {"type": "boolean"},
+                                                      "level": {"type": "string", "enum": ["day", "week", "month", "mid", "year"]},
+                                                      "target_date": {"type": "string", "description": "YYYY-MM-DD"},
+                                                      "brand": {"type": "string", "description": "A brand name or key, or 'personal'"},
                                                       "to_today": {"type": "boolean"}}, "required": ["goal_id"]}, "read": False},
     {"name": "delete_goal", "title": "Delete a goal", "destructive": True, "description": "Delete one of the user's goals. Only when asked.",
      "inputSchema": {"type": "object", "properties": {"goal_id": {"type": "integer"}}, "required": ["goal_id"]}, "read": False},
@@ -1076,15 +1092,22 @@ def _run_tool(call, name: str, args: dict):
     if name == "email_thread":
         return need(*call("GET", "/api/crm/email/thread?" + urllib.parse.urlencode({k: args[k] for k in ("email_id", "thread_id") if args.get(k)})))
     if name == "list_goals":
+        if args.get("level") or args.get("brand"):
+            q = urllib.parse.urlencode({k: v for k, v in (("level", args.get("level")), ("brand", args.get("brand") or "all")) if v})
+            return need(*call("GET", f"/api/calendar/goals/plan?{q}"))
         return need(*call("GET", "/api/calendar/goals"))
     if name == "add_goal":
-        return need(*call("POST", "/api/calendar/goals", {"text": args.get("text", ""), "period": args.get("period") or "day", "shared": bool(args.get("shared"))}))
+        return need(*call("POST", "/api/calendar/goals", {"text": args.get("text", ""), "period": args.get("level") or args.get("period") or "day",
+                                                         "shared": bool(args.get("shared")), "brand": args.get("brand"),
+                                                         "target_date": args.get("target_date"), "parent_id": args.get("parent_goal_id")}))
     if name == "update_goal":
         gid = int(args["goal_id"])
         out = None
         if args.get("to_today"):
             out = need(*call("POST", f"/api/calendar/goals/{gid}/to-today"))
-        body = {k: args[k] for k in ("done", "text", "shared") if args.get(k) is not None}
+        body = {k: args[k] for k in ("done", "text", "shared", "target_date", "brand") if args.get(k) is not None}
+        if args.get("level"):
+            body["period"] = args["level"]
         if body:
             out = need(*call("PUT", f"/api/calendar/goals/{gid}", body))
         return out or {"unchanged": True}
@@ -1246,8 +1269,8 @@ SHOW_LABELS = {"date": "Date", "time": "Time", "start_date": "Date", "title": "T
                "follow_up_days": "Follow-up in days", "with_contents": "Delete everything inside too", "include_replies": "Include 'Reply to' ones",
                "mode": "How", "notify": "Email the guests about it", "invite": "Invites emailed to", "google_meet": "Google Meet link",
                "record_with_fathom": "Record with Fathom", "duration_min": "Minutes", "as_reply": "As a reply in their thread", "done": "Done",
-               "personal": "Personal (only you see it)"}
-SHOW_OLD = {"date": "start_date", "time": "start_time", "linkedin": "url", "profile_url": "url", "involved": "active", "record": "expect_recording"}
+               "personal": "Personal (only you see it)", "level": "Level", "target_date": "Target date"}
+SHOW_OLD = {"level": "period", "date": "start_date", "time": "start_time", "linkedin": "url", "profile_url": "url", "involved": "active", "record": "expect_recording"}
 SHOW_NOTES = {
     "book_meeting": "Google Calendar emails an invite to everyone invited.",
     "cancel_meeting": "The meeting is removed from the calendar, Google Calendar included.",
@@ -1345,12 +1368,22 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
                      f"{str(r.get('happened_at') or r.get('created_at') or '')[:10]}:\n{r.get('text') or ''}")
         current = r
         shown_ids.add("record_id")
-    if a.get("goal_id"):
+    def goal(gid):
         ov = need(*call("GET", "/api/calendar/goals"))
-        g = next((x for k in ("today_goals", "week_goals", "earlier_open") for x in ov.get(k) or [] if x.get("goal_id") == int(a["goal_id"])), {})
-        lines.append(f"Goal: {g.get('text') or '#' + str(a['goal_id'])}")
+        found = next((x for k in ("today_goals", "week_goals", "earlier_open") for x in ov.get(k) or [] if x.get("goal_id") == int(gid)), None)
+        if found is None:                                  # the longer levels and steps
+            st, pl = call("GET", "/api/calendar/goals/plan?brand=all")
+            every = [x for lv in ((pl or {}).get("goals") or {}).values() for x in lv] if st < 400 and isinstance(pl, dict) else []
+            every += [y for x in every for y in x.get("steps") or []]
+            found = next((x for x in every if x.get("goal_id") == int(gid)), None)
+        return found or {}
+    if a.get("goal_id"):
+        g = goal(a["goal_id"])
+        lines.append(f"Goal: {g.get('text') or '#' + str(a['goal_id'])}" + (f" ({g['level']}" + (f", by {g['target_date']}" if g.get("target_date") else "") + ")" if g.get("level") else ""))
         current = g
         shown_ids.add("goal_id")
+    if a.get("parent_goal_id"):
+        lines.append(f"A step of: {goal(a['parent_goal_id']).get('text') or '#' + str(a['parent_goal_id'])}")
     if a.get("suggestion_id"):
         sg = next((x for x in need(*call("GET", "/api/crm/suggestions"))["suggestions"] if x["suggestion_id"] == int(a["suggestion_id"])), {})
         lines.append(f"Suggestion: {sg.get('name') or ''} <{sg.get('email') or ''}>" + (f", for {sg['opportunity']}" if sg.get("opportunity") else "")

@@ -2,7 +2,7 @@
 """Checks the brand rules on a fresh, empty installation in a temporary folder (never the real data): a team member limited to
 some brands never sees a contact, funnel, task or opportunity participant of another brand; "whole brand" and "ticked funnels
 only" behave as described in lk_calendar/access.py; a member can only create contacts in their brands and can't change brands;
-a member with no brands chosen keeps their old funnel access; personal tasks are only ever their maker's. Deploys stop if this fails.
+a member with no brands chosen keeps their old funnel access; personal tasks, goals and documents are only ever their maker's. Deploys stop if this fails.
 Prints BRAND CHECK PASSED or lists what failed. Run on its own: python3 scripts/check_brands.py
 """
 
@@ -156,6 +156,36 @@ def main():
     check("AdminDentist" not in titles(m), "a member with Everything still doesn't see the admin's personal task")
     check(a.post("/api/calendar/events", json={"title": "x", "kind": "meeting", "project": "personal", "start_date": day, "start_time": "10:00"}).status_code == 400,
           "a meeting can't be personal")
+
+    # Personal goals (every level) and Personal documents: only their maker's, whatever the access
+    def goal(client, text, **k):
+        r = client.post("/api/calendar/goals", json={"text": text, **k})
+        return r.get_json().get("goal_id") if r.status_code == 200 else None
+    def plan(client):
+        return str(client.get("/api/calendar/goals/plan?brand=all").get_json())
+    admin_life, member_life = goal(a, "AdminLife", period="year"), goal(m, "MemberLife", period="mid", brand="personal")
+    nexy_goal = goal(a, "NexyShared", period="month", brand="nexy", shared=True)
+    check(admin_life and member_life and nexy_goal, "long, mid and short-term goals can be added, for Personal and a brand")
+    check("AdminLife" not in plan(m) and "MemberLife" in plan(m), "a member sees their own personal goals and not the admin's")
+    check("MemberLife" not in plan(a) and "AdminLife" in plan(a), "the admin sees their own personal goals and not a member's")
+    check(m.put(f"/api/calendar/goals/{admin_life}", json={"done": True}).status_code == 400
+          and a.put(f"/api/calendar/goals/{member_life}", json={"done": True}).status_code == 400, "nobody ticks off or changes another's goal")
+    step = goal(a, "AdminStep", period="month", parent_id=admin_life)
+    check(step and goal(a, "x", parent_id=step) is None, "a goal has steps, and a step has no steps of its own")
+    check(a.put(f"/api/calendar/goals/{admin_life}", json={"shared": True}).status_code == 400, "a personal long-term goal can't be shown to the team")
+    done = a.put(f"/api/calendar/goals/{admin_life}", json={"done": True}).get_json()
+    check(done.get("done_at") and not a.put(f"/api/calendar/goals/{admin_life}", json={"done": False}).get_json().get("done_at"),
+          "ticking off keeps the time, unticking clears it")
+    def doc(client, title):
+        r = client.post("/api/crm/docs", json={"title": title, "brand": "personal", "content": "diaryword"})
+        return r.get_json().get("doc_id") if r.status_code == 200 else None
+    admin_doc, member_doc = doc(a, "AdminDiary"), doc(m, "MemberDiary")
+    check(admin_doc and member_doc, "everyone can write Personal documents")
+    check(m.get(f"/api/crm/docs/{admin_doc}").status_code >= 400 and a.get(f"/api/crm/docs/{member_doc}").status_code >= 400,
+          "nobody opens another's Personal document")
+    check("AdminDiary" not in str(m.get("/api/crm/docs/search?q=diaryword").get_json()) and "MemberDiary" not in str(a.get("/api/crm/docs/search?q=diaryword").get_json())
+          and "AdminDiary" not in str(m.get("/api/crm/docs/tree?brand=personal").get_json()), "search and the Personal list show only your own")
+    check(a.put(f"/api/crm/docs/{admin_doc}", json={"brand": "nexy"}).status_code >= 400, "a Personal document can't be moved to a brand")
 
 
 try:

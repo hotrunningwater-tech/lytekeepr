@@ -2958,3 +2958,16 @@ body.no-linkedin #linkedinTab { display: none !important; }
 body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .ai-goals { display: block; }
 .ai-goals-head { margin-bottom: 6px; }
 body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .ai-goals + .assistant-heading { margin-top: 0; padding-top: 4px; }   /* the chat header no longer slides up over the card */
+
+/* All goals, in place of the chat when opened */
+.ai-goals-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-goals-all { display: none; }
+.ai-panel.goals-open > :not(.ai-goals-all) { display: none !important; }
+.ai-panel.goals-open > .ai-goals-all { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; overflow-y: auto; }
+.gl-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .gl-head .hm-days { margin-left: auto; width: auto; padding: 5px 10px; }
+.gl-level { display: flex; flex-direction: column; gap: 6px; }
+.gl-sub { margin-left: 28px; display: flex; flex-direction: column; gap: 6px; margin-block: 6px; }
+.gl-steps { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; color: inherit; }
+.gl-edit { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: #fff; border-radius: 12px; }
+.gl-edit-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; } .gl-edit-row .hm-days { width: auto; }
+.gl-docs { align-self: flex-start; }

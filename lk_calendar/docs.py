@@ -6,6 +6,8 @@ Brand → Funnel → Folders (nested) → Documents → Tabs
 - Three tables hold everything (doc_folders, docs, doc_tabs); moving or renaming never touches the content.
 - Every overwrite first saves the old text in doc_revisions, and deleting only marks things deleted, so nothing is lost by mistake.
 - Who may see what follows the brand and funnel access (see can_scope).
+- Personal (brand 'personal') is each person's own place, next to the brands, with no funnels: only whoever created a personal
+  folder or document sees it (not the admin either). Nothing moves between Personal and a brand.
 """
 
 import re
@@ -107,6 +109,10 @@ def _who() -> str:
 def scope(brand=None, funnel_id=None) -> tuple:
     """(brand key, funnel_id or None) from a brand name/key and/or a funnel. A funnel brings its own brand, and must have one."""
     from . import brands
+    if str(brand or "").strip().lower() == store.PERSONAL:
+        if funnel_id:
+            raise DocError("Personal has no funnels.")
+        return store.PERSONAL, None
     key = brands.resolve(brand) if brand else ""
     fid = int(funnel_id) if funnel_id else None
     if fid:
@@ -128,12 +134,24 @@ def scope(brand=None, funnel_id=None) -> tuple:
 def can_scope(brand: str, funnel_id) -> bool:
     """Funnel documents: whoever may see that funnel (and its brand). Brand documents: the admin, "Everything", or a member given the whole brand."""
     from . import access
-    if access.is_full():
-        return True
+    if brand == store.PERSONAL or access.is_full():
+        return True                                    # Personal: everyone has one (each row is checked with _see)
     scopes = access.brand_scopes()
     if funnel_id:
         return access.can_funnel(funnel_id) and (scopes is None or brand in scopes)
     return bool(scopes) and scopes.get(brand) == "all"
+
+
+def _see(row) -> bool:
+    """May this person see this folder or document: its brand or funnel, and for Personal only their own."""
+    if not can_scope(row["brand"], row["funnel_id"]):
+        return False
+    return row["brand"] != store.PERSONAL or store.is_mine({"project": store.PERSONAL, "owner_id": row["created_by_id"]})
+
+
+def _same_side(old_brand, new_brand):
+    if (old_brand == store.PERSONAL) != (new_brand == store.PERSONAL):
+        raise DocError("Personal documents stay personal, and brand documents stay with the brands. Copy the text instead.")
 
 
 def _need(brand, funnel_id):
@@ -145,7 +163,8 @@ def _folder(conn, folder_id) -> dict:
     row = conn.execute("SELECT * FROM doc_folders WHERE folder_id = ? AND deleted_at = ''", (int(folder_id),)).fetchone()
     if not row:
         raise DocError("No such folder.")
-    _need(row["brand"], row["funnel_id"])
+    if not _see(row):
+        raise DocError("No such folder.")
     return dict(row)
 
 
@@ -153,7 +172,8 @@ def _doc(conn, doc_id) -> dict:
     row = conn.execute("SELECT * FROM docs WHERE doc_id = ? AND deleted_at = ''", (int(doc_id),)).fetchone()
     if not row:
         raise DocError("No such document.")
-    _need(row["brand"], row["funnel_id"])
+    if not _see(row):
+        raise DocError("No such document.")
     return dict(row)
 
 
@@ -184,7 +204,7 @@ def _path(conn, folder_id) -> list:
 
 def _where(conn, brand, funnel_id, folder_id) -> str:
     from . import brands
-    parts = [brands.names().get(brand, brand)]
+    parts = ["Personal" if brand == store.PERSONAL else brands.names().get(brand, brand)]
     if funnel_id:
         row = conn.execute("SELECT name FROM funnels WHERE funnel_id = ?", (funnel_id,)).fetchone()
         parts.append(row["name"] if row else f"funnel {funnel_id}")
@@ -198,12 +218,18 @@ def overview() -> list:
     names = brands.names()
     out = []
     with _crm() as conn:
-        rows = conn.execute("""SELECT brand, funnel_id, COUNT(*) AS n, MAX(updated_at) AS last FROM docs WHERE deleted_at = '' GROUP BY brand, funnel_id""").fetchall()
+        groups: dict = {}
+        for d in conn.execute("SELECT brand, funnel_id, created_by_id, updated_at FROM docs WHERE deleted_at = ''"):
+            if _see(d):
+                g = groups.setdefault((d["brand"], d["funnel_id"]), {"brand": d["brand"], "funnel_id": d["funnel_id"], "n": 0, "last": ""})
+                g["n"] += 1
+                g["last"] = max(g["last"], d["updated_at"] or "")
+        rows = list(groups.values())
         funnels = {r["funnel_id"]: r["name"] for r in conn.execute("SELECT funnel_id, name FROM funnels")}
+    names[store.PERSONAL] = "Personal"
     for r in rows:
-        if can_scope(r["brand"], r["funnel_id"]):
-            out.append({"brand": r["brand"], "brand_name": names.get(r["brand"], r["brand"]), "funnel_id": r["funnel_id"],
-                        "funnel": funnels.get(r["funnel_id"], "") if r["funnel_id"] else "", "documents": r["n"], "last_updated": r["last"]})
+        out.append({"brand": r["brand"], "brand_name": names.get(r["brand"], r["brand"]), "funnel_id": r["funnel_id"],
+                    "funnel": funnels.get(r["funnel_id"], "") if r["funnel_id"] else "", "documents": r["n"], "last_updated": r["last"]})
     return sorted(out, key=lambda x: (x["brand_name"], x["funnel"]))
 
 
@@ -213,9 +239,13 @@ def tree(brand=None, funnel_id=None) -> dict:
     _need(key, fid)
     with _crm() as conn:
         cond, args = ("funnel_id = ?", [fid]) if fid else ("funnel_id IS NULL AND brand = ?", [key])
-        folders = [dict(r) for r in conn.execute(f"SELECT folder_id, parent_id, name, updated_at FROM doc_folders WHERE {cond} AND deleted_at = '' ORDER BY lower(name)", args)]
-        docs = [dict(r) for r in conn.execute(f"""SELECT doc_id, folder_id, title, created_by, updated_at, length(body) AS chars FROM docs WHERE {cond} AND deleted_at = ''
-                                                  ORDER BY lower(title)""", args)]
+        folders = [dict(r) for r in conn.execute(f"""SELECT folder_id, parent_id, name, updated_at, brand, funnel_id, created_by_id FROM doc_folders
+                                                     WHERE {cond} AND deleted_at = '' ORDER BY lower(name)""", args) if _see(r)]
+        docs = [dict(r) for r in conn.execute(f"""SELECT doc_id, folder_id, title, created_by, updated_at, length(body) AS chars, brand, funnel_id, created_by_id
+                                                  FROM docs WHERE {cond} AND deleted_at = '' ORDER BY lower(title)""", args) if _see(r)]
+        for x in folders + docs:
+            for k in ("brand", "funnel_id", "created_by_id"):
+                x.pop(k)
         tabs: dict = {}
         if docs:
             marks = ",".join("?" for _ in docs)
@@ -284,7 +314,7 @@ def search(q: str, brand=None, funnel_id=None, in_content: bool = True, limit: i
                 return False
             if key and not fid and r["brand"] != key:
                 return False
-            return can_scope(r["brand"], r["funnel_id"])
+            return _see(r)
         def match(text):
             t = (text or "").lower()
             return all(w in t for w in words)
@@ -361,6 +391,7 @@ def update_folder(folder_id, name=None, parent_id=None, brand=None, funnel_id=No
                 key, fid = scope(brand, funnel_id) if (brand or funnel_id) else (f["brand"], f["funnel_id"])     # to_top alone: the top of where it is
                 _need(key, fid)
                 parent = None
+            _same_side(f["brand"], key)
             ids = [f["folder_id"]] + inner
             marks = ",".join("?" for _ in ids)
             conn.execute("UPDATE doc_folders SET parent_id = ?, updated_at = ? WHERE folder_id = ?", (parent, _now(), f["folder_id"]))
@@ -422,10 +453,12 @@ def update_doc(doc_id, title=None, folder_id=None, brand=None, funnel_id=None, t
             conn.execute("UPDATE docs SET title = ?, updated_at = ? WHERE doc_id = ?", (title.strip()[:300], _now(), d["doc_id"]))
         if folder_id:
             f = _folder(conn, folder_id)
+            _same_side(d["brand"], f["brand"])
             conn.execute("UPDATE docs SET folder_id = ?, brand = ?, funnel_id = ?, updated_at = ? WHERE doc_id = ?", (f["folder_id"], f["brand"], f["funnel_id"], _now(), d["doc_id"]))
         elif to_top or brand or funnel_id:
             key, fid = scope(brand, funnel_id) if (brand or funnel_id) else (d["brand"], d["funnel_id"])
             _need(key, fid)
+            _same_side(d["brand"], key)
             conn.execute("UPDATE docs SET folder_id = NULL, brand = ?, funnel_id = ?, updated_at = ? WHERE doc_id = ?", (key, fid, _now(), d["doc_id"]))
         row = conn.execute("SELECT * FROM docs WHERE doc_id = ?", (d["doc_id"],)).fetchone()
         return {"doc_id": row["doc_id"], "title": row["title"], "where": _where(conn, row["brand"], row["funnel_id"], row["folder_id"])}
