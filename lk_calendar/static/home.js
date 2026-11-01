@@ -248,8 +248,6 @@
         api('POST', '/api/crm/quiet/' + c.person_id + '/snooze', { days: 14 }).then(load).catch(fail);
       } }, 'Not now')]);
   }
-  var QUIET_KEY = 'lkHomeQuietOpen';
-  function quietOpen() { try { return JSON.parse(localStorage.getItem(QUIET_KEY) || '{}') || {}; } catch (e) { return {}; } }
   function renderQuiet() {
     var q = state.quiet;
     state.counts.Quiet = q ? q.count : 0;
@@ -264,18 +262,12 @@
       }));
       return sel;
     }
-    // Each side is one line until opened (closed by default; the choice is remembered on this device)
-    function section(side, label, cls, picker) {
-      var open = quietOpen()[side];
-      out.push(h('div', { class: 'hm-quiet-head' }, [h('button', { class: 'hm-day hm-link hm-fold' + (cls ? ' ' + cls : ''), type: 'button', 'aria-expanded': open ? 'true' : 'false',
-        onclick: function () { var o = quietOpen(); o[side] = !open; try { localStorage.setItem(QUIET_KEY, JSON.stringify(o)); } catch (e) { /* storage blocked */ } renderQuiet(); } },
-        (open ? '▾ ' : '▸ ') + label), open ? picker : null]));
-      return open;
-    }
     var out = [h('div', { class: 'hm-quiet-head' }, [brandPick])];
-    if (section('you', 'Waiting on you · ' + q.waiting_on_you.length, 'hm-late', dayPick('quietYouDays', [1, 3, 7, 14], q.you_days, 'Unanswered')))
-      out = out.concat(q.waiting_on_you.length ? q.waiting_on_you.map(quietRow) : [h('p', { class: 'hm-empty' }, 'Nobody is waiting on you.')]);
-    if (!section('them', 'Waiting on them · ' + q.waiting_on_them.length, '', dayPick('quietDays', [7, 14, 30, 60, 90], q.days, 'No answer'))) { fill($('homeQuiet'), out); return; }
+    out.push(h('div', { class: 'hm-quiet-head' }, [h('div', { class: 'hm-day hm-late' }, 'Waiting on you · ' + q.waiting_on_you.length),
+      dayPick('quietYouDays', [1, 3, 7, 14], q.you_days, 'Unanswered')]));
+    out = out.concat(q.waiting_on_you.length ? q.waiting_on_you.map(quietRow) : [h('p', { class: 'hm-empty' }, 'Nobody is waiting on you.')]);
+    out.push(h('div', { class: 'hm-quiet-head' }, [h('div', { class: 'hm-day' }, 'Waiting on them · ' + q.waiting_on_them.length),
+      dayPick('quietDays', [7, 14, 30, 60, 90], q.days, 'No answer')]));
     // Conversations that went quiet one by one; outreach never answered folded per funnel (or per brand when not in a funnel)
     var quietOnes = q.waiting_on_them.filter(function (c) { return c.ever_replied; });
     var cold = {}, coldOrder = [];
@@ -322,7 +314,8 @@
     return state.counts[key] || 0;
   }
   var OPEN_KEY = 'lkHomeChip';
-  function openKey() { try { return localStorage.getItem(OPEN_KEY) || ''; } catch (e) { return ''; } }      // nothing open by default
+  function openKey() { try { return sessionStorage.getItem(OPEN_KEY) || ''; } catch (e) { return ''; } }      // nothing open when Home opens
+  try { localStorage.removeItem(OPEN_KEY); sessionStorage.removeItem(OPEN_KEY); } catch (e) { /* storage blocked */ }      // closed on every visit
   var rows = [].slice.call(document.querySelectorAll('#hxAll > .hx')), chips = {};
   function showOpen() {
     var key = openKey();
@@ -339,7 +332,7 @@
     var k = row.getAttribute('data-key'), calm = row.querySelector('.hx-toggle').classList.contains('is-calm');
     var chip = h('button', { class: 'home-chip' + (calm ? ' is-calm' : ''), type: 'button', onclick: function () {
       var next = openKey() === k ? '' : k;
-      try { localStorage.setItem(OPEN_KEY, next); } catch (e) { /* storage blocked */ }
+      try { sessionStorage.setItem(OPEN_KEY, next); } catch (e) { /* storage blocked */ }
       showOpen();
     } }, [row.querySelector('.hx-label').textContent, h('b', {}, '0')]);
     chips[k] = chip; $('homeChips').appendChild(chip);
@@ -358,7 +351,7 @@
     showOpen();
   }
   $('homeChipHide').addEventListener('click', function () {       // close the open list, keep just the bar
-    try { localStorage.setItem(OPEN_KEY, ''); } catch (e) { /* storage blocked */ }
+    try { sessionStorage.setItem(OPEN_KEY, ''); } catch (e) { /* storage blocked */ }
     showOpen();
   });
   var licount = $('followupActionCount');
