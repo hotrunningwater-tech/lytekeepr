@@ -73,7 +73,7 @@ def list_events():
 
 @bp.post("/api/calendar/overdue/move")
 def move_overdue():
-    return jsonify(store.move_overdue(str(_payload().get("to", "today"))))
+    return jsonify(store.move_overdue(str(_payload().get("to", "today")), allowed=access.can_event))      # only what this person may see
 
 
 @bp.get("/api/calendar/agenda")

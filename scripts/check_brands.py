@@ -2,7 +2,7 @@
 """Checks the brand rules on a fresh, empty installation in a temporary folder (never the real data): a team member limited to
 some brands never sees a contact, funnel, task or opportunity participant of another brand; "whole brand" and "ticked funnels
 only" behave as described in lk_calendar/access.py; a member can only create contacts in their brands and can't change brands;
-a member with no brands chosen keeps their old funnel access. Deploys stop if this fails.
+a member with no brands chosen keeps their old funnel access; personal tasks are only ever their maker's. Deploys stop if this fails.
 Prints BRAND CHECK PASSED or lists what failed. Run on its own: python3 scripts/check_brands.py
 """
 
@@ -130,6 +130,32 @@ def main():
     a.post(f"/api/team/{uid}/funnels", json={"funnel_ids": [PF]})
     v = seen()
     check(v["opp"] is None and "n1" not in v["contacts"], "ticked funnels: an unticked Nexy funnel is hidden with its opportunity")
+
+    # Personal tasks and reminders: only their maker sees or changes them, whatever the access (the admin and "Everything" included)
+    day = (date.today() + timedelta(days=1)).isoformat()
+    def task(client, title, project=None):
+        body = {"title": title, "kind": "task", "start_date": day, "start_time": "08:00", "untimed": True, **({"project": project} if project else {})}
+        r = client.post("/api/calendar/events", json=body)
+        return r.get_json().get("id") if r.status_code == 201 else None
+    def titles(client):
+        ag = client.get("/api/calendar/agenda").get_json()
+        return " ".join(e["title"] for k in ("overdue", "today", "upcoming") for e in ag[k])
+    mine_admin, mine_member, work = task(a, "AdminDentist", "personal"), task(m, "MemberGym", "personal"), task(a, "AdminWork")
+    check(mine_admin and mine_member and work, "personal tasks can be created by the admin and by a member")
+    check("MemberGym" in titles(m) and "AdminDentist" not in titles(m), "a member sees their own personal task and not the admin's")
+    check("AdminDentist" in titles(a) and "MemberGym" not in titles(a), "the admin sees their own personal task and not a member's")
+    for client, other in ((m, mine_admin), (a, mine_member)):
+        check(client.put(f"/api/calendar/events/{other}", json={"title": "x"}).status_code in (403, 404)
+              and client.post(f"/api/calendar/events/{other}/done", json={"date": day}).status_code in (403, 404)
+              and client.get(f"/api/calendar/events/{other}").status_code in (403, 404)
+              and client.delete(f"/api/calendar/events/{other}").status_code in (403, 404), "nobody opens, changes, ticks off or deletes another's personal task")
+    check(m.put(f"/api/calendar/events/{mine_member}", json={"title": "MemberGym2"}).status_code == 200, "a member changes their own personal task")
+    check(m.put(f"/api/calendar/events/{work}", json={"title": "x"}).status_code in (403, 404) and m.delete(f"/api/calendar/events/{work}").status_code in (403, 404),
+          "a member can't change or delete a task they can't see")
+    a.post(f"/api/team/{uid}/access", json={"access": "all"})
+    check("AdminDentist" not in titles(m), "a member with Everything still doesn't see the admin's personal task")
+    check(a.post("/api/calendar/events", json={"title": "x", "kind": "meeting", "project": "personal", "start_date": day, "start_time": "10:00"}).status_code == 400,
+          "a meeting can't be personal")
 
 
 try:

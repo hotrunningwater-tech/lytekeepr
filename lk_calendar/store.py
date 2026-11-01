@@ -63,6 +63,8 @@ LATER_STATUSES = {
 # "google" is not a brand: it marks read-only events synced from Google Calendar (a calendar source).
 DEFAULT_BRANDS = (("lytekeepr", "LyteKeepr", "#7fa8b8"), ("aspan", "Aspan", "#e98b74"), ("nexy", "Nexy", "#21493f"))
 CALENDAR_SOURCES = ("google",)
+# "personal" is not a brand either: a task or reminder only the person who made it sees (not even the admin sees a member's).
+PERSONAL = "personal"
 MEETING_STATUSES = {"scheduled": "", "completed": "completed", "no_show": "no_show", "cancelled": "cancelled"}   # stored value; "" = scheduled
 MEETING_ALIASES = {"scheduled": "scheduled", "upcoming": "scheduled", "": "scheduled", "completed": "completed", "complete": "completed",
                    "done": "completed", "held": "completed", "no show": "no_show", "noshow": "no_show", "no-show": "no_show",
@@ -339,7 +341,12 @@ def clean(data: dict, partial_from: dict | None = None) -> dict:
     if not title:
         raise ValidationError("title is required")
     project = base.get("project") or default_project()
-    if project not in CALENDAR_SOURCES:
+    if project == PERSONAL:
+        if base.get("kind", "task") == "meeting":
+            raise ValidationError("A meeting can't be personal: personal is for tasks and reminders.")
+        if str(base.get("lead_ref") or ""):
+            raise ValidationError("A personal task can't be linked to a contact or deal.")
+    elif project not in CALENDAR_SOURCES:
         keys = brand_keys()
         if project not in keys:
             raise ValidationError(f"project must be one of the brands: {', '.join(keys)}")
@@ -383,6 +390,40 @@ def clean(data: dict, partial_from: dict | None = None) -> dict:
     }
 
 
+def _viewer():
+    """Who is looking: a team member's id, or None for the admin (also scripts and the scheduled run, which work for the admin)."""
+    from . import users
+    return None if users.is_admin() else users.current_id()
+
+
+def _admin_id(conn) -> int | None:
+    row = conn.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").fetchone()
+    return row["id"] if row else None
+
+
+def is_mine(ev: dict, conn=None) -> bool:
+    """A personal item belongs to whoever made it (no owner = the admin's); everything else isn't private."""
+    if (ev or {}).get("project") != PERSONAL:
+        return True
+    me, owner = _viewer(), ev.get("owner_id")
+    if me is not None:
+        return owner == me
+    if owner is None:
+        return True
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        return owner == _admin_id(conn)
+    finally:
+        if own:
+            conn.close()
+
+
+def _touchable(event_id: int, conn) -> dict | None:
+    ev = get_event(event_id, conn)
+    return ev if ev and is_mine(ev, conn) else None
+
+
 def create_event(data: dict) -> dict:
     row = clean(data)
     with _conn() as conn:
@@ -409,7 +450,7 @@ def get_event(event_id: int, conn=None) -> dict | None:
 
 def update_event(event_id: int, data: dict) -> dict | None:
     with _conn() as conn:
-        current = get_event(event_id, conn)
+        current = _touchable(event_id, conn)
         if not current:
             return None
         if current["source"] == "google":
@@ -428,8 +469,10 @@ def update_event(event_id: int, data: dict) -> dict | None:
 
 def delete_event(event_id: int) -> bool:
     with _conn() as conn:
-        current = get_event(event_id, conn)
-        if current and current["source"] == "google":
+        current = _touchable(event_id, conn)
+        if not current:
+            return False
+        if current["source"] == "google":
             raise ValidationError(GOOGLE_READ_ONLY)
         return conn.execute("DELETE FROM events WHERE id = ?", (event_id,)).rowcount > 0
 
@@ -437,7 +480,7 @@ def delete_event(event_id: int) -> bool:
 def set_done(event_id: int, occ_date: str, done: bool) -> bool:
     _parse_date(occ_date, "date")
     with _conn() as conn:
-        if not get_event(event_id, conn):
+        if not _touchable(event_id, conn):
             return False
         if done:
             conn.execute("INSERT OR IGNORE INTO completions VALUES (?, ?)", (event_id, occ_date))
@@ -470,7 +513,10 @@ def occurrences(start: str, end: str) -> list[dict]:
     if (d1 - d0).days > MAX_RANGE_DAYS:
         raise ValidationError(f"range too large (max {MAX_RANGE_DAYS} days)")
     with _conn() as conn:
-        events = [dict(r) for r in conn.execute("SELECT * FROM events")]
+        admin_id = _admin_id(conn)
+        me = _viewer()
+        events = [dict(r) for r in conn.execute("SELECT * FROM events")
+                  if r["project"] != PERSONAL or r["owner_id"] == me or (me is None and r["owner_id"] in (None, admin_id))]
         done = {(r["event_id"], r["occ_date"]) for r in conn.execute(
             "SELECT event_id, occ_date FROM completions WHERE occ_date BETWEEN ? AND ?", (start, end))}
         leads = {r["id"]: dict(r) for r in conn.execute("SELECT * FROM leads")}
@@ -509,12 +555,12 @@ def agenda() -> dict:
     }
 
 
-def move_overdue(to: str = "today") -> dict:
-    """Move every overdue one-off item to today (or tomorrow), keeping its time of day."""
+def move_overdue(to: str = "today", allowed=None) -> dict:
+    """Move every overdue one-off item to today (or tomorrow), keeping its time of day. allowed(item): only the ones the person may change."""
     if to not in ("today", "tomorrow"):
         raise ValidationError("to must be 'today' or 'tomorrow'")
     target = now_local().date() + timedelta(days=1 if to == "tomorrow" else 0)
-    ids = [o["id"] for o in agenda()["overdue"]]
+    ids = [o["id"] for o in agenda()["overdue"] if allowed is None or allowed(o)]
     with _conn() as conn:
         conn.executemany("UPDATE events SET start_date = ? WHERE id = ? AND repeat = 'none'",
                          [(target.isoformat(), i) for i in ids])

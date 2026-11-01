@@ -2902,6 +2902,8 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .hm-input:focus { outline: none; border-color: var(--coral); background: #fff; }
 .home-add { display: flex; gap: 8px; align-items: center; }
 .home-add .hm-input { flex: 1; } .home-add .hm-date { flex: none; width: 160px; }
+.hm-personal { flex: none; display: flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.home-head-tools:has(.hm-days) { display: flex; gap: 8px; align-items: center; } .home-head-tools .hm-days { width: auto; padding: 5px 10px; }
 .hm-progress { display: flex; align-items: center; gap: 10px; font-family: var(--font-heading); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); }
 .hm-bar { flex: 1; height: 7px; border-radius: 7px; background: rgba(233, 139, 116, 0.18); overflow: hidden; }
 .hm-bar i { display: block; height: 100%; background: var(--coral); border-radius: 7px; transition: width .2s; }

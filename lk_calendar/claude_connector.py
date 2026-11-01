@@ -308,11 +308,14 @@ TOOLS = [
     {"name": "create_task", "title": "Create a task",
      "description": "Add a task or reminder for the user ('remind me to send Anna the demo on Friday'): it shows on Home (under Actions when due, otherwise under Tasks). "
                     "When it is about a contact, give contact_id: it then also shows in 'Coming up' on their page. Today or later only. "
-                    "Something a contact said or wants ('she wants a demo') is a note (add_contact_note), not a task.",
+                    "Something a contact said or wants ('she wants a demo') is a note (add_contact_note), not a task. "
+                    "A personal one (not work: 'remind me to call mom', 'pick up the dry cleaning'): personal = true, no brand and no contact; only the user sees it. "
+                    "When it is unclear whether it is personal or work, ask.",
      "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
                                                       "time": {"type": "string", "description": "HH:MM, 24-hour; leave out for no specific time"},
                                                       "notes": {"type": "string"}, "contact_id": {"type": "integer", "description": "The contact it is about, if any"},
-                                                      "brand": {"type": "string", "description": "Which brand the task is for; default: the contact's brand, else LyteKeepr. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
+                                                      "brand": {"type": "string", "description": "Which brand the task is for; default: the contact's brand, else LyteKeepr. " + "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."},
+                                                      "personal": {"type": "boolean", "description": "true = a personal task or reminder, not work: private to the user (nobody else sees it, not even the admin)"}},
                      "required": ["title", "date"]}, "read": False},
     {"name": "mark_task_done", "title": "Mark a task done", "description": "Mark a LyteKeepr task done (or not done) on a given date. Get the id from get_agenda or list_calendar.",
      "inputSchema": {"type": "object", "properties": {"task_id": {"type": "integer"}, "date": {"type": "string", "description": "YYYY-MM-DD of that occurrence"},
@@ -840,6 +843,10 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("POST", "/api/calendar/autopilot/drafts", {k: args.get(k) for k in ("call_id", "item_id", "subject", "body")}))
     if name == "get_call":
         return need(*call("GET", f"/api/calls/{int(args['call_id'])}"))["call"]
+    if name == "create_task" and args.get("personal") is True:
+        body = {"title": str(args.get("title") or "").strip(), "project": "personal", "kind": "task", "start_date": args.get("date"),
+                "start_time": args.get("time") or "08:00", "untimed": not args.get("time"), "notes": str(args.get("notes") or "")}
+        return need(*call("POST", "/api/calendar/events", body))
     if name == "create_task":
         brand, ref = _brand_key(call, need, args.get("brand")), ""
         if args.get("contact_id"):
@@ -1195,6 +1202,8 @@ def _confirmed(args: dict, shown: dict) -> bool:
 
 def _precheck(call, need, name: str, args: dict):
     """A missing or wrong detail is said before anything is shown, so the user never says yes to something that can't be done."""
+    if name == "create_task" and args.get("personal") is True and (args.get("contact_id") or args.get("brand")):
+        return {"done": False, "message": "A personal task has no contact and no brand. Ask the user: personal (no contact, no brand), or work?"}
     if name == "create_contact":
         missing = []                                            # the app's own minimum
         if not (str(args.get("name") or "").strip() or str(args.get("company") or "").strip()):
@@ -1236,7 +1245,8 @@ SHOW_LABELS = {"date": "Date", "time": "Time", "start_date": "Date", "title": "T
                "add_note": "Note added", "content": "Text", "involved": "Still involved", "record": "Record with Fathom", "to": "Move to",
                "follow_up_days": "Follow-up in days", "with_contents": "Delete everything inside too", "include_replies": "Include 'Reply to' ones",
                "mode": "How", "notify": "Email the guests about it", "invite": "Invites emailed to", "google_meet": "Google Meet link",
-               "record_with_fathom": "Record with Fathom", "duration_min": "Minutes", "as_reply": "As a reply in their thread", "done": "Done"}
+               "record_with_fathom": "Record with Fathom", "duration_min": "Minutes", "as_reply": "As a reply in their thread", "done": "Done",
+               "personal": "Personal (only you see it)"}
 SHOW_OLD = {"date": "start_date", "time": "start_time", "linkedin": "url", "profile_url": "url", "involved": "active", "record": "expect_recording"}
 SHOW_NOTES = {
     "book_meeting": "Google Calendar emails an invite to everyone invited.",

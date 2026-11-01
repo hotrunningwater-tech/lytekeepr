@@ -23,7 +23,7 @@
   if (!$('homeActions')) return;
   function fail(e) { if (window.lkContacts && window.lkContacts.notice) window.lkContacts.notice(e.message); else alert(e.message); }
 
-  var state = { agenda: null, goals: null, brands: {}, open: {}, quiet: null, quietDays: 14, quietYouDays: 3, quietBrand: '' };
+  var state = { agenda: null, goals: null, brands: {}, open: {}, quiet: null, quietDays: 14, quietYouDays: 3, quietBrand: '', taskShow: 'all' };
   function isMeeting(e) { return e.kind === 'meeting' || e.source === 'google' || !!e.has_call || !!e.expect_recording; }
   function toUTC(iso) { var p = iso.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
   function dayLabel(iso, today) {
@@ -39,6 +39,7 @@
     return (hr % 12 || 12) + (m === '00' ? '' : ':' + m) + (hr < 12 ? ' AM' : ' PM');
   }
   function brandDot(key) {
+    if (key === 'personal') return h('span', { class: 'hm-brand', title: 'Only you see it' }, [h('i', { style: 'background:#9a8fb0' }), 'Personal']);
     var b = state.brands[key];
     return b ? h('span', { class: 'hm-brand' }, [h('i', { style: 'background:' + b.color }), b.name]) : null;
   }
@@ -57,6 +58,11 @@
   }
   window.lkHome = { reload: load };
 
+  // Tasks: All, Work only or Personal only (lead follow-ups and meetings are work and aren't affected)
+  function shown(e) {
+    if (e.lead || state.taskShow === 'all') return true;
+    return (e.project === 'personal') === (state.taskShow === 'personal');
+  }
   function render() {
     var a = state.agenda, today = a.now.slice(0, 10);
     $('homeDateLine').textContent = toUTC(today).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
@@ -150,10 +156,12 @@
   }
   function renderActions(overdue, todays, today, coming) {
     var due = overdue.concat(todays);
-    var own = due.filter(function (e) { return !e.lead; }), leads = due.filter(function (e) { return !!e.lead; });
+    var own = due.filter(function (e) { return !e.lead && shown(e); }), leads = due.filter(function (e) { return !!e.lead; });
     state.counts.Followups = leads.length; state.ownDue = own.length;
     var late = own.filter(function (e) { return e.date < today; }), now = own.filter(function (e) { return e.date >= today; });
-    fill($('homeActionsTools'), [late.length ? h('button', { class: 'hm-mini', type: 'button', onclick: function () {
+    var showPick = h('select', { class: 'hm-input hm-days', title: 'Which tasks to show', onchange: function () { state.taskShow = showPick.value; render(); } },
+      [['all', 'All tasks'], ['work', 'Work'], ['personal', 'Personal']].map(function (o) { return h('option', { value: o[0], selected: state.taskShow === o[0] }, o[1]); }));
+    fill($('homeActionsTools'), [showPick, late.length ? h('button', { class: 'hm-mini', type: 'button', onclick: function () {
       api('POST', '/api/calendar/overdue/move', { to: 'today' }).then(load).catch(fail);
     } }, 'Move overdue to today') : null]);
     fill($('homeActions'), [undoRow('homeActions'), late.length ? h('div', { class: 'hm-day hm-late' }, 'Overdue') : null].concat(late.map(function (e) { return itemRow(e, today, true); }),
@@ -400,17 +408,21 @@
       var title = h('input', { type: 'text', class: 'hm-input', placeholder: 'Add a task…', id: 'homeTaskTitle' });
       var day = h('input', { type: 'date', class: 'hm-input hm-date', value: today, id: 'homeTaskDate' });
       var go = h('button', { class: 'btn btn-primary btn-small', type: 'button' }, 'Add task');
+      var mine = h('input', { type: 'checkbox', id: 'homeTaskPersonal' });
+      var personal = h('label', { class: 'hm-personal', title: 'A personal task: only you see it' }, [mine, ' Personal']);
       function addTask() {
         if (!title.value.trim()) { title.focus(); return; }
-        api('POST', '/api/calendar/events', { title: title.value.trim(), kind: 'task', start_date: day.value || today, start_time: '08:00', untimed: true })
+        var body = { title: title.value.trim(), kind: 'task', start_date: day.value || today, start_time: '08:00', untimed: true };
+        if (mine.checked) body.project = 'personal';
+        api('POST', '/api/calendar/events', body)
           .then(function () { title.value = ''; return load(); }).then(function () { title.focus(); }).catch(fail);
       }
       go.addEventListener('click', addTask);
       title.addEventListener('keydown', function (e) { if (e.key === 'Enter') addTask(); });
-      add.append(title, day, go);
+      add.append(title, day, personal, go);
     }
     var byDay = {};
-    fold(list).forEach(function (it) { var d = it.group ? it.members[0].date : it.date; (byDay[d] = byDay[d] || []).push(it); });
+    fold(list.filter(shown)).forEach(function (it) { var d = it.group ? it.members[0].date : it.date; (byDay[d] = byDay[d] || []).push(it); });
     var days = Object.keys(byDay).sort();
     var out = [];
     days.forEach(function (d) {

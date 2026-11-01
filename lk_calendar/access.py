@@ -147,7 +147,11 @@ def lead_person(lead_id):
 
 def can_event(event: dict) -> bool:
     """An event is visible when it belongs to a contact the person may see, or it is theirs (created by them, or from their own Google
-    Calendar). The admin's own events and Google Calendar are only for those with the whole database."""
+    Calendar). The admin's own events and Google Calendar are only for those with the whole database. A personal task or reminder
+    is only ever its maker's, whatever their access."""
+    from . import store
+    if not store.is_mine(event):
+        return False
     if is_full():
         return True
     lead = event.get("lead")

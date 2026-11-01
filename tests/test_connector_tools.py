@@ -85,6 +85,21 @@ class ToolListTest(unittest.TestCase):
         claude_connector._run_tool(call, "create_task", {**args, "confirm_code": shown["confirm_code"]})
         self.assertEqual(len(writes), 1)
 
+    def test_personal_task_has_no_brand_or_contact(self):
+        writes = []
+        def call(method, path, body=None):
+            if method != "GET":
+                writes.append(body)
+            return 200, {"brands": [{"key": "nexy", "name": "Nexy"}]}
+        args = {"title": "Call mom", "date": "2026-11-02", "personal": True}
+        shown = claude_connector._run_tool(call, "create_task", args)
+        self.assertIn("Personal (only you see it): yes", shown["show_the_user"])
+        claude_connector._run_tool(call, "create_task", {**args, "confirm_code": shown["confirm_code"]})
+        self.assertEqual(writes[0]["project"], "personal")
+        self.assertNotIn("lead_ref", writes[0])
+        refused = claude_connector._run_tool(call, "create_task", {**args, "contact_id": 3})
+        self.assertNotIn("show_the_user", refused)
+
     def test_reads_never_ask(self):
         reads = {t["name"] for t in claude_connector.TOOLS if t["read"]}
         self.assertFalse(reads & claude_connector.SHOWN_FIRST)

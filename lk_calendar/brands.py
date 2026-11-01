@@ -84,7 +84,7 @@ def create(name: str, color: str = "") -> dict:
     existing = all_brands()
     if any(b["name"].lower() == name.lower() for b in existing):
         raise store.ValidationError(f"There is already a brand called “{name}”.")
-    keys = {b["key"] for b in existing} | set(store.CALENDAR_SOURCES)
+    keys = {b["key"] for b in existing} | set(store.CALENDAR_SOURCES) | {store.PERSONAL}
     key, n = _slug(name), 2
     while key in keys:
         key, n = f"{_slug(name)}{n}", n + 1
