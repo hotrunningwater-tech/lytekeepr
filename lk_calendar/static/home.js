@@ -268,8 +268,38 @@
     out = out.concat(q.waiting_on_you.length ? q.waiting_on_you.map(quietRow) : [h('p', { class: 'hm-empty' }, 'Nobody is waiting on you.')]);
     out.push(h('div', { class: 'hm-quiet-head' }, [h('div', { class: 'hm-day' }, 'Waiting on them · ' + q.waiting_on_them.length),
       dayPick('quietDays', [7, 14, 30, 60, 90], q.days, 'No answer')]));
-    out = out.concat(q.waiting_on_them.length ? q.waiting_on_them.map(quietRow) : [h('p', { class: 'hm-empty' }, 'Nobody owes you an answer.')]);
+    // Conversations that went quiet one by one; outreach never answered folded per funnel (or per brand when not in a funnel)
+    var quietOnes = q.waiting_on_them.filter(function (c) { return c.ever_replied; });
+    var cold = {}, coldOrder = [];
+    q.waiting_on_them.forEach(function (c) {
+      if (c.ever_replied) return;
+      var key = c.funnel_name ? c.funnel_name + ' · ' + (c.stage_name || 'no stage') : ((state.brands[c.brand] || {}).name || 'No brand') + ' · no funnel';
+      if (!cold[key]) { cold[key] = []; coldOrder.push(key); }
+      cold[key].push(c);
+    });
+    coldOrder.sort(function (x, y) { return cold[y].length - cold[x].length; });
+    if (!q.waiting_on_them.length) out.push(h('p', { class: 'hm-empty' }, 'Nobody owes you an answer.'));
+    else {
+      out.push(h('div', { class: 'hm-day' }, 'Went quiet · ' + quietOnes.length));
+      out = out.concat(quietOnes.length ? quietOnes.map(quietRow) : [h('p', { class: 'hm-empty' }, 'No conversation went quiet.')]);
+      if (coldOrder.length) out.push(h('div', { class: 'hm-day' }, 'Never replied · ' + (q.waiting_on_them.length - quietOnes.length)));
+      coldOrder.forEach(function (key) { out.push(coldGroup(key, cold[key])); });
+    }
     fill($('homeQuiet'), out);
+  }
+  function coldGroup(label, list) {
+    var key = 'cold:' + label, open = !!state.open[key];
+    var ages = list.map(function (c) { return c.days_quiet; }), lo = Math.min.apply(null, ages), hi = Math.max.apply(null, ages);
+    var brands = {}; list.forEach(function (c) { if (c.brand) brands[c.brand] = 1; });
+    var row = h('div', { class: 'hm-row hm-group' }, [
+      h('div', { class: 'hm-main' }, [h('button', { class: 'hm-title hm-link', type: 'button', onclick: function () { state.open[key] = !open; renderQuiet(); } },
+        (open ? '▾ ' : '▸ ') + label + ' · ' + list.length),
+        h('div', { class: 'hm-meta' }, [h('span', {}, (lo === hi ? lo : lo + '–' + hi) + ' days, no reply')].concat(Object.keys(brands).map(brandDot)).filter(Boolean))]),
+      h('button', { class: 'hm-mini', type: 'button', title: 'All ' + list.length + ' off this list for 14 days', onclick: function () {
+        if (!confirm('Hide all ' + list.length + ' (' + label + ') for 14 days?')) return;
+        api('POST', '/api/crm/quiet/snooze', { person_ids: list.map(function (c) { return c.person_id; }), days: 14 }).then(load).catch(fail);
+      } }, 'Not now')]);
+    return open ? h('div', {}, [row, h('div', { class: 'hm-sub' }, list.map(quietRow))]) : row;
   }
 
   /* ---------- the automatic bar: one chip per type with its count; a chip opens its list below the bar ---------- */

@@ -2,7 +2,8 @@
 For each contact the last message is found in their messages (email, LinkedIn, Instagram), the emails saved in LyteKeepr to or from
 their address, and outreach steps ("dm sent" counts as yours, "replied" as theirs). Then:
 - waiting_on_you: they wrote last and you haven't answered for `you_days` days (3 by default);
-- waiting_on_them: you wrote last and they haven't answered for `days` days (14 by default).
+- waiting_on_them: you wrote last and they haven't answered for `days` days (14 by default). ever_replied tells a conversation that
+  went quiet (they wrote at some point) from cold outreach never answered (Home groups those per funnel).
 A recorded call or a logged conversation after the last message means you were in touch: nobody is waiting.
 Each row says whether a follow-up is planned for them, and whether it is overdue (then it is on you).
 Left out: contacts marked "not interested" on any channel (moving someone to Lost sets that), contacts never written to, and contacts put
@@ -197,7 +198,7 @@ def waiting(days: int = DEFAULT_DAYS, you_days: int = DEFAULT_YOU_DAYS, brand: s
         if quiet < (you_days if theirs else days):
             continue
         row = {**p, "contact_id": p["person_id"], "side": "waiting_on_you" if theirs else "waiting_on_them", "days_quiet": quiet,
-               "last_at": last["at"], "last_how": last["how"]}
+               "last_at": last["at"], "last_how": last["how"], "ever_replied": bool(last_in)}
         if p["person_id"] in follow_ups:                           # a follow-up is planned; overdue means it is on you
             d = follow_ups[p["person_id"]]
             row["follow_up"] = {"date": d, "overdue": d < today.isoformat()}
@@ -217,14 +218,20 @@ def waiting(days: int = DEFAULT_DAYS, you_days: int = DEFAULT_YOU_DAYS, brand: s
 
 def snooze(person_id: int, days: int = DEFAULT_DAYS) -> dict:
     """'Not now': off both lists for `days` days (it comes back after that if the conversation is still stuck)."""
-    if not access.can_person(person_id):
+    return {"person_id": int(person_id), "until": snooze_many([person_id], days)["until"]}
+
+
+def snooze_many(person_ids: list, days: int = DEFAULT_DAYS) -> dict:
+    """'Not now' for a whole group at once (all of one funnel's unanswered outreach)."""
+    ids = [int(i) for i in person_ids]
+    if not ids or any(not access.can_person(i) for i in ids):
         raise QuietError("You don't have access to that contact")
     until = (store.now_local().date() + timedelta(days=max(1, min(int(days or DEFAULT_DAYS), 365)))).isoformat()
     today = store.now_local().date().isoformat()
     marks = {k: v for k, v in _snoozed().items() if v > today}   # old ones drop off
-    marks[str(int(person_id))] = until
+    marks.update({str(i): until for i in ids})
     store.set_state(SNOOZE_KEY, json.dumps(marks))
-    return {"person_id": int(person_id), "until": until}
+    return {"count": len(ids), "until": until}
 
 
 def register(app):
@@ -238,6 +245,14 @@ def register(app):
                                    a.get("side", ""), a.get("limit", 200, type=int)))
         except store.ValidationError as exc:
             return jsonify({"error": str(exc)}), 400
+
+    @app.post("/api/crm/quiet/snooze")
+    def quiet_snooze_many():
+        body = request.get_json(silent=True) or {}
+        try:
+            return jsonify(snooze_many(body.get("person_ids") if isinstance(body.get("person_ids"), list) else [], body.get("days", DEFAULT_DAYS)))
+        except QuietError as exc:
+            return jsonify({"error": str(exc)}), 403
 
     @app.post("/api/crm/quiet/<int:person_id>/snooze")
     def quiet_snooze(person_id):
