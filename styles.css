@@ -2964,10 +2964,19 @@ body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .a
 .ai-goals-all { display: none; }
 .ai-panel.goals-open > :not(.ai-goals-all) { display: none !important; }
 .ai-panel.goals-open > .ai-goals-all { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; overflow-y: auto; }
-.gl-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .gl-head .hm-days { margin-left: auto; width: auto; padding: 5px 10px; }
-.gl-level { display: flex; flex-direction: column; gap: 6px; }
+.ai-panel.goals-open { background: #e3eaee; }
+.gl-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--ink); color: #fff; border-radius: 16px; padding: 10px 14px; flex: none; }
+.gl-head .hm-mini { background: rgba(255, 255, 255, 0.14); color: #fff; border-color: transparent; }
+.gl-title { font-family: var(--font-heading); font-size: 18px; font-weight: 700; }
+.gl-head .hm-days { margin-left: auto; width: auto; padding: 5px 10px; background: #fff; color: var(--ink); }
+.gl-level { display: flex; flex-direction: column; gap: 8px; background: #fff; border-radius: 16px; padding: 14px 16px; border: 2px solid var(--teal); flex: none;
+            box-shadow: 0 2px 10px rgba(41, 67, 78, 0.10); }
+.gl-level.gl-year { border-color: var(--ink); } .gl-level.gl-mid { border-color: var(--teal); } .gl-level.gl-month { border-color: var(--coral); }
+.gl-level-head { display: flex; align-items: baseline; gap: 10px; }
+.gl-level-name { font-family: var(--font-heading); font-size: 17px; font-weight: 700; color: var(--ink); }
+.gl-level-span { font-size: 13px; color: var(--ink-soft); }
+.gl-level-count { margin-left: auto; background: var(--ink); color: #fff; border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 700; }
 .gl-sub { margin-left: 28px; display: flex; flex-direction: column; gap: 6px; margin-block: 6px; }
 .gl-steps { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; color: inherit; }
 .gl-edit { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: #fff; border-radius: 12px; }
 .gl-edit-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; } .gl-edit-row .hm-days { width: auto; }
-.gl-docs { align-self: flex-start; }

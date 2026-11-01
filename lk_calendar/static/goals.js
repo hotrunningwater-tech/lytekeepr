@@ -1,6 +1,6 @@
 /* All goals, only when asked for: the "All goals" button on the Daily goals card opens them in place of the chat (Back to chat
-   returns). Long term, mid term, short term, this week and today, for Personal or one brand, each with its steps; plus the way
-   into the Personal documents. Home's daily and weekly goals stay where they are. */
+   returns). Long term, mid term and short term, for Personal or one brand, each with its steps. Home's daily and weekly goals
+   stay where they are. */
 (function () {
   'use strict';
 
@@ -32,8 +32,9 @@
     return 'done ' + (isNaN(d) ? iso : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
   }
 
-  var ORDER = [['year', 'Long term', '1 year or more'], ['mid', 'Mid term', '2–4 months'], ['month', 'Short term', 'about 1 month'],
-               ['week', 'This week', ''], ['day', 'Today', '']];
+  // Only the longer levels here: today's and this week's goals stay on Home
+  var ORDER = [['year', 'Long term', '1 year or more'], ['mid', 'Mid term', '2–4 months'], ['month', 'Short term', 'about 1 month']];
+  var LEVEL_NAMES = [['year', 'Long term'], ['mid', 'Mid term'], ['month', 'Short term'], ['week', 'This week'], ['day', 'Today']];
   var STEP = { year: 'month', mid: 'month', month: 'week', week: 'day', day: 'day' };     // a step's level: one below its goal
   var state = { brand: 'personal', data: null, open: {}, editing: null };
   function remember() { try { localStorage.setItem('lkGoalsBrand', state.brand); } catch (e) { /* storage blocked */ } }
@@ -71,7 +72,7 @@
   }
   function editRow(g) {
     var text = h('input', { type: 'text', class: 'hm-input', value: g.text });
-    var level = h('select', { class: 'hm-input hm-days' }, ORDER.map(function (o) { return h('option', { value: o[0], selected: o[0] === g.period }, o[1]); }));
+    var level = h('select', { class: 'hm-input hm-days' }, LEVEL_NAMES.map(function (o) { return h('option', { value: o[0], selected: o[0] === g.period }, o[1]); }));
     var date = h('input', { type: 'date', class: 'hm-input hm-date', value: g.target_date || '' });
     function save() {
       var body = { text: text.value };
@@ -101,17 +102,16 @@
     var pick = h('select', { class: 'hm-input hm-days', onchange: function () { state.brand = pick.value; remember(); load(); } },
       brands.map(function (b) { return h('option', { value: b.key, selected: b.key === state.brand }, b.name); }));
     out.push(h('div', { class: 'gl-head' }, [h('button', { class: 'hm-mini', type: 'button', onclick: function () { show(false); } }, '← Back to chat'),
-      h('span', { class: 'hx-label' }, 'Goals'), pick]));
+      h('span', { class: 'gl-title' }, 'Goals'), pick]));
     if (!d) out.push(h('p', { class: 'hm-empty' }, 'Loading…'));
     else if (d.error) out.push(h('p', { class: 'hm-empty' }, d.error));
     else ORDER.forEach(function (o) {
       var list = d.goals[o[0]] || [];
-      out.push(h('div', { class: 'gl-level' }, [h('div', { class: 'hm-day' }, o[1] + (o[2] ? ' · ' + o[2] : '') + (list.length ? ' · ' + list.length : '')),
+      out.push(h('div', { class: 'gl-level gl-' + o[0] }, [h('div', { class: 'gl-level-head' }, [h('span', { class: 'gl-level-name' }, o[1]),
+        h('span', { class: 'gl-level-span' }, o[2]), list.length ? h('span', { class: 'gl-level-count' }, String(list.length)) : null]),
         h('div', { class: 'home-list' }, list.map(function (g) { return row(g, false); })),
-        adder(o[0], null, { year: 'Add a long-term goal…', mid: 'Add a mid-term goal…', month: 'Add a short-term goal…', week: 'Add a goal for this week…', day: 'Add a goal for today…' }[o[0]])]));
+        adder(o[0], null, { year: 'Add a long-term goal…', mid: 'Add a mid-term goal…', month: 'Add a short-term goal…' }[o[0]])]));
     });
-    if (state.brand === 'personal' && window.lkDocs && window.lkDocs.openBrand)
-      out.push(h('button', { class: 'hm-mini gl-docs', type: 'button', onclick: function () { window.lkDocs.openBrand('personal'); } }, 'Personal documents'));
     $('aiGoalsAll').replaceChildren.apply($('aiGoalsAll'), out);
   }
 
