@@ -97,7 +97,6 @@
           <p class="overview-sub" id="homeDateLine">Your goals, tasks and meetings</p></div>
           <div class="home-tabs" id="homeTabs" role="tablist">
             <button class="home-tab on" type="button" role="tab" data-pane="tasks">Tasks</button>
-            <button class="home-tab" type="button" role="tab" data-pane="day">Daily goals</button>
             <button class="home-tab" type="button" role="tab" data-pane="week">Weekly goals</button>
           </div>
         </div>
@@ -263,7 +262,6 @@
             <div class="home-list" id="homeActions"></div>
             <div class="home-list" id="homeTasks"></div>
           </div>
-          <div id="homeGoalsToday" data-pane="day" hidden></div>
           <div id="homeGoalsWeek" data-pane="week" hidden></div>
         </div>
 
@@ -487,13 +485,13 @@
 
     <!-- AI Assistant Workspace -->
     <section class="panel ai-panel" id="aiPanel">
+      <div class="ai-goals" id="aiGoals"><div class="ai-goals-head"><span class="hx-label">Daily goals</span></div><div id="homeGoalsToday"></div></div>
       <div class="assistant-heading">
         <div class="assistant-title-row">
           <h1>Ask LyteKeepr</h1>
           <span class="availability"><span class="availability-dot"></span>Assistant online</span>
           <button class="clear-chat-btn" id="clearChatBtn" type="button">Clear chat</button>
         </div>
-        <p class="assistant-sub">Whenever you want more context, just ask</p>
       </div>
 
       <div class="conversation" id="conversation"></div>

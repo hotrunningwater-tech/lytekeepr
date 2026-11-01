@@ -2821,7 +2821,9 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .home-auto { gap: 10px; }
 .home-auto-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: rgba(233, 139, 116, 0.08); border: 1px solid rgba(233, 139, 116, 0.3); border-radius: 14px; padding: 10px 14px; }
 .home-auto-bar > .hx-label { margin-right: 6px; }
-.home-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-chips { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; }   /* one row; a narrow screen scrolls it sideways */
+.home-chips::-webkit-scrollbar { display: none; }
+.home-chips .home-chip { flex: none; white-space: nowrap; padding: 5px 10px; }
 .home-chip { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid rgba(233, 139, 116, 0.4); border-radius: 999px; padding: 6px 12px; font-family: var(--font-heading); font-size: 12px; font-weight: 600; color: var(--ink); cursor: pointer; }
 .home-chip b { background: var(--coral); color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 11px; }
 .home-chip.is-calm { border-color: rgba(127, 168, 184, 0.4); color: var(--ink-soft); }
@@ -2947,3 +2949,12 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .lks-cu-kind { color: var(--ink-soft); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
 .lks-cu-title { color: var(--ink); min-width: 0; }
 @media (max-width: 600px) { .lks-cu-row { grid-template-columns: 1fr; gap: 2px; } }
+
+/* Daily goals at the top of the right column, on Home only; the chat takes the rest */
+.ai-goals { display: none; flex: none; background: #fff; border: 1.5px solid rgba(233, 139, 116, 0.55); border-radius: 16px; padding: 14px 16px 16px;
+            box-shadow: 0 6px 18px rgba(41, 67, 78, 0.08); }
+.ai-goals .home-list { max-height: 170px; overflow-y: auto; }       /* three goals show; a 4th and more are there when you scroll */
+.ai-goals-head .hx-label { color: var(--coral); }
+body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .ai-goals { display: block; }
+.ai-goals-head { margin-bottom: 6px; }
+body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .ai-goals + .assistant-heading { margin-top: 0; padding-top: 4px; }   /* the chat header no longer slides up over the card */
