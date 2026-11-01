@@ -248,6 +248,8 @@
         api('POST', '/api/crm/quiet/' + c.person_id + '/snooze', { days: 14 }).then(load).catch(fail);
       } }, 'Not now')]);
   }
+  var QUIET_KEY = 'lkHomeQuietOpen';
+  function quietOpen() { try { return JSON.parse(localStorage.getItem(QUIET_KEY) || '{}') || {}; } catch (e) { return {}; } }
   function renderQuiet() {
     var q = state.quiet;
     state.counts.Quiet = q ? q.count : 0;
@@ -262,12 +264,18 @@
       }));
       return sel;
     }
+    // Each side is one line until opened (closed by default; the choice is remembered on this device)
+    function section(side, label, cls, picker) {
+      var open = quietOpen()[side];
+      out.push(h('div', { class: 'hm-quiet-head' }, [h('button', { class: 'hm-day hm-link hm-fold' + (cls ? ' ' + cls : ''), type: 'button', 'aria-expanded': open ? 'true' : 'false',
+        onclick: function () { var o = quietOpen(); o[side] = !open; try { localStorage.setItem(QUIET_KEY, JSON.stringify(o)); } catch (e) { /* storage blocked */ } renderQuiet(); } },
+        (open ? '▾ ' : '▸ ') + label), open ? picker : null]));
+      return open;
+    }
     var out = [h('div', { class: 'hm-quiet-head' }, [brandPick])];
-    out.push(h('div', { class: 'hm-quiet-head' }, [h('div', { class: 'hm-day hm-late' }, 'Waiting on you · ' + q.waiting_on_you.length),
-      dayPick('quietYouDays', [1, 3, 7, 14], q.you_days, 'Unanswered')]));
-    out = out.concat(q.waiting_on_you.length ? q.waiting_on_you.map(quietRow) : [h('p', { class: 'hm-empty' }, 'Nobody is waiting on you.')]);
-    out.push(h('div', { class: 'hm-quiet-head' }, [h('div', { class: 'hm-day' }, 'Waiting on them · ' + q.waiting_on_them.length),
-      dayPick('quietDays', [7, 14, 30, 60, 90], q.days, 'No answer')]));
+    if (section('you', 'Waiting on you · ' + q.waiting_on_you.length, 'hm-late', dayPick('quietYouDays', [1, 3, 7, 14], q.you_days, 'Unanswered')))
+      out = out.concat(q.waiting_on_you.length ? q.waiting_on_you.map(quietRow) : [h('p', { class: 'hm-empty' }, 'Nobody is waiting on you.')]);
+    if (!section('them', 'Waiting on them · ' + q.waiting_on_them.length, '', dayPick('quietDays', [7, 14, 30, 60, 90], q.days, 'No answer'))) { fill($('homeQuiet'), out); return; }
     // Conversations that went quiet one by one; outreach never answered folded per funnel (or per brand when not in a funnel)
     var quietOnes = q.waiting_on_them.filter(function (c) { return c.ever_replied; });
     var cold = {}, coldOrder = [];
