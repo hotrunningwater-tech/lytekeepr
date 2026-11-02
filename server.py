@@ -755,6 +755,8 @@ def crm_move_to_stage():
 
 @app.post("/api/crm/people/<int:person_id>/delete")
 def crm_delete_person(person_id):
+    from lk_calendar import recycle
+    recycle.keep(person_id)                                # restorable for 30 days; if this fails nothing is deleted
     info = None
     try:
         from lk_calendar import contacts as lk_contacts

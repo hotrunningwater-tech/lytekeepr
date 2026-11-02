@@ -785,7 +785,7 @@
   function showSettings(view) {
     currentSettingsView = view;
     nav.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.view === view); });
-    if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else if (view === 'claude') claudeView(); else if (view === 'brands') brandsView(); else if (view === 'email') emailView(); else detailsView();
+    if (view === 'deleted') deletedView(); else if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else if (view === 'claude') claudeView(); else if (view === 'brands') brandsView(); else if (view === 'email') emailView(); else detailsView();
   }
   nav.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { showSettings(b.dataset.view); }); });
 
@@ -914,6 +914,23 @@
 
   /* Claude: use LyteKeepr from the Claude app (phone or web). The address to add as a connector, and who is connected. */
   /* Brands: the businesses this account runs. Funnels, contacts and calendar items each belong to one. */
+  function deletedView() {
+    main.replaceChildren();
+    var card = h('div', { class: 'lks-card' }, [h('h2', {}, 'Recently deleted'), h('p', {}, 'Loading…')]);
+    main.appendChild(card);
+    api('GET', '/api/crm/recycle').then(function (r) {
+      var err = h('p', { class: 'lks-err', hidden: true });
+      var rows = r.deleted.map(function (d) {
+        return h('div', { class: 'lks-row' }, [h('div', {}, [h('b', {}, d.name || d.detail || 'Contact'), h('div', { class: 'lks-note' }, (d.detail ? d.detail + ' · ' : '') + 'deleted ' + d.deleted_at.slice(0, 10) + ' · ' + d.days_left + ' days left')]),
+          h('button', { class: 'btn lks-soft btn-small', type: 'button', onclick: function () {
+            api('POST', '/api/crm/recycle/' + d.bin_id + '/restore').then(deletedView).catch(function (e) { err.hidden = false; err.textContent = e.message; });
+          } }, 'Restore')]);
+      });
+      card.replaceChildren.apply(card, [h('h2', {}, 'Recently deleted'), h('p', { class: 'lks-note' }, 'Deleted contacts stay here for ' + r.keep_days + ' days, then they are removed for good. Saved email drafts don\u2019t come back.'), err]
+        .concat(rows.length ? rows : [h('p', { class: 'lks-note' }, 'Nothing deleted recently.')]));
+    }).catch(function (e) { card.replaceChildren(h('h2', {}, 'Recently deleted'), h('p', { class: 'lks-err' }, e.message)); });
+  }
+
   function brandsView() {
     main.replaceChildren();
     var card = h('div', { class: 'lks-card' }, [h('h2', {}, 'Brands'), h('p', {}, 'Loading…')]);

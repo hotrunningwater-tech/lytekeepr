@@ -52,6 +52,8 @@ def register(app):
     own_mail.register(app)
     from . import quiet
     quiet.register(app)
+    from . import recycle
+    recycle.register(app)
     from . import goals
     goals.register(app)
     from . import docs

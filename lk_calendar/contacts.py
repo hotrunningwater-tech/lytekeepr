@@ -597,12 +597,14 @@ def cleanup_after_delete(info: dict) -> None:
 
 
 def delete_contact(contact_id: int) -> bool:
-    """Delete a contact for good: details, notes, raw notes, messages, statuses, calendar tasks, saved drafts, and their company if they were its only person.
+    """Delete a contact (restorable for 30 days, see recycle.py): details, notes, raw notes, messages, statuses, calendar tasks, saved drafts, and their company if they were its only person.
     A person who has synced messages is also put on the removed list, so the next sync doesn't bring them back."""
     info = collect_for_delete(contact_id)
     with _crm() as conn:
         if not conn.execute("SELECT 1 FROM people WHERE person_id = ?", (contact_id,)).fetchone():
             return False
+    from . import recycle
+    recycle.keep(contact_id)                           # restorable for 30 days
     delete_calendar_links(contact_id)
     with _crm() as conn:
         if info["has_messages"]:

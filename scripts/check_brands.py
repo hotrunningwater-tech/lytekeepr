@@ -187,6 +187,25 @@ def main():
           and "AdminDiary" not in str(m.get("/api/crm/docs/tree?brand=personal").get_json()), "search and the Personal list show only your own")
     check(a.put(f"/api/crm/docs/{admin_doc}", json={"brand": "nexy"}).status_code >= 400, "a Personal document can't be moved to a brand")
 
+    # Recently deleted: a deleted contact comes back whole, and only for whoever may see the bin
+    gone = contact(name="Delete Me", email="gone@t.test", brand="nexy")
+    a.post(f"/api/crm/people/{gone}/notes", json={"text": "binnote"})
+    a.post(f"/api/calendar/people/{gone}/outreach", json={"channel": "email", "status": "email sent", "follow_up_days": 3})
+    check(a.delete(f"/api/calendar/contacts/{gone}").status_code < 400 and a.get(f"/api/calendar/contacts/{gone}").status_code == 404, "deleting a contact removes it")
+    binned = [d for d in a.get("/api/crm/recycle").get_json()["deleted"] if d["person_id"] == gone]
+    check(len(binned) == 1 and binned[0]["days_left"] == 30, "a deleted contact is in Recently deleted for 30 days")
+    check(gone not in [d["person_id"] for d in m.get("/api/crm/recycle").get_json()["deleted"]], "a member doesn't see what others deleted")
+    check(m.post(f"/api/crm/recycle/{binned[0]['bin_id']}/restore").status_code >= 400, "a member can't restore what others deleted")
+    same = contact(name="Same Email", email="gone@t.test", brand="nexy")
+    check(a.post(f"/api/crm/recycle/{binned[0]['bin_id']}/restore").status_code == 400, "no restore while another contact uses that email")
+    a.delete(f"/api/calendar/contacts/{same}")
+    check(a.post(f"/api/crm/recycle/{binned[0]['bin_id']}/restore").status_code == 200, "a deleted contact can be restored")
+    back = a.get(f"/api/calendar/contacts/{gone}")
+    check(back.status_code == 200 and back.get_json().get("email") == "gone@t.test", "the restored contact is back with its email")
+    check("binnote" in str(a.get(f"/api/crm/people/{gone}/notes").get_json()), "its notes come back")
+    check(a.get(f"/api/calendar/people/{gone}/outreach").get_json() and "email" in str(a.get(f"/api/calendar/people/{gone}/outreach").get_json()), "its statuses come back")
+    check(any(d.get("person_id") == gone for d in a.get("/api/crm/overview").get_json()["people"]), "it shows in the CRM again")
+
 
 try:
     main()
