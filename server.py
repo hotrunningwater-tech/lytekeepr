@@ -61,6 +61,18 @@ ALLOWED_ROLES = {"user", "assistant"}
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder=None)
+
+
+@app.errorhandler(Exception)
+def _unexpected_error(exc):
+    """Anything unexpected: logged in full for us, plain words for the person. Normal web errors (404 and so on) stay as they are."""
+    from werkzeug.exceptions import HTTPException
+    if isinstance(exc, HTTPException):
+        return exc
+    app.logger.exception("Unexpected error on %s %s", request.method, request.path)
+    text = "Something went wrong on our side. Please try again. If it keeps happening, tell us what you were doing."
+    return (jsonify({"error": text}), 500) if request.path.startswith("/api") else (text, 500)
+
 app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024  # local demo uploads and recordings
 
 import auth_gate
@@ -424,7 +436,7 @@ def _finish_gmail_connect(code, expected_email=""):
         tokens = exchange_code_for_tokens(code)
         profile = gmail_client.get_profile(tokens.get("access_token"))
     except GoogleOAuthError as exc:
-        return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote(str(exc))}")
+        return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote(str(exc))}")      # plain words: see google_oauth/flow.py
 
     account_id = profile.get("emailAddress")
     if not account_id:

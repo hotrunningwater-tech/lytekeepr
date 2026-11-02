@@ -131,7 +131,7 @@ def _access_token() -> str:
     except GoogleOAuthError as exc:
         text = str(exc).lower()
         if "could not reach" in text:                          # network blip: not an authorization problem
-            raise GoogleSyncError(f"Could not reach Google to refresh authorization: {exc}") from exc
+            raise GoogleSyncError("Could not reach Google. Try again in a minute.") from exc
         if "not connected" in text or "missing google_" in text:
             raise GoogleAuthError("Google is not connected on this machine. " + RECONNECT_HINT, never_connected=True) from exc
         raise GoogleAuthError("Google authorization expired or was revoked. " + RECONNECT_HINT) from exc
@@ -162,7 +162,7 @@ def _fetch_events(window_start: datetime, window_end: datetime, calendar_id: str
                 raise GoogleSyncError("The Google Calendar API is not enabled for your Google project (turn it on in Google Cloud Console, APIs & Services).") from exc
             raise GoogleSyncError(f"Google Calendar API error {exc.code}: {body}") from exc
         except urllib.error.URLError as exc:
-            raise GoogleSyncError(f"Could not reach Google: {exc}") from exc
+            raise GoogleSyncError("Could not reach Google. Try again in a minute.") from exc
         items.extend(data.get("items", []))
         page = data.get("nextPageToken")
         if not page:
@@ -193,7 +193,7 @@ def list_calendars() -> list[dict]:
             raise GoogleAuthError("Google did not allow reading your calendar list. Press Reconnect Google.") from exc
         raise GoogleSyncError(f"Google could not list your calendars (error {exc.code}).") from exc
     except urllib.error.URLError as exc:
-        raise GoogleSyncError(f"Could not reach Google: {exc}") from exc
+        raise GoogleSyncError("Could not reach Google. Try again in a minute.") from exc
     chosen = chosen_calendars()
     def key(c):
         return "primary" if c.get("primary") else c["id"]
@@ -382,7 +382,7 @@ def delete_meeting(event_id: int) -> bool:
         else:
             raise GoogleSyncError(f"Google could not delete the meeting (error {exc.code}).") from exc
     except urllib.error.URLError as exc:
-        raise GoogleSyncError(f"Could not reach Google: {exc}") from exc
+        raise GoogleSyncError("Could not reach Google. Try again in a minute.") from exc
     with store._conn() as conn:
         conn.execute("DELETE FROM events WHERE id = ?", (event_id,))
     return True
@@ -415,7 +415,7 @@ def set_description(event_id: int, text: str, mode: str = "append", notify: bool
                 raise GoogleAuthError("Google hasn't allowed LyteKeepr to change your calendar yet. Press Reconnect Google and tick every box.") from exc
             raise GoogleSyncError(f"Google could not change the meeting (error {exc.code}).") from exc
         except urllib.error.URLError as exc:
-            raise GoogleSyncError(f"Could not reach Google: {exc}") from exc
+            raise GoogleSyncError("Could not reach Google. Try again in a minute.") from exc
     item = call("GET", url)
     organizer = item.get("organizer") or {}
     if not organizer.get("self"):
@@ -460,7 +460,7 @@ def create_meeting(title: str, start_date: str, start_time: str, duration_min: i
                                   "every box, then save again.") from exc
         raise GoogleSyncError(f"Google could not create the meeting (error {exc.code}).") from exc
     except urllib.error.URLError as exc:
-        raise GoogleSyncError(f"Could not reach Google: {exc}") from exc
+        raise GoogleSyncError("Could not reach Google. Try again in a minute.") from exc
     row = _convert(item)
     if not row:
         raise GoogleSyncError("Google created the meeting but sent back something unreadable; it will appear after the next sync.")

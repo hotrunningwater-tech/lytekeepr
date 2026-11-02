@@ -12,6 +12,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import logging
+
 from .config import GoogleOAuthConfig
 from .errors import GoogleOAuthError
 from .store import save_tokens
@@ -66,9 +68,10 @@ def exchange_code_for_tokens(code: str, save: bool = True) -> dict:
             tokens = json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
-        raise GoogleOAuthError(f"Google rejected the authorization code: {body}") from exc
+        logging.getLogger(__name__).warning("Google rejected the authorization code: %s", body)
+        raise GoogleOAuthError("Google didn't accept the connection. Please try connecting again.") from exc
     except urllib.error.URLError as exc:
-        raise GoogleOAuthError(f"Could not reach Google's token endpoint: {exc}") from exc
+        raise GoogleOAuthError("Could not reach Google. Check your connection and try again in a minute.") from exc
 
     tokens["expires_at"] = time.time() + tokens.get("expires_in", 3600)
     if save:                                    # a team member's calendar tokens are kept elsewhere (lk_calendar/member_google)
@@ -95,9 +98,10 @@ def refresh_access_token(refresh_token: str) -> dict:
             tokens = json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
-        raise GoogleOAuthError(f"Google rejected the refresh token: {body}") from exc
+        logging.getLogger(__name__).warning("Google rejected the refresh token: %s", body)
+        raise GoogleOAuthError("Your Google connection stopped working. Please connect Google again in LyteKeepr.") from exc
     except urllib.error.URLError as exc:
-        raise GoogleOAuthError(f"Could not reach Google's token endpoint: {exc}") from exc
+        raise GoogleOAuthError("Could not reach Google. Check your connection and try again in a minute.") from exc
 
     tokens["expires_at"] = time.time() + tokens.get("expires_in", 3600)
     return tokens

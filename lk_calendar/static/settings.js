@@ -1113,4 +1113,15 @@
       box.replaceChildren.apply(box, kids);
     }).catch(function (e) { box.textContent = e.message; });
   }
+
+  // Back from Google after connecting Gmail: say how it went
+  (function () {
+    var q = new URLSearchParams(location.search), result = q.get('gmail');
+    if (!result) return;
+    var words = { missing_code: 'Google didn\u2019t finish the connection. Please try again.', missing_account_email: 'Google didn\u2019t say which Gmail this is. Please try again.',
+                  unknown_workspace: 'That connection link has expired. Please start connecting again.' };
+    var reason = q.get('reason') || '';
+    history.replaceState(null, '', location.pathname);
+    setTimeout(function () { notice(result === 'connected' ? 'Gmail is connected.' : 'Gmail was not connected. ' + (words[reason] || reason || 'Please try again.')); }, 300);
+  })();
 })();

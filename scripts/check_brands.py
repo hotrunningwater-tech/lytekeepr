@@ -187,6 +187,14 @@ def main():
           and "AdminDiary" not in str(m.get("/api/crm/docs/tree?brand=personal").get_json()), "search and the Personal list show only your own")
     check(a.put(f"/api/crm/docs/{admin_doc}", json={"brand": "nexy"}).status_code >= 400, "a Personal document can't be moved to a brand")
 
+    # An unexpected failure: plain words, no raw error
+    from lk_calendar import goals as goals_mod
+    real, goals_mod.overview = goals_mod.overview, lambda: 1 / 0
+    r = a.get("/api/calendar/goals")
+    goals_mod.overview = real
+    check(r.status_code == 500 and "went wrong on our side" in r.get_json().get("error", "") and "division" not in r.get_data(as_text=True), "an unexpected failure gives plain words")
+    check(a.get("/no-such-page-at-all").status_code in (302, 404), "normal web errors stay as they are")
+
     # Recently deleted: a deleted contact comes back whole, and only for whoever may see the bin
     gone = contact(name="Delete Me", email="gone@t.test", brand="nexy")
     a.post(f"/api/crm/people/{gone}/notes", json={"text": "binnote"})
