@@ -13,6 +13,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from google_oauth.sealed import seal, unseal
+
 CALENDAR_SCOPES = ("https://www.googleapis.com/auth/calendar.readonly", "https://www.googleapis.com/auth/calendar.events")
 
 
@@ -27,7 +29,7 @@ def _path(user_id: int):
 
 def load(user_id: int) -> dict | None:
     try:
-        return json.loads(_path(user_id).read_text())
+        return unseal(json.loads(_path(user_id).read_text()))
     except (OSError, ValueError):
         return None
 
@@ -36,8 +38,10 @@ def _save(user_id: int, data: dict) -> None:
     folder = _folder()
     folder.mkdir(parents=True, exist_ok=True)
     path = _path(user_id)
-    path.write_text(json.dumps(data))
-    os.chmod(path, 0o600)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(seal(data)))
+    os.chmod(tmp, 0o600)
+    tmp.replace(path)
 
 
 def has_token(user_id: int) -> bool:

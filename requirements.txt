@@ -5,3 +5,4 @@ requests==2.34.2
 mcp==2.2.0
 gunicorn
 openpyxl
+cryptography>=44

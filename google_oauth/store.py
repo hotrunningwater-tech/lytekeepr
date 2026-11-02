@@ -8,6 +8,7 @@ profiles can restore prior local state safely.
 import json
 from pathlib import Path
 from profiles.store import get_active_profile, get_active_gmail_account_id, set_active_gmail_account_id
+from .sealed import seal, unseal
 
 # Each workspace keeps its own Google tokens in <workspace>/google/. Before workspaces existed they lived next to this file; those are
 # copied once into the first workspace and then never read again. The three names below stay None unless a test points them elsewhere.
@@ -56,8 +57,12 @@ def _active_account_path() -> Path:
 
 
 def _write_json(path: Path, data: dict) -> None:
+    import os
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2))
+    tmp = path.with_name(path.name + ".tmp")              # never a half-written key
+    tmp.write_text(json.dumps(data, indent=2))
+    os.chmod(tmp, 0o600)
+    tmp.replace(path)
 
 
 def _read_json(path: Path) -> dict | None:
@@ -108,18 +113,18 @@ def clear_active_account_id() -> None:
 def save_tokens(data: dict, account_id: str | None = None) -> None:
     target_account_id = account_id or load_active_account_id()
     if target_account_id:
-        _write_json(account_tokens_path(target_account_id), data)
+        _write_json(account_tokens_path(target_account_id), seal(data))
         return
-    _write_json(_store_path(), data)
+    _write_json(_store_path(), seal(data))
 
 
 def load_tokens(account_id: str | None = None) -> dict | None:
     target_account_id = account_id or load_active_account_id()
     if target_account_id:
-        tokens = _read_json(account_tokens_path(target_account_id))
+        tokens = unseal(_read_json(account_tokens_path(target_account_id)))
         if tokens:
             return tokens
-    return _read_json(_store_path())
+    return unseal(_read_json(_store_path()))
 
 
 def has_refresh_token() -> bool:
