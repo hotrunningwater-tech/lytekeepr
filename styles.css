@@ -2957,7 +2957,7 @@ body.no-linkedin #linkedinTab { display: none !important; }
 .ai-goals-head .hx-label { color: var(--coral); }
 body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .ai-goals { display: block; }
 .ai-goals-head { margin-bottom: 6px; }
-body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .ai-goals + .assistant-heading { margin-top: 0; padding-top: 4px; }   /* the chat header no longer slides up over the card */
+body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .ai-goals ~ .assistant-heading { margin-top: 0; padding-top: 4px; }   /* the chat header no longer slides up over the card */
 
 /* All goals, in place of the chat when opened */
 .ai-goals-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
