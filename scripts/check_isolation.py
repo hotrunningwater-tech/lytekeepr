@@ -236,6 +236,27 @@ def main():
     attack("B -> A", [("B admin", b_admin), ("B member", b_member)], ids_a, "zzleaka", a_admin, ids_b, folder[ws_b])
     attack("A -> B", [("A admin", a_admin), ("A member", a_member)], ids_b, "zzleakb", b_admin, ids_a, folder[ws_a])
     own_data("after the attacks")
+    # A customer's own download and closing their account: only their own data, only their admin, and nobody else is touched
+    import io
+    import zipfile
+    r = b_admin.get("/api/account/export")
+    if r.status_code != 200:
+        problems.append(f"EXPORT: the admin's download failed ({r.status_code})")
+    else:
+        z = zipfile.ZipFile(io.BytesIO(r.get_data()))
+        everything = b" ".join(z.read(n) for n in z.namelist()).lower()
+        if b"zzleakb" not in everything or b"zzleaka" in everything:
+            problems.append("EXPORT: the download must hold this workspace's data and nobody else's")
+    if b_member.get("/api/account/export").status_code != 403 or b_member.post("/api/account/close", json={"confirm": "owner-b@example.com"}).status_code != 403:
+        problems.append("CLOSE: a team member can't download everything or close the account")
+    if b_admin.post("/api/account/close", json={"confirm": "wrong@example.com"}).status_code != 400 or a_admin.post("/api/account/close", json={"confirm": "owner-a@example.com"}).status_code != 400:
+        problems.append("CLOSE: the email must match, and the first workspace can't be closed from here")
+    if b_admin.post("/api/account/close", json={"confirm": "owner-b@example.com"}).status_code != 200:
+        problems.append("CLOSE: the admin couldn't close their account")
+    if b_member.get("/api/crm/overview").status_code == 200 and b"zzleakb" in b_member.get("/api/crm/overview").get_data().lower():
+        problems.append("CLOSE: a closed account's team can still see its data")
+    if b"zzleaka" not in a_admin.get("/api/crm/overview").get_data().lower():
+        problems.append("CLOSE: closing one account touched another")
 
 
 if __name__ == "__main__":

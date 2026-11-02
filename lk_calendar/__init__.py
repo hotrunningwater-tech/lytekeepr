@@ -52,8 +52,9 @@ def register(app):
     own_mail.register(app)
     from . import quiet
     quiet.register(app)
-    from . import recycle
+    from . import account_data, recycle
     recycle.register(app)
+    account_data.register(app)
     from . import goals
     goals.register(app)
     from . import docs

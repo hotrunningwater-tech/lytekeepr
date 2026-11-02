@@ -738,6 +738,7 @@
       me = r; window.lkMe = r; showChip(r);
       var tb = nav.querySelector('[data-view=team]'); if (tb) tb.hidden = r.role !== 'admin';      // admin only
       var bb = nav.querySelector('[data-view=brands]'); if (bb) bb.hidden = r.role !== 'admin';     // admin only
+      var db = nav.querySelector('[data-view=data]'); if (db) db.hidden = r.role !== 'admin';       // the account's admin
       var eb = nav.querySelector('[data-view=email]'); if (eb) eb.hidden = r.role !== 'admin';      // the mailbox is the admin's
       var cb = nav.querySelector('[data-view=calls]'); if (cb) cb.hidden = false;                  // everyone: their own Fathom
       return r;
@@ -785,7 +786,7 @@
   function showSettings(view) {
     currentSettingsView = view;
     nav.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.view === view); });
-    if (view === 'deleted') deletedView(); else if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else if (view === 'claude') claudeView(); else if (view === 'brands') brandsView(); else if (view === 'email') emailView(); else detailsView();
+    if (view === 'deleted') deletedView(); else if (view === 'data') dataView(); else if (view === 'mappings') mappingsView(); else if (view === 'team') teamView(); else if (view === 'calls') callsView(); else if (view === 'claude') claudeView(); else if (view === 'brands') brandsView(); else if (view === 'email') emailView(); else detailsView();
   }
   nav.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { showSettings(b.dataset.view); }); });
 
@@ -914,6 +915,26 @@
 
   /* Claude: use LyteKeepr from the Claude app (phone or web). The address to add as a connector, and who is connected. */
   /* Brands: the businesses this account runs. Funnels, contacts and calendar items each belong to one. */
+  function dataView() {
+    main.replaceChildren();
+    var card = h('div', { class: 'lks-card' }, [h('h2', {}, 'Your data'),
+      h('p', {}, 'Download your contacts, messages, notes, calls, tasks, goals and documents as spreadsheets in a zip file.'),
+      h('div', { class: 'lks-row' }, [h('a', { class: 'btn btn-primary', href: (window.LK_PREFIX || '') + '/api/account/export' }, 'Download everything')])]);
+    main.appendChild(card);
+    api('GET', '/api/account/status').then(function (r) {
+      if (!r.can_close) return;
+      var input = h('input', { type: 'text', placeholder: r.owner_email, 'aria-label': 'Type your email to confirm' });
+      var err = h('p', { class: 'lks-err', hidden: true });
+      main.appendChild(h('div', { class: 'lks-card' }, [h('h2', {}, 'Close your account'),
+        h('p', {}, 'Nobody on your team can sign in any more, and your data is removed from the app. Download it first if you want to keep it. To confirm, type ' + r.owner_email + '.'),
+        h('div', { class: 'lks-opt' }, [input]), err,
+        h('div', { class: 'lks-row' }, [h('button', { class: 'btn lks-soft', type: 'button', onclick: function () {
+          api('POST', '/api/account/close', { confirm: input.value }).then(function () { location.href = (window.LK_PREFIX || '') + '/login'; })
+            .catch(function (e) { err.hidden = false; err.textContent = e.message; });
+        } }, 'Close my account')])]));
+    }).catch(function () {});
+  }
+
   function deletedView() {
     main.replaceChildren();
     var card = h('div', { class: 'lks-card' }, [h('h2', {}, 'Recently deleted'), h('p', {}, 'Loading…')]);
