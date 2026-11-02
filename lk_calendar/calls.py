@@ -235,6 +235,8 @@ def _store_call(item: dict) -> bool:
             new = True
         _link_people(conn, call_id, invitees)
     _link_event(call_id, start, end)
+    with _crm() as conn:
+        _adopt_meeting(conn, call_id, item.get("meeting_url") or "")
     if new:                                         # a recording arrived, so the meeting happened: mark it completed (unless already set)
         with _crm() as conn:
             event_id = conn.execute("SELECT event_id FROM calls WHERE call_id = ?", (call_id,)).fetchone()["event_id"]
@@ -244,10 +246,51 @@ def _store_call(item: dict) -> bool:
     return new
 
 
+def _own_emails() -> set:
+    """Our own side of a call: the connected mail accounts and the team. A call is never "with" them, even when one is also a contact."""
+    from gmail import storage
+    with store._conn() as cal:
+        team = {(r["email"] or "").strip().lower() for r in cal.execute("SELECT email FROM users")}
+    return ({a.lower() for a in storage.list_account_ids()} | team) - {""}
+
+
+def _forget_own_side(conn) -> None:
+    own = _own_emails()
+    if own:
+        conn.execute(f"""DELETE FROM call_people WHERE person_id IN (SELECT person_id FROM channel_accounts
+                         WHERE channel = 'email' AND lower(channel_identifier) IN ({','.join('?' for _ in own)}))""", sorted(own))
+
+
+def _adopt_meeting(conn, call_id: int, meeting_url: str = "") -> None:
+    """A recording Fathom didn't tie to the calendar ("Impromptu ...", only the host listed) that belongs to a meeting takes that meeting's
+    guests and name, so it lands on the guest's contact. Only when it started within 15 minutes of the meeting, and not when both have
+    a meeting link and the links differ: a private call must not land on the wrong contact."""
+    call = conn.execute("SELECT event_id, title, started_at, invitees FROM calls WHERE call_id = ?", (call_id,)).fetchone()
+    if not call or not call["event_id"] or not call["started_at"]:
+        return
+    invitees = json.loads(call["invitees"] or "[]")
+    own = _own_emails()
+    if any(i.get("external") and i.get("email") not in own for i in invitees):
+        return                                      # Fathom knows the guests
+    event = store.get_event(call["event_id"])
+    if not event:
+        return
+    gap = abs((datetime.fromisoformat(f"{event['start_date']}T{event['start_time']}") - datetime.fromisoformat(call["started_at"])).total_seconds())
+    if gap > 15 * 60 or (meeting_url and event.get("join_url") and meeting_url.split("?")[0].rstrip("/") != event["join_url"].split("?")[0].rstrip("/")):
+        return
+    have = {i.get("email") for i in invitees}
+    guests = [{"name": a.get("name") or "", "email": (a.get("email") or "").lower(), "external": True}
+              for a in json.loads(event.get("attendees") or "[]") if (a.get("email") or "").lower() not in have | own]
+    title = event["title"] if (call["title"] or "").lower().startswith("impromptu") else call["title"]
+    conn.execute("UPDATE calls SET invitees = ?, title = ? WHERE call_id = ?", (json.dumps(invitees + guests), title, call_id))
+    _link_people(conn, call_id, invitees + guests)
+
+
 def _link_people(conn, call_id: int, invitees: list) -> None:
-    """The contacts on the call: anyone invited whose email belongs to a contact (any capitalisation)."""
+    """The contacts on the call: anyone invited whose email belongs to a contact (any capitalisation), never our own side."""
+    own = _own_emails()
     for inv in invitees:
-        if not inv["email"]:
+        if not inv["email"] or inv["email"] in own:
             continue
         for r in conn.execute("SELECT DISTINCT person_id FROM channel_accounts WHERE channel = 'email' AND lower(channel_identifier) = ?", (inv["email"],)):
             conn.execute("INSERT OR IGNORE INTO call_people (call_id, person_id) VALUES (?, ?)", (call_id, r["person_id"]))
@@ -287,7 +330,7 @@ def _catch_up(conn, person_id: int) -> None:
     """Calls that arrived before this contact existed (or before it had this email): link them now, by invitee email."""
     emails = {r["e"] for r in conn.execute("""SELECT lower(channel_identifier) AS e FROM channel_accounts
                                               WHERE person_id = ? AND channel = 'email' AND channel_identifier != ''""", (person_id,))}
-    if not emails:
+    if not emails or emails & _own_emails():
         return
     for r in conn.execute("""SELECT call_id, invitees FROM calls WHERE call_id NOT IN (SELECT call_id FROM call_people WHERE person_id = ?)""",
                           (person_id,)).fetchall():      # (linking is not showing: who may see each call is decided when reading)
@@ -496,9 +539,13 @@ def attention(days: int = 14) -> dict:
                                                     ORDER BY started_at DESC""", (since, *args))]
         for r in ready:
             r["invitees"] = json.loads(r["invitees"] or "[]")
+        _forget_own_side(conn)
         people = _people_on(conn, [r["call_id"] for r in ready])
         for r in ready:                             # a contact added since the call arrived: link it now, by email
             if not people.get(r["call_id"]):
+                _adopt_meeting(conn, r["call_id"])
+                fresh = conn.execute("SELECT title, invitees FROM calls WHERE call_id = ?", (r["call_id"],)).fetchone()
+                r["title"], r["invitees"] = fresh["title"], json.loads(fresh["invitees"] or "[]")
                 _link_people(conn, r["call_id"], r["invitees"])
         people = _people_on(conn, [r["call_id"] for r in ready])
         linked = {r["event_id"] for r in conn.execute("SELECT event_id FROM calls WHERE event_id IS NOT NULL")}
