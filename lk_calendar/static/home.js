@@ -96,7 +96,52 @@
       }))])]);
   }
   loadStart();
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) loadStart(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { loadStart(); loadAlerts(); } });
+
+  /* ---------- Not syncing: email or LinkedIn stopped, with the one step that fixes it ---------- */
+  function loadAlerts() {
+    api('GET', '/api/calendar/sync-problems').then(renderAlerts).catch(function () { /* never in the way of Home */ });
+  }
+  function alertAction(p) {
+    if (p.action === 'gmail') return h('button', { class: 'hm-mini', type: 'button', onclick: function () { location.href = (window.LK_PREFIX || '') + '/auth/google/start'; } }, 'Reconnect');
+    if (p.action === 'linkedin') return h('button', { class: 'hm-mini', type: 'button', onclick: function () { var t = $('linkedinTab'); if (t) t.click(); } }, 'Open LinkedIn tab');
+    return null;
+  }
+  function renderAlerts(d) {
+    var box = $('homeAlerts'), list = (d && d.problems) || [];
+    box.hidden = !list.length;
+    fill(box, list.map(function (p) {
+      return h('div', { class: 'lk-alert' }, [h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, p.title), h('div', { class: 'gs-why' }, p.fix)]),
+        alertAction(p), h('button', { class: 'hm-mini', type: 'button', onclick: function () { openHelp(p.title + ': '); } }, 'Help')]);
+    }));
+  }
+  loadAlerts();
+  setInterval(loadAlerts, 10 * 60 * 1000);
+
+  /* ---------- Help: USER writes what's wrong; it reaches the LyteKeepr team by email, and the reply comes back to USER's inbox ---------- */
+  function openHelp(start) {
+    var old = $('lkHelp'); if (old) old.remove();
+    var text = h('textarea', { class: 'lk-help-text', rows: '5', placeholder: 'What happened, and what did you expect?' });
+    text.value = start || '';
+    var note = h('div', { class: 'gs-why' }, 'We see which account this is from and what isn\'t working, so a sentence is enough.');
+    var send = h('button', { class: 'btn btn-primary', type: 'button' }, 'Send');
+    var close = function () { wrap.remove(); };
+    var wrap = h('div', { class: 'lk-help-back', id: 'lkHelp', onclick: function (ev) { if (ev.target === wrap) close(); } }, [
+      h('div', { class: 'lk-help-card', role: 'dialog', 'aria-label': 'Help' }, [
+        h('div', { class: 'gs-head' }, [h('span', { class: 'gs-title' }, 'Tell us what\'s not working'), h('button', { class: 'hm-mini', type: 'button', onclick: close }, 'Close')]),
+        text, note, h('div', { class: 'lk-help-row' }, [send])])]);
+    send.onclick = function () {
+      send.disabled = true;
+      api('POST', '/api/calendar/help', { text: text.value }).then(function (r) {
+        fill(wrap.firstChild, [h('div', { class: 'gs-head' }, [h('span', { class: 'gs-title' }, 'Sent'), h('button', { class: 'hm-mini', type: 'button', onclick: close }, 'Close')]),
+          h('div', { class: 'gs-why' }, r.reply_to ? 'We\'ll reply to ' + r.reply_to + '.' : 'We\'ll get back to you by email.')]);
+      }).catch(function (e) { send.disabled = false; note.textContent = e.message; });
+    };
+    document.body.appendChild(wrap);
+    text.focus();
+  }
+  window.lkOpenHelp = openHelp;
+  var helpBtn = $('helpBtn'); if (helpBtn) helpBtn.addEventListener('click', function () { openHelp(''); });
 
   // Tasks: All, Work only or Personal only (lead follow-ups and meetings are work and aren't affected)
   function shown(e) {

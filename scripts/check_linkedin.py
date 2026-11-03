@@ -201,6 +201,12 @@ def main():
     tick()
     check(calls() == ["status"], f"it kept going while logged out: {calls()}")
     check(a_admin.get("/api/linkedin/status").get_json()["state"] == "needs_login", "being logged out is not shown")
+    shown_home = [x["key"] for x in a_admin.get("/api/calendar/sync-problems").get_json()["problems"]]
+    check("linkedin_login" in shown_home and "email" not in shown_home, f"Home does not say LinkedIn is logged out: {shown_home}")
+    check(a_member.get("/api/calendar/sync-problems").get_json()["problems"] == [], "a team member is warned about the admin's LinkedIn")
+    linkedin_health = [x for x in _console.health() if x["name"] == "LinkedIn sync"]
+    check(linkedin_health and linkedin_health[0]["state"] == "warn" and "logged out" in linkedin_health[0]["detail"],
+          f"the owner console does not show the logged-out LinkedIn: {linkedin_health}")
     make_read_due()
     fake(auth="expired", conversations=conversations, messages=messages)
     tick()
@@ -291,6 +297,8 @@ def main():
     status = a_admin.get("/api/linkedin/status").get_json()
     check(status["outbox_waiting"] == 0 and len(status["outbox_problems"]) == 2, f"failed sends are not reported: {status}")
 
+    support_check()
+
     # ---- a suspended workspace pauses, Disconnect stops for good
     directory.set_status(accounts["owner-a@example.com"]["id"], "suspended")
     check(stranger.get("/linkedin-helper/plan", headers=good).status_code == 403, "a suspended workspace can still add messages")
@@ -308,6 +316,53 @@ def main():
     check(refused.get("status") == "not_connected", f"a message was accepted with LinkedIn disconnected: {refused}")
     addon_check(address)
     httpd.shutdown()
+
+
+def support_check():
+    """Home warns when something stopped syncing, with the fix; Help reaches the owner with the account attached."""
+    import google_oauth.store as gstore
+    from lk_calendar import google_sync, store, support
+    def shown():
+        return [x["key"] for x in a_admin.get("/api/calendar/sync-problems").get_json()["problems"]]
+    check("linkedin_send" in shown(), f"Home does not warn about LinkedIn messages that may not have gone: {shown()}")
+    with linkedin_link._db() as conn:
+        conn.execute("UPDATE linkedin_links SET last_seen = '2026-01-01T09:00:00', last_state = 'ok' WHERE profile_id = ? AND ended_at = ''", (ws_a,))
+    check("linkedin_quiet" in shown(), f"Home does not warn when LinkedIn has been quiet for days: {shown()}")
+    real_token, real_status = gstore.has_refresh_token, google_sync.status
+    gstore.has_refresh_token = lambda *a, **k: True
+    google_sync.status = lambda *a, **k: {"needs_reconnect": False}
+    try:
+        with use_profile(ws_a):
+            store.set_state("gmail_last_ok", "")
+        check("email" not in shown(), "a workspace was warned before its first email sync was even counted")
+        with use_profile(ws_a):
+            store.set_state("gmail_last_ok", "2026-01-01T09:00:00")
+        check("email" in shown(), f"Home does not warn when email stopped syncing: {shown()}")
+        email_health = [x for x in _console.health() if x["name"] == "Email sync"]
+        check(email_health and email_health[0]["state"] == "warn", f"the owner console does not show the stopped email: {email_health}")
+        with use_profile(ws_a):
+            support.email_synced()
+        check("email" not in shown(), "the email warning stays after a good sync")
+        google_sync.status = lambda *a, **k: {"needs_reconnect": True}
+        check("google" in shown() and "email" not in shown(), f"a cut-off Google sign-in is not shown as one clear step: {shown()}")
+    finally:
+        gstore.has_refresh_token, google_sync.status = real_token, real_status
+    sent = []
+    real_send = support._send_help
+    support._send_help = lambda text, user, profile_id: sent.append((text, user.get("email"), profile_id))
+    try:
+        check(a_member.post("/api/calendar/help", json={"text": ""}).status_code == 400, "an empty help request was accepted")
+        answer = a_member.post("/api/calendar/help", json={"text": "The calendar is empty"}).get_json()
+        check(answer.get("ok") and answer.get("reply_to") == "member-a@example.com", f"a team member could not ask for help: {answer}")
+        check(sent == [("The calendar is empty", "member-a@example.com", ws_a)], f"the help request did not reach the owner with its account: {sent}")
+        asks = [e for e in directory.list_errors() if e["kind"] == "Help request"]
+        check(len(asks) == 1 and asks[0]["owner_email"] == "owner-a@example.com", f"the help request is not in the owner console: {asks}")
+        check(any(x["name"] == "Help requests" and x["state"] == "bad" for x in _console.health()), "the owner console does not show a waiting help request")
+        support._send_help = lambda *a: (_ for _ in ()).throw(RuntimeError("Gmail down"))
+        check(a_admin.post("/api/calendar/help", json={"text": "Gmail is down too"}).get_json().get("ok"),
+              "a help request was lost when the email to the owner failed (it should still be in the console)")
+    finally:
+        support._send_help = real_send
 
 
 def addon_check(address):

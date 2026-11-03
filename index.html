@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=60">
+<link rel="stylesheet" href="styles.css?v=61">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team11">
 </head>
@@ -59,6 +59,7 @@
         <span class="user-name" id="userName"></span>
         <span class="user-role" id="userRole" hidden>Admin</span>
       </div>
+      <button class="lk-help-btn" id="helpBtn" type="button" title="Something not working? Tell us">Help</button>
       <button class="lk-gear" id="settingsBtn" type="button" aria-label="Settings" title="Settings: import contacts, companies">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
       </button>
@@ -101,6 +102,7 @@
           </div>
         </div>
 
+        <div id="homeAlerts" hidden></div>
         <div id="homeStart" hidden></div>
         <div class="home-section home-auto" id="homeActionsSection">
          <div class="home-auto-bar"><span class="hx-label">Automatic</span><div class="home-chips" id="homeChips"></div><button class="home-hide" type="button" id="homeChipHide" hidden>Hide ×</button></div>
@@ -654,7 +656,7 @@
 <script src="lk-calendar/settings.js?v=data3"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
-<script src="lk-calendar/home.js?v=25"></script>
+<script src="lk-calendar/home.js?v=26"></script>
 <script src="lk-calendar/docs.js?v=3"></script>
 <script src="lk-calendar/goals.js?v=2"></script>
 <script src="lk-calendar/viewstate.js"></script>

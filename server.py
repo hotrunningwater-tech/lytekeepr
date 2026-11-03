@@ -1129,6 +1129,8 @@ def run_gmail_scan(since_date=None) -> dict:
     promises.review_quietly()
     _first_email_follow_ups()
     relationships.update_quietly()     # who is in touch with whom (addresses only): suggestions for opportunities          # new mail: replies switch leads to "replied"; a promised time ("next week") sets the follow-up
+    from lk_calendar import support
+    support.email_synced()             # Home and the owner console warn when this stops happening
     return result
 
 

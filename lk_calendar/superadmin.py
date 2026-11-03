@@ -39,7 +39,8 @@ def usage(profile_id: str) -> dict:
     from google_oauth.store import has_refresh_token
     from profiles.store import use_profile
     from . import google_sync, store
-    out = {"contacts": 0, "funnels": 0, "emails_30d": 0, "team": 0, "last_active": "", "gmail": False, "google_reconnect": False, "last_gmail_sync": ""}
+    out = {"contacts": 0, "funnels": 0, "emails_30d": 0, "team": 0, "last_active": "", "gmail": False, "google_reconnect": False, "last_gmail_sync": "",
+           "sync_problems": []}
     try:
         with use_profile(profile_id):
             crm_db.init_db()
@@ -58,6 +59,8 @@ def usage(profile_id: str) -> dict:
             out["gmail"] = has_refresh_token()
             out["google_reconnect"] = google_sync.status()["needs_reconnect"]
             out["last_gmail_sync"] = store.get_state("gmail_last_daily_scan") or ""
+            from . import support
+            out["sync_problems"] = support.problems()
     except Exception:
         log.exception("could not count usage for workspace %s", profile_id)
     return out
@@ -93,7 +96,17 @@ def health() -> list[dict]:
     reconnect = [a["name"] or a["owner_email"] for a in accounts if counts[a["id"]]["google_reconnect"]]
     items.append({"name": "Google connections", "state": "warn" if reconnect else "ok",
                   "detail": ("needs reconnecting: " + ", ".join(reconnect)) if reconnect else f"{len(accounts) - len(no_gmail)} of {len(accounts)} active accounts have Gmail connected"})
-    open_errors = directory.list_errors()
+    not_syncing = {}
+    for a in accounts:
+        for p in counts[a["id"]]["sync_problems"]:
+            not_syncing.setdefault("LinkedIn" if p["key"].startswith("linkedin") else "Email", []).append(f"{a['name'] or a['owner_email']}: {p['title']}")
+    for name in ("Email", "LinkedIn"):
+        found = not_syncing.get(name, [])
+        items.append({"name": f"{name} sync", "state": "warn" if found else "ok", "detail": "; ".join(found) if found else "every connected account is syncing"})
+    everything = directory.list_errors()
+    asks = [e for e in everything if e["kind"] == "Help request"]
+    open_errors = [e for e in everything if e["kind"] != "Help request"]
+    items.append({"name": "Help requests", "state": "bad" if asks else "ok", "detail": f"{len(asks)} waiting (below)" if asks else "none waiting"})
     items.append({"name": "Errors", "state": "bad" if open_errors else "ok", "detail": f"{len(open_errors)} open" if open_errors else "none open"})
     return items
 
