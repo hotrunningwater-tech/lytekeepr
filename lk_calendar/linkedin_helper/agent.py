@@ -144,7 +144,8 @@ class LinkedIn:
         args.update(context_id="lytekeepr", request_id=f"lk-{uuid.uuid4().hex[:12]}")
         result = await asyncio.wait_for(self.session.call_tool(name, args), timeout=120)
         if getattr(result, "is_error", None) or getattr(result, "isError", None):       # mcp 2 / mcp 1 spelling
-            raise RuntimeError(f"{name} failed")
+            said = " ".join(getattr(b, "text", "") for b in getattr(result, "content", None) or []).strip()
+            raise RuntimeError(said[:300] or f"{name} failed")
         data = getattr(result, "structured_content", None) or getattr(result, "structuredContent", None)
         if data:
             return data
@@ -263,20 +264,62 @@ async def send_waiting(cfg):
             for n, item in enumerate(items):
                 if n:
                     await asyncio.sleep(SEND_PAUSE_SECONDS)
-                target = {"profile_slug": item["profile_slug"]} if item.get("profile_slug") else {"conversation_ref": item.get("conversation_ref")}
                 try:                    # LinkedIn's tool sends in two steps: an exact draft, then that draft (the key stops a second send)
-                    draft = await li.tool("linkedin.messaging.message.prepare", message=item["text"], **target)
+                    draft = await _prepare(li, item)
+                    if not draft:
+                        call(cfg, "POST", f"outbox/{item['id']}", {"outcome": "failed", "detail": f"Couldn't find {item.get('name') or 'them'} on your LinkedIn."})
+                        continue
                     result = (await li.tool("linkedin.messaging.message.execute", action_id=draft["draft"]["action_id"], payload_hash=draft["draft"]["payload_hash"],
                                             approval_preview=draft["approval_preview"], idempotency_key=f"lk-outbox-{item['id']}")).get("result") or {}
                     outcome = result.get("outcome") if result.get("outcome") in ("verified", "failed", "uncertain") else "uncertain"
                     detail = result.get("detail") or ""
                 except Exception as exc:  # noqa: BLE001 - LinkedIn refused or the tool broke: reported, never retried blindly
-                    outcome, detail = "failed", type(exc).__name__
+                    outcome, detail = "failed", _plain(str(exc))
                 call(cfg, "POST", f"outbox/{item['id']}", {"outcome": outcome, "detail": detail})
                 if outcome == "verified":
                     sent += 1
                     await _bring_in_thread(cfg, li, item)
     return sent
+
+
+async def _prepare(li, item):
+    """LinkedIn's exact draft of the message (nothing is sent yet), trying each way to reach the person until one works: the person's
+    own profile (their Message button; LinkedIn can flag a chat that looks one-to-one as a group and refuse it), the one connection
+    with exactly that name, then the chat, looked up now (a conversation ref only works in the session that just found it).
+    Preparing sends nothing, so trying the next way is safe. None when the person can't be found at all."""
+    name = (item.get("name") or "").strip()
+    refused = None
+
+    async def routes():
+        if item.get("profile_slug"):
+            yield {"profile_slug": item["profile_slug"]}
+        if name:
+            people = (await li.tool("linkedin.connections.search", query=name)).get("people") or []
+            same = {p["profile_slug"] for p in people if (p.get("name") or "").strip().lower() == name.lower() and p.get("profile_slug")} - {item.get("profile_slug")}
+            if len(same) == 1:
+                yield {"profile_slug": same.pop()}
+            found = await li.tool("linkedin.messaging.search", query=name, page_size=10)
+            chats = [c for c in found.get("conversations") or [] if (c.get("participant_name") or "").strip().lower() == name.lower() and not c.get("is_group")]
+            if chats:
+                yield {"conversation_ref": chats[0]["conversation_ref"]}
+
+    async for target in routes():
+        try:
+            return await li.tool("linkedin.messaging.message.prepare", message=item["text"], **target)
+        except RuntimeError as exc:
+            refused = exc
+    if refused:
+        raise refused
+    return None
+
+
+def _plain(said):
+    """LinkedIn's refusal in words a USER can act on."""
+    if "Group conversations" in said:
+        return "LinkedIn's tool can't send into this chat (it reads it as a group chat). Please send it on LinkedIn yourself."
+    if "message request" in said.lower() or "inmail" in said.lower():
+        return "LinkedIn only allows a message request or InMail here. Please send it on LinkedIn yourself."
+    return "LinkedIn refused it: " + said[:200]
 
 
 async def _bring_in_thread(cfg, li, item):

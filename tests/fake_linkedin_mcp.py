@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 PATH = os.environ["FAKE_LINKEDIN"]
 server = MCPServer("fake-linkedin")
@@ -31,11 +32,14 @@ def status(context_id: str, request_id: str) -> dict[str, Any]:
 
 
 @server.tool(name="linkedin.messaging.search", structured_output=True)
-def search(context_id: str, request_id: str, category: str, page_size: int, cursor: str | None = None) -> dict[str, Any]:
+def search(context_id: str, request_id: str, category: str | None = None, page_size: int = 25, cursor: str | None = None, query: str | None = None) -> dict[str, Any]:
     note("search")
     if data().get("auth") == "expired":
         raise ValueError("login required")
-    return {"conversations": data()["conversations"], "pagination": {"has_more": False}}
+    found = data()["conversations"]
+    if query:                                         # like the real tool: a search by name
+        found = [c for c in found if query.lower() in (c.get("participant_name") or "").lower()]
+    return {"conversations": found, "pagination": {"has_more": False}}
 
 
 @server.tool(name="linkedin.messaging.conversation.get", structured_output=True)
@@ -47,9 +51,19 @@ def conversation(context_id: str, request_id: str, conversation_ref: str, max_me
     return {"conversation": {"messages": d["messages"][conversation_ref]}}
 
 
+@server.tool(name="linkedin.connections.search", structured_output=True)
+def connections(context_id: str, request_id: str, query: str | None = None) -> dict[str, Any]:
+    note("connections:" + (query or ""))
+    return {"people": [p for p in data().get("connections", []) if (query or "").lower() in p["name"].lower()]}
+
+
 @server.tool(name="linkedin.messaging.message.prepare", structured_output=True)
 def prepare(context_id: str, request_id: str, message: str, profile_slug: str | None = None, conversation_ref: str | None = None) -> dict[str, Any]:
     note("prepare:" + (profile_slug or conversation_ref or "?"))
+    if profile_slug in data().get("broken_profiles", []):    # like the real tool: some profiles' Message button doesn't open the chat
+        raise ToolError("parser_drift: The profile Message button did not open one exact-recipient conversation surface")
+    if conversation_ref in data().get("group_refs", []):     # like the real tool: a chat it reads as a group is refused
+        raise ToolError("invalid_target: Group conversations are outside this message capability.")     # the real tool shows its reason
     action_id = "action_" + str(abs(hash((message, profile_slug, conversation_ref))))
     preview = {"action_id": action_id, "action_type": "message_send", "summary": message, "payload_hash": "h" + action_id}
     return {"status": "ready_for_confirmation", "draft": {"action_id": action_id, "payload_hash": "h" + action_id, "payload": {"message": message}},

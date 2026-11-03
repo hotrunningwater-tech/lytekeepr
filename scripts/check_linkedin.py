@@ -296,6 +296,29 @@ def main():
         tick()
     status = a_admin.get("/api/linkedin/status").get_json()
     check(status["outbox_waiting"] == 0 and len(status["outbox_problems"]) == 2, f"failed sends are not reported: {status}")
+    # a chat with no profile link (common on real LinkedIn): found by name in the same session, then sent; a chat LinkedIn's tool
+    # reads as a group is refused, and the reason is shown in plain words
+    plain_chat = {"conversation_ref": "c9", "participant_name": "Plain Chat", "participant_profile_slug": None, "last_activity_text": "9:00 AM"}
+    plain_messages = dict(messages, c9=[message("m90", "hi there")])
+    fake(conversations=conversations + [plain_chat], messages=plain_messages)
+    make_read_due()
+    tick()
+    for case in ("connection", "broken profile", "plain", "group"):
+        shown = claude_connector._run_tool(connector_call, "send_linkedin_message", {"contact": "Plain Chat", "text": f"zz {case} chat"})
+        claude_connector._run_tool(connector_call, "send_linkedin_message", {"contact": "Plain Chat", "text": f"zz {case} chat", "confirm_code": shown.get("confirm_code")})
+        fake(conversations=conversations + [plain_chat], messages=plain_messages, group_refs=["c9"] if case == "group" else [],
+             connections=[{"name": "Plain Chat", "profile_slug": "plain-chat"}] if case in ("connection", "broken profile") else [],
+             broken_profiles=["plain-chat"] if case == "broken profile" else [])
+        tick()
+        if case == "connection":           # no profile address saved: found among the connections, sent from the profile, not the chat
+            check("prepare:plain-chat" in calls() and "zz connection chat" in sent_file.read_text(), f"a connection was not messaged from the profile: {calls()}")
+        if case == "broken profile":       # the profile route refused: the chat is used instead, and it goes once
+            check("prepare:plain-chat" in calls() and "prepare:c9" in calls() and "zz broken profile chat" in sent_file.read_text(),
+                  f"a refused profile route did not fall back to the chat: {calls()}")
+        if case == "plain":
+            check("prepare:c9" in calls() and "zz plain chat" in sent_file.read_text(), f"a chat with no profile link was not sent: {calls()}")
+    problems_now = a_admin.get("/api/linkedin/status").get_json()["outbox_problems"]
+    check(any("group chat" in (x.get("detail") or "") for x in problems_now), f"a refused group chat is not explained in plain words: {problems_now}")
 
     support_check()
 
