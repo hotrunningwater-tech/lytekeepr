@@ -1087,7 +1087,7 @@ def run_gmail_scan(since_date=None) -> dict:
     result = own_mail.scan(since_date) if own_mail.is_enabled() else scan_for_candidates(since_date=since_date)
     account_id = result["account_id"]
 
-    known_contact_ids = []
+    known_contact_ids, removed_sender_ids = [], []
     new_ids = result.get("new_candidate_ids", [])
     if new_ids:
         crm_db.init_db()
@@ -1099,6 +1099,9 @@ def run_gmail_scan(since_date=None) -> dict:
                     continue
                 contact_info = _email_contact_info(message)
                 if contact_info is None:
+                    continue
+                if crm_db.is_contact_excluded(lookup_conn, "email", contact_info[0]) or crm_db.is_contact_excluded(lookup_conn, "email", contact_info[0].lower()):
+                    removed_sender_ids.append(message_id)          # a sender the user removed: skips review
                     continue
                 existing = crm_db.find_channel_account(lookup_conn, "email", contact_info[0])
                 if existing is not None and existing["contact_status"] == "trusted":
@@ -1123,6 +1126,8 @@ def run_gmail_scan(since_date=None) -> dict:
         finally:
             crm_conn.close()
 
+    if removed_sender_ids:
+        save_candidates(account_id, [], removed_sender_ids)
     result["auto_saved_known_contact_ids"] = known_contact_ids
     result["candidates"] = get_pending_candidates(account_id)
     from lk_calendar import promises, relationships
@@ -1209,6 +1214,82 @@ def gmail_save_candidates():
     _first_email_follow_ups()
     relationships.update_quietly()     # who is in touch with whom (addresses only): suggestions for opportunities          # emails just saved: replies and promised times update the follow-ups
     return jsonify(result)
+
+
+# ---- Sorting what waits for review, one decision per sender (gmail/senders.py; Claude's email_inbox and sort_email_inbox) ----
+def _wrote_to(address: str):
+    """Has the user ever written to this address? Their own sent mail first, then the whole mailbox (not only what was synced).
+    None when the mailbox can't be asked: nothing is guessed."""
+    from mailserver import own as own_mail
+    crm_db.init_db()
+    conn = crm_db.get_connection()
+    try:
+        if conn.execute("""SELECT 1 FROM messages m JOIN channel_accounts ca ON ca.account_id = m.account_id
+                           WHERE ca.channel = 'email' AND lower(ca.channel_identifier) = ? AND m.direction = 'outgoing' LIMIT 1""",
+                        (address.lower(),)).fetchone():
+            return True
+    finally:
+        conn.close()
+    try:
+        if own_mail.is_enabled():
+            return own_mail.sent_to(address)
+        return bool(gmail_client.list_message_ids(f"in:sent to:{address}").get("messages"))
+    except Exception:
+        logging.getLogger(__name__).warning("could not ask the mailbox about a sender", exc_info=True)
+        return None
+
+
+@app.get("/api/email/senders")
+def email_senders():
+    from gmail import senders
+    account_id = get_active_account_id()
+    if not account_id:
+        return jsonify({"groups": [], "removed": []})
+    return jsonify({"groups": senders.groups(account_id, _email_contact_info, _wrote_to), "removed": senders.removed(account_id)})
+
+
+@app.post("/api/email/senders/sort")
+def email_senders_sort():
+    """keep / remove / bring_back: lists of sender addresses. Kept: they become contacts with all their waiting emails."""
+    from gmail import senders
+    account_id = get_active_account_id()
+    if not account_id:
+        return jsonify({"error": "No mailbox is connected yet."}), 400
+    body = request.get_json(silent=True) or {}
+    lists = {k: body.get(k) or [] for k in ("keep", "remove", "bring_back")}
+    if any(not isinstance(v, list) for v in lists.values()):
+        return jsonify({"error": "keep, remove and bring_back must be lists of email addresses."}), 400
+    keep = senders.ids_from(account_id, _email_contact_info, lists["keep"])
+    remove = senders.ids_from(account_id, _email_contact_info, [a for a in lists["remove"] if a.strip().lower() not in {k.lower() for k in keep}])
+    out = {"kept": [], "removed": [], "brought_back": [], "not_waiting": []}
+    asked = {a.strip().lower() for a in lists["keep"] + lists["remove"]}
+    out["not_waiting"] = sorted(asked - {a.lower() for a in list(keep) + list(remove)})
+    ids = [i for v in keep.values() for i in v]
+    if ids:
+        save_candidates(account_id, ids)
+    crm_db.init_db()
+    conn = crm_db.get_connection()
+    try:
+        for i in ids:
+            message = gmail_storage.load_message(account_id, i)
+            if message:
+                _crm_write_email(conn, message)
+        out["kept"] = [{"sender": a, "emails": len(v)} for a, v in keep.items()]
+        for address, sender_ids in remove.items():
+            senders.remove(account_id, address, sender_ids, conn)
+            out["removed"].append({"sender": address, "emails": len(sender_ids)})
+        for address in lists["bring_back"]:
+            back = senders.bring_back(account_id, address, conn)
+            (out["brought_back"] if back >= 0 else out["not_waiting"]).append({"sender": address, "emails": back} if back >= 0 else address)
+        conn.commit()
+    finally:
+        conn.close()
+    if ids:
+        from lk_calendar import promises, relationships
+        promises.review_quietly()
+        _first_email_follow_ups()
+        relationships.update_quietly()
+    return jsonify(out)
 
 
 @app.get("/api/gmail/messages/<message_id>/attachments/<attachment_id>/raw")

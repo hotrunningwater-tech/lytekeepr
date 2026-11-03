@@ -247,11 +247,8 @@ def scan_for_candidates(since_date: str | None = None) -> dict:
             )
 
         # Every new, non-category-excluded message goes straight to
-        # pending_review — no relevance classification. This used to run
-        # an LLM check for "is this about an active divorce/custody
-        # case" (classify_fn, now unused), which is DLYTE-era logic that
-        # doesn't fit LyteKeepr's general CRM purpose — it was silently
-        # hiding real emails a CRM user would want to see.
+        # pending_review; nothing is hidden on a guess. The review itself is
+        # one decision per sender (gmail/senders.py, Claude's sort_email_inbox).
         new_pending_ids = []
         team = _team_addresses(account_id)
         for message in normalized_batch:

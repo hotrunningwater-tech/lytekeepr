@@ -73,6 +73,14 @@ if ! python3 scripts/check_linkedin.py > /tmp/lk-linkedin.log 2>&1; then
   exit 1
 fi
 grep "PASSED" /tmp/lk-linkedin.log
+# Never ship email sorting that loses a kept sender's emails or lets a removed sender back in.
+echo "Checking email sorting..."
+if ! python3 scripts/check_email_sort.py > /tmp/lk-email-sort.log 2>&1; then
+  grep -E "FAILED|REFUSED|Error" /tmp/lk-email-sort.log | head -20
+  echo "Deploy stopped: the email sorting check did not pass (full output in /tmp/lk-email-sort.log)."
+  exit 1
+fi
+grep "PASSED" /tmp/lk-email-sort.log
 rsync -az --delete --filter="merge $FILTER" ./ "$HOST:$DEST"
 ssh "$HOST" 'chown -R lkcal:lkcal /opt/lytekeepr-calendar/app &&
   install -o root -g root -m 700 /opt/lytekeepr-calendar/app/scripts/calendar_backup.py /opt/lytekeepr-calendar/backup.py &&

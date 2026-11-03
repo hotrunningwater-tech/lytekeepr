@@ -90,6 +90,8 @@ related_people | Who else belongs here
 accept_suggestion | Accept a suggestion
 dismiss_suggestion | Dismiss a suggestion
 send_email | Send an email
+email_inbox | Email waiting for review
+sort_email_inbox | Sort email waiting for review
 linkedin_inbox | LinkedIn people waiting for review
 sort_linkedin_inbox | Sort LinkedIn people waiting for review
 send_linkedin_message | Send a LinkedIn message

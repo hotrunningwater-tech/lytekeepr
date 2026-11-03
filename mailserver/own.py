@@ -192,6 +192,26 @@ def _sent_folder(m, cfg) -> str:
     return "Sent"
 
 
+def sent_to(address: str) -> bool:
+    """Has the user ever sent anything to this address? Asks the whole Sent folder, not only what was synced."""
+    cfg = load()
+    if not cfg:
+        raise MailError("No mail server is connected.")
+    m = _imap(cfg)
+    try:
+        folder = _sent_folder(m, cfg)
+        typ, _ = m.select(_q(folder), readonly=True)
+        if typ != "OK":
+            raise MailError(f"Couldn't open the {folder} folder.")
+        typ, found = m.search(None, "TO", _q(address))
+        return typ == "OK" and bool(found and found[0].split())
+    finally:
+        try:
+            m.logout()
+        except Exception:
+            pass
+
+
 def _dec(value) -> str:
     try:
         return str(make_header(decode_header(value or "")))

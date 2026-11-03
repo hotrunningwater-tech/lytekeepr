@@ -146,6 +146,9 @@ def normalize_message(raw: dict, account_id: str) -> dict:
         "labelIds": label_ids,
         "isUnread": "UNREAD" in label_ids,
         "isStarred": "STARRED" in label_ids,
+        "isBulk": bool(_header(headers, "List-Unsubscribe") or _header(headers, "List-Id")              # mailing lists and mass mail
+                       or _header(headers, "Precedence").strip().lower() in ("bulk", "list", "junk")
+                       or _header(headers, "Auto-Submitted").strip().lower() not in ("", "no")),
         "hasAttachments": bool(attachments),
         "attachments": attachments,
         "syncedAt": datetime.now(timezone.utc).isoformat(),

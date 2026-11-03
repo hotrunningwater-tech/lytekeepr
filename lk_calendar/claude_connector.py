@@ -660,6 +660,20 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"keep": {"type": "array", "items": {"type": "integer"}, "description": "person_ids to keep as contacts"},
                                                       "remove": {"type": "array", "items": {"type": "integer"}, "description": "person_ids to remove"}}},
      "read": False},
+    {"name": "email_inbox", "title": "Email waiting for review",
+     "description": ("Emails from people who aren't contacts yet wait for review. Here they are by sender, in groups (written: the user has written "
+                     "to them; automatic: no-reply, lists, receipts; selling; never: the user never wrote to them), each sender with how many emails "
+                     "and one example. For 'sort my email': call this, decide keep or remove per group (suggested: keep written, remove automatic "
+                     "and selling) and per sender where the example says otherwise, list only the senders you can't judge for the user to decide, "
+                     "then do it all with sort_email_inbox."),
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "sort_email_inbox", "title": "Sort email waiting for review",
+     "description": ("Keep senders as contacts (with all their waiting emails; later emails go straight onto them) and remove others (their later "
+                     "emails skip review; can be brought back for 30 days with bring_back)."),
+     "inputSchema": {"type": "object", "properties": {"keep": {"type": "array", "items": {"type": "string"}, "description": "sender email addresses to keep"},
+                                                      "remove": {"type": "array", "items": {"type": "string"}, "description": "sender email addresses to remove"},
+                                                      "bring_back": {"type": "array", "items": {"type": "string"}, "description": "removed senders to bring back"}}},
+     "read": False},
     {"name": "send_linkedin_message", "title": "Send a LinkedIn message", "destructive": True,
      "description": ("Send a LinkedIn message to one contact: in their existing conversation, or a first message if LyteKeepr has their LinkedIn profile. "
                      "It goes out from the user's own computer through the LyteKeepr LinkedIn add-on (within a minute while it is on). "
@@ -1150,6 +1164,11 @@ def _run_tool(call, name: str, args: dict):
                 c["why"] = intro[c["email"]]
         mine = [x for x in (sg or {}).get("suggestions", []) if x.get("opportunity_id") == o["opportunity_id"]] if st < 400 else []
         return {"opportunity": o["name"], "already_on_it": [p["name"] for p in o["participants"]], "maybe": out[:20], "suggestions": mine}
+    if name == "email_inbox":
+        out = need(*call("GET", "/api/email/senders"))
+        return {"groups": out["groups"], "removed_in_last_30_days": out["removed"]}
+    if name == "sort_email_inbox":
+        return need(*call("POST", "/api/email/senders/sort", {k: args.get(k) or [] for k in ("keep", "remove", "bring_back")}))
     if name == "linkedin_inbox":
         convs = need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review"))["conversations"]
         return [{"person_id": c["person_id"], "name": c["participant_name"], "company": c.get("company_name"),
@@ -1435,6 +1454,18 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
         lines.append(f"Draft {a['draft']}: to {to or '?'}, subject '{d.get('subject') or ''}'")
         current = d
         shown_ids.add("draft")
+    if name == "sort_email_inbox":
+        counts = {x["sender"].lower(): x["emails"] for g in need(*call("GET", "/api/email/senders")).get("groups") or [] for x in g.get("senders") or []}
+        def senders(addrs):
+            return ", ".join(f"{x} ({counts[x.lower()]} email{'s' if counts[x.lower()] != 1 else ''})" if x.lower() in counts
+                             else f"{x} (not waiting for review: skipped)" for x in addrs or [])
+        if a.get("keep"):
+            lines.append(f"Keep as contacts, with their emails ({len(a['keep'])}): " + senders(a["keep"]))
+        if a.get("remove"):
+            lines.append(f"Remove ({len(a['remove'])}; later emails skip review; can be brought back for 30 days): " + senders(a["remove"]))
+        if a.get("bring_back"):
+            lines.append("Bring back: " + ", ".join(a["bring_back"]))
+        shown_ids |= {"keep", "remove", "bring_back"}
     if name == "sort_linkedin_inbox":
         waiting = {c["person_id"]: c for c in need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review")).get("conversations") or []}
         def who(ids):
@@ -1779,6 +1810,10 @@ def register(app):
                                         "When the user asks to sort, sync, check, update or bring in their LinkedIn, in any wording ('sort my LinkedIn', "
                                         "'sort out my linked in', 'sync LinkedIn'), don't ask what they mean: call sync_linkedin from the LyteKeepr LinkedIn add-on "
                                         "if it is there, then linkedin_inbox, then suggest who to keep and who to remove and do it with sort_linkedin_inbox after their yes. "
+                                        "When the user asks to sort, clean up or go through their email or inbox, in any wording ('sort my email', 'sort my inbox'), "
+                                        "don't ask what they mean: call email_inbox, decide per group and per sender, then show one summary (how many senders "
+                                        "you'd keep and remove, by group, and the few you can't judge, each with its example) and do it with sort_email_inbox "
+                                        "after their yes. Don't make the user go through emails one by one. "
                                         "To message someone on LinkedIn, use send_linkedin_message (shown first). If the user only says 'message X' and X has both "
                                         "email and LinkedIn, ask which. "
                                         "Dates are YYYY-MM-DD and times HH:MM in the user's local time. Find a contact's id with find "
