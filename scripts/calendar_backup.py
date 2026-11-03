@@ -54,4 +54,11 @@ for ws in sorted(p for p in PROFILES_DATA.glob("*") if p.is_dir()):
         results.append(backup(ws / "calendar" / "calendar.db", f"ws{ws.name}-calendar", CAL_COUNTS))
     if (ws / "crm" / "lytekeepr.db").exists():
         results.append(backup(ws / "crm" / "lytekeepr.db", f"ws{ws.name}-crm", CRM_COUNTS))
+# A workspace that was deleted or closed has no live folder any more: its copies go once they are older than the normal keep time.
+live = {p.name for p in PROFILES_DATA.glob("*") if p.is_dir()}
+cutoff = datetime.datetime.now().timestamp() - KEEP * 86400
+for f in DEST.glob("ws*-*.db"):
+    if f.name[2:].split("-")[0] not in live and f.stat().st_mtime < cutoff:
+        f.unlink()
+        print(f"{datetime.datetime.now():%F %T} removed {f.name} (its workspace is gone)")
 sys.exit(0 if all(results) else 1)

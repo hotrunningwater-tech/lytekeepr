@@ -1,6 +1,6 @@
 """A customer's own data: download everything as a zip of spreadsheets, and close the account themselves.
 Only the workspace's admin can do either. Other people's Personal tasks, goals and documents are never in the download.
-Closing works like deleting from the Owner console: nobody can sign in any more and the workspace folder moves to the deleted folder."""
+Closing works like deleting from the Owner console: nobody can sign in any more and the workspace folder moves to the deleted folder, which erases it for good after 30 days."""
 
 import csv
 import io

@@ -216,7 +216,7 @@ def set_status(account_id: int, status: str) -> dict:
 
 def delete_account(account_id: int) -> dict:
     """Remove a customer account: its people can no longer sign in, and its workspace folder is moved to profiles/deleted/
-    (kept, not erased). The owner's own first workspace can never be deleted."""
+    (erased for good after 30 days, see purge_deleted). The owner's own first workspace can never be deleted."""
     with _lock:
         with _conn() as conn:
             row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()

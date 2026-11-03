@@ -53,6 +53,20 @@ def _run_one() -> str:
         return "failed"
 
 
+_last_purge = 0.0
+
+
+def _purge_daily() -> None:
+    """Once a day: workspaces deleted or closed more than 30 days ago are erased for good."""
+    global _last_purge
+    if time.time() - _last_purge < 86400:
+        return
+    _last_purge = time.time()
+    from profiles.store import purge_deleted
+    for name in purge_deleted():
+        log.warning("Erased a deleted workspace for good: %s", name)
+
+
 def _loop() -> None:
     _, tick, delay = _settings()
     time.sleep(delay)
@@ -60,6 +74,7 @@ def _loop() -> None:
         try:
             from . import directory
             directory.run_in_each_workspace(run_if_due, "Google Calendar sync")       # each workspace's own Google account
+            _purge_daily()
         except Exception:                      # a scheduler must never die
             log.exception("Google auto-sync tick crashed")
         time.sleep(tick)

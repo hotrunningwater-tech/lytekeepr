@@ -12,7 +12,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent.parent
 PROFILE_ROOT = Path(os.getenv("LK_PROFILES_ROOT") or APP_DIR / "profiles")      # LK_PROFILES_ROOT: tests, or data kept outside the app
 PROFILE_DATA_ROOT = PROFILE_ROOT / "data"
-PROFILE_DELETED_ROOT = PROFILE_ROOT / "deleted"      # deleted workspaces are moved here, never erased by the app
+PROFILE_DELETED_ROOT = PROFILE_ROOT / "deleted"      # deleted and closed workspaces are moved here, and erased for good after DELETED_KEEP_DAYS (purge_deleted)
 REGISTRY_PATH = PROFILE_ROOT / "registry.json"
 ACTIVE_PROFILE_PATH = PROFILE_ROOT / "active-profile.json"
 PROFILE_SYSTEM_VERSION = 1
@@ -329,6 +329,26 @@ def archive_profile(profile_id: str) -> Path | None:
         folder.rename(target)
     _save_registry(registry)
     return target
+
+
+DELETED_KEEP_DAYS = 30
+
+
+def purge_deleted(days: int = DELETED_KEEP_DAYS) -> list[str]:
+    """Erase for good every workspace folder deleted more than `days` days ago (the date is in the folder's name; a name without one is left alone)."""
+    import re
+    import shutil
+    from datetime import datetime, timedelta
+    erased = []
+    if not PROFILE_DELETED_ROOT.is_dir():
+        return erased
+    cutoff = datetime.now() - timedelta(days=days)
+    for folder in PROFILE_DELETED_ROOT.iterdir():
+        m = re.search(r"-(\d{8}-\d{6})$", folder.name)
+        if folder.is_dir() and m and datetime.strptime(m.group(1), "%Y%m%d-%H%M%S") < cutoff:
+            shutil.rmtree(folder)
+            erased.append(folder.name)
+    return erased
 
 
 def attach_gmail_account(profile_id: str | None, account_id: str) -> dict:

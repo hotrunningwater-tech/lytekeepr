@@ -927,7 +927,7 @@
       var input = h('input', { type: 'text', placeholder: r.owner_email, 'aria-label': 'Type your email to confirm' });
       var err = h('p', { class: 'lks-err', hidden: true });
       main.appendChild(h('div', { class: 'lks-card' }, [h('h2', {}, 'Close your account'),
-        h('p', {}, 'Nobody on your team can sign in any more, and your data is removed from the app. Download it first if you want to keep it. To confirm, type ' + r.owner_email + '.'),
+        h('p', {}, 'Nobody on your team can sign in any more, your data leaves the app now and is erased for good after 30 days. Download it first if you want to keep it. To confirm, type ' + r.owner_email + '.'),
         h('div', { class: 'lks-opt' }, [input]), err,
         h('div', { class: 'lks-row' }, [h('button', { class: 'btn lks-soft', type: 'button', onclick: function () {
           api('POST', '/api/account/close', { confirm: input.value }).then(function () { location.href = (window.LK_PREFIX || '') + '/login'; })
