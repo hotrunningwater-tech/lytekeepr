@@ -135,6 +135,35 @@ def main():
     check(state["e7"]["status"] == "saved", f"a kept sender's new email waits for review: {state['e7']['status']}")
     check(state["e8"]["status"] == "dismissed", f"a removed sender's new email waits for review: {state['e8']['status']}")
 
+    # an existing contact is never removed from here, even if an email of theirs waits for review
+    conn = crm_db.get_connection()
+    try:
+        crm_db.get_or_create_person_for_channel(conn, "email", "client@known.test", "Known Client")
+        conn.commit()
+    finally:
+        conn.close()
+    email("e9", "client@known.test", "Known Client", "Invoice question", "Can you resend the invoice?")
+    kept_safe = a.post("/api/email/senders/sort", json={"remove": ["client@known.test"]}).get_json()
+    conn = crm_db.get_connection()
+    try:
+        check(kept_safe.get("already_contacts") == ["client@known.test"] and not kept_safe.get("removed")
+              and not crm_db.is_contact_excluded(conn, "email", "client@known.test"), f"an existing contact could be removed: {kept_safe}")
+    finally:
+        conn.close()
+
+    # the test switch: off, the mailbox must be the Google account signed in with; on (one named login only), any mailbox
+    asked = []
+    server.build_authorization_url = lambda state, login_hint=None: (asked.append((server._oauth_state_signer().loads(state), login_hint)), "https://accounts.test/")[1]
+    a.get("/auth/google/start")
+    check(asked and asked[-1][0]["e"] == "owner@example.com", f"without the test switch the mailbox is not tied to the login: {asked}")
+    os.environ["LK_TEST_ANY_MAILBOX"] = "someone-else@example.com"
+    a.get("/auth/google/start")
+    check(asked[-1][0]["e"] == "owner@example.com", "the test switch opened up a workspace it does not name")
+    os.environ["LK_TEST_ANY_MAILBOX"] = "owner@example.com"
+    a.get("/auth/google/start")
+    check(asked[-1][0]["e"] == "" and asked[-1][1] is None, f"the test switch did not open up the named test login: {asked[-1]}")
+    os.environ.pop("LK_TEST_ANY_MAILBOX")
+
     # bring back within 30 days: the set-aside emails wait for review again, later ones come in again
     back = a.post("/api/email/senders/sort", json={"bring_back": ["rep@saas.test"]}).get_json()
     check(back.get("brought_back") and back["brought_back"][0]["emails"] >= 1, f"a removed sender could not be brought back: {back}")

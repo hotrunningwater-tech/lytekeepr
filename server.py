@@ -384,6 +384,9 @@ def google_oauth_start():
     if getattr(_g, "account_status", "active") == "waiting":
         return redirect(f"{_app_home()}?gmail=error&reason={urllib.parse.quote('Your account is waiting for approval.')}")
     email = (user.get("email") or "").lower()          # the mailbox is always the Google account you sign in with
+    if email and email == os.getenv("LK_TEST_ANY_MAILBOX", "").strip().lower():
+        email = ""                                     # the owner's test workspace (temporary, set on the server only): any mailbox
+        logging.getLogger(__name__).warning("test switch on: %s may connect any mailbox", user.get("email"))
     lk_store.set_setting("gmail_autoconnect_offered", lk_store.now_local().isoformat())     # the automatic offer happens once
     try:
         url = build_authorization_url(state=_oauth_state_signer().dumps({"p": "connect", "w": get_active_profile_id(), "e": email}),
@@ -1261,7 +1264,16 @@ def email_senders_sort():
         return jsonify({"error": "keep, remove and bring_back must be lists of email addresses."}), 400
     keep = senders.ids_from(account_id, _email_contact_info, lists["keep"])
     remove = senders.ids_from(account_id, _email_contact_info, [a for a in lists["remove"] if a.strip().lower() not in {k.lower() for k in keep}])
-    out = {"kept": [], "removed": [], "brought_back": [], "not_waiting": []}
+    out = {"kept": [], "removed": [], "brought_back": [], "not_waiting": [], "already_contacts": []}
+    crm_db.init_db()
+    conn = crm_db.get_connection()
+    try:                                               # an existing contact is never removed from here: their later emails keep coming
+        for address in list(remove):
+            if conn.execute("SELECT 1 FROM channel_accounts WHERE channel = 'email' AND lower(channel_identifier) = ?", (address.lower(),)).fetchone():
+                out["already_contacts"].append(address)
+                remove.pop(address)
+    finally:
+        conn.close()
     asked = {a.strip().lower() for a in lists["keep"] + lists["remove"]}
     out["not_waiting"] = sorted(asked - {a.lower() for a in list(keep) + list(remove)})
     ids = [i for v in keep.values() for i in v]
