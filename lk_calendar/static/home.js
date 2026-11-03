@@ -58,6 +58,33 @@
   }
   window.lkHome = { reload: load };
 
+  /* ---------- Get started: a short list for someone new; it goes away when done or dismissed ---------- */
+  function loadStart() {
+    api('GET', '/api/calendar/getting-started').then(renderStart).catch(function () { /* never in the way of Home */ });
+  }
+  function startAction(s) {
+    if (s.action === 'gmail') location.href = (window.LK_PREFIX || '') + '/auth/google/start';
+    else if (s.action === 'crm') { var crm = $('crmTab'); if (crm) crm.click(); }
+    else if (s.action && s.action.indexOf('settings:') === 0 && window.lkOpenSettings) window.lkOpenSettings(s.action.slice(9));
+  }
+  function renderStart(d) {
+    var box = $('homeStart');
+    box.hidden = !d.show;
+    if (!d.show) { box.replaceChildren(); return; }
+    function send(body) { api('POST', '/api/calendar/getting-started', body).then(renderStart).catch(fail); }
+    fill(box, [h('div', { class: 'gs-card' }, [
+      h('div', { class: 'gs-head' }, [h('span', { class: 'gs-title' }, 'Get started'), h('span', { class: 'gs-count' }, d.done + ' of ' + d.total + ' done'),
+        h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ dismissed: true }); } }, 'Hide')]),
+      h('div', { class: 'gs-list' }, d.steps.map(function (s) {
+        var doit = s.done ? null : s.manual ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ tick: s.key }); } }, 'I did this')
+                                            : h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, 'Open');
+        return h('div', { class: 'gs-step' + (s.done ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
+          h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), s.done ? null : h('div', { class: 'gs-why' }, s.why)]), doit]);
+      }))])]);
+  }
+  loadStart();
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) loadStart(); });
+
   // Tasks: All, Work only or Personal only (lead follow-ups and meetings are work and aren't affected)
   function shown(e) {
     if (e.lead || state.taskShow === 'all') return true;

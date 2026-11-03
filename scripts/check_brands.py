@@ -187,6 +187,16 @@ def main():
           and "AdminDiary" not in str(m.get("/api/crm/docs/tree?brand=personal").get_json()), "search and the Personal list show only your own")
     check(a.put(f"/api/crm/docs/{admin_doc}", json={"brand": "nexy"}).status_code >= 400, "a Personal document can't be moved to a brand")
 
+    # Get started: steps tick themselves, and it goes away when done or hidden; each person has their own
+    gs = a.get("/api/calendar/getting-started").get_json()
+    keys = [x["key"] for x in gs["steps"]]
+    check({"gmail", "claude", "claude_google", "contact", "fathom"} == set(keys) and "gmail" not in [x["key"] for x in m.get("/api/calendar/getting-started").get_json()["steps"]], "Get started lists the steps, Gmail only for the admin")
+    check(next(x for x in gs["steps"] if x["key"] == "contact")["done"], "adding a contact ticks its step by itself")
+    gs2 = a.post("/api/calendar/getting-started", json={"tick": "claude_google"}).get_json()
+    check(next(x for x in gs2["steps"] if x["key"] == "claude_google")["done"] and gs2["done"] == gs["done"] + 1, "the Claude-side step is ticked by hand")
+    check(not next(x for x in m.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "claude_google")["done"], "one person's tick isn't another's")
+    check(a.post("/api/calendar/getting-started", json={"dismissed": True}).get_json()["show"] is False, "Hide hides it")
+
     # An unexpected failure: plain words, no raw error
     from lk_calendar import goals as goals_mod
     real, goals_mod.overview = goals_mod.overview, lambda: 1 / 0

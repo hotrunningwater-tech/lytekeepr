@@ -2980,3 +2980,13 @@ body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .a
 .gl-steps { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; color: inherit; }
 .gl-edit { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: #fff; border-radius: 12px; }
 .gl-edit-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; } .gl-edit-row .hm-days { width: auto; }
+
+/* Get started, on Home for someone new */
+#homeStart { margin-bottom: 16px; }
+.gs-card { background: #fff; border: 1.5px solid rgba(233, 139, 116, 0.55); border-radius: 16px; padding: 14px 16px; }
+.gs-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.gs-title { font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: var(--ink); }
+.gs-count { color: var(--ink-soft); font-size: 13px; } .gs-head .hm-mini { margin-left: auto; }
+.gs-list { display: flex; flex-direction: column; gap: 4px; }
+.gs-step { display: flex; align-items: center; gap: 10px; padding: 6px 0; } .gs-step.done .hm-title { color: var(--ink-soft); font-weight: 500; }
+.gs-step .hm-main { flex: 1; min-width: 0; } .gs-why { font-size: 13px; color: var(--ink-soft); }

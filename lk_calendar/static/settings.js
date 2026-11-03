@@ -783,6 +783,7 @@
   setTimeout(checkName, 2500);
 
   var currentSettingsView = 'details';
+  window.lkOpenSettings = function (view) { currentSettingsView = view; openPanel(); };
   function showSettings(view) {
     currentSettingsView = view;
     nav.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.view === view); });
