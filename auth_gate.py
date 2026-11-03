@@ -17,13 +17,14 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 COOKIE = "lk_auth"
 MAX_AGE = 30 * 24 * 3600
 PUBLIC_PATHS = {"/login", "/logout", "/styles.css", "/auth/google/callback", "/auth/google/login"}   # the callback carries a signed state instead of the login cookie
+PUBLIC_PREFIXES = ("/linkedin-helper/",)        # the LinkedIn add-on's addresses: each checks its own code or key (lk_calendar/linkedin_link.py)
 MAX_FAILURES = 8
 LOCKOUT_SECONDS = 15 * 60
 
 
-# Things that still exist once for the whole app (the LinkedIn session, the LinkedIn lead files and the LinkedIn developer tools)
-# belong to the first workspace only; other workspaces are refused until they work per workspace.
-HOME_ONLY_API = ("/api/linkedin", "/api/linkedin-leads", "/api/dev", "/api/diagnostics")
+# Things that still exist once for the whole app (the LinkedIn lead files and the developer tools) belong to the first workspace only;
+# other workspaces are refused until they work per workspace.
+HOME_ONLY_API = ("/api/linkedin-leads", "/api/dev", "/api/diagnostics")
 WAITING_ALLOWED_API = ("/api/me",)
 
 
@@ -57,10 +58,11 @@ def finish_google_login(email: str, verified: bool, name: str = ""):
 
 
 def after_login_target() -> str:
-    """Where to go after signing in: back to Claude's "Allow" page if the sign-in started there, else the app."""
+    """Where to go after signing in: back to Claude's "Allow" page or LinkedIn's Approve page if the sign-in started there, else the app."""
     prefix = _session.get("prefix", "")
     nxt = request.cookies.get("lk_next", "")
-    return nxt if nxt.startswith(prefix + "/oauth/authorize?") and "\n" not in nxt and "\r" not in nxt else prefix + "/"
+    ok = nxt.startswith((prefix + "/oauth/authorize?", prefix + "/linkedin/approve?"))      # Claude's "Allow" page, or LinkedIn's Approve
+    return nxt if ok and "\n" not in nxt and "\r" not in nxt else prefix + "/"
 
 
 def _notify_signup(email: str, app_url: str) -> None:
@@ -156,7 +158,7 @@ def install(app, app_dir):
     def require_login():
         from profiles.store import get_active_profile_id, home_profile_id, set_request_profile
         g.profile_token = set_request_profile(home_profile_id())     # until the cookie says otherwise (current_user switches it)
-        if request.path in PUBLIC_PATHS:
+        if request.path in PUBLIC_PATHS or request.path.startswith(PUBLIC_PREFIXES):
             return None
         user = current_user()
         if user:

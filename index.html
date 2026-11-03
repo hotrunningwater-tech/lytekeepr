@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=59">
+<link rel="stylesheet" href="styles.css?v=60">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team11">
 </head>
@@ -289,21 +289,7 @@
         </div>
 
         <div class="preview-body">
-          <div class="preview-section">
-            <p id="linkedinStatusText">Checking connection…</p>
-            <div class="card-actions">
-              <button class="btn btn-secondary btn-small" type="button" id="linkedinCheckConnectionBtn">Check connection</button>
-            </div>
-          </div>
-          <div class="preview-section" id="linkedinSyncSection" hidden>
-            <span class="block-label">Sync</span>
-            <p id="linkedinSyncStatusText"></p>
-            <div class="card-actions">
-              <button class="btn btn-primary btn-small" type="button" id="linkedinBackfillBtn">Run 7-day backfill</button>
-              <button class="btn btn-secondary btn-small" type="button" id="linkedinSyncNowBtn">Sync now</button>
-              <button class="subtle-link-btn" type="button" id="linkedinResetBtn">Reset test data</button>
-            </div>
-          </div>
+          <div class="preview-section" id="linkedinConnect"></div>
           <div class="preview-section" id="linkedinMessagesSection" hidden>
             <div class="demo-reset-tabs" role="tablist" aria-label="LinkedIn message views">
               <button class="demo-reset-tab is-active" type="button" id="linkedinTrustedTabBtn" role="tab" aria-selected="true">Recent conversations</button>
@@ -668,7 +654,7 @@
 <script src="lk-calendar/settings.js?v=data3"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
-<script src="lk-calendar/home.js?v=23"></script>
+<script src="lk-calendar/home.js?v=25"></script>
 <script src="lk-calendar/docs.js?v=3"></script>
 <script src="lk-calendar/goals.js?v=2"></script>
 <script src="lk-calendar/viewstate.js"></script>
@@ -679,57 +665,108 @@
 
     var linkedinTab = document.getElementById('linkedinTab');
     var linkedinPanel = document.getElementById('linkedinPanel');
-    var linkedinStatusText = document.getElementById('linkedinStatusText');
-    var linkedinSyncSection = document.getElementById('linkedinSyncSection');
-    var linkedinSyncStatusText = document.getElementById('linkedinSyncStatusText');
-    var linkedinBackfillBtn = document.getElementById('linkedinBackfillBtn');
-    var linkedinSyncNowBtn = document.getElementById('linkedinSyncNowBtn');
+    var linkedinConnect = document.getElementById('linkedinConnect');
     var linkedinMessagesSection = document.getElementById('linkedinMessagesSection');
     var linkedinConversationList = document.getElementById('linkedinConversationList');
     var closeLinkedinPanelBtn = document.getElementById('closeLinkedinPanelBtn');
-    var linkedinCheckConnectionBtn = document.getElementById('linkedinCheckConnectionBtn');
     var linkedinLastKnownSyncedAt = null;
     var linkedinAutoRefreshTimer = null;
 
-    function refreshSyncStatus() {
-      fetch('/api/linkedin/sync/status')
-        .then(function (res) { return res.json(); })
+    function linkedinEl(tag, className, text) {
+      var el = document.createElement(tag);
+      if (className) el.className = className;
+      if (text != null) el.textContent = text;
+      return el;
+    }
+
+    function linkedinPost(url, body) {
+      return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+        .then(function (res) { return res.json().then(function (data) { if (!res.ok) throw new Error(data.error || 'Something went wrong'); return data; }); });
+    }
+
+    // Not connected yet: one button downloads the Claude add-on; the rest happens in Claude and on a LyteKeepr Approve page.
+    function renderLinkedinSetup() {
+      linkedinConnect.replaceChildren();
+      linkedinConnect.appendChild(linkedinEl('span', 'block-label', 'Connect your LinkedIn'));
+      linkedinConnect.appendChild(linkedinEl('p', 'attention-copy', 'Your LinkedIn messages come into LyteKeepr through the Claude app on your computer. Your LinkedIn login stays there.'));
+      var list = document.createElement('ol');
+      list.className = 'attention-copy';
+      ['Click Add LinkedIn to Claude below. A file downloads.', 'Open your Downloads folder and double-click "LyteKeepr LinkedIn.mcpb". The Claude app opens.', 'In Claude, click Install.', 'A LyteKeepr page opens in your browser: click Approve.', 'Log in to LinkedIn if a window asks.']
+        .forEach(function (s) { list.appendChild(linkedinEl('li', '', s)); });
+      linkedinConnect.appendChild(list);
+      var actions = linkedinEl('div', 'card-actions');
+      var button = linkedinEl('a', 'btn btn-primary btn-small', 'Add LinkedIn to Claude');
+      button.href = (window.LK_PREFIX || '') + '/api/linkedin/addon';
+      actions.appendChild(button);
+      var app = linkedinEl('a', 'subtle-link-btn', 'No Claude app yet? Get it');
+      app.href = 'https://claude.ai/download';
+      app.target = '_blank';
+      app.rel = 'noopener';
+      actions.appendChild(app);
+      linkedinConnect.appendChild(actions);
+      linkedinConnect.appendChild(linkedinEl('p', 'attention-copy', 'Good to know: the add-on is not an official LinkedIn product, and LinkedIn does not allow automated tools, so it could restrict your account.'));
+    }
+
+    function linkedinWhen(iso) {
+      if (!iso) return 'not yet';
+      var d = new Date(iso);
+      return isNaN(d) ? iso : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    function renderLinkedinConnected(data) {
+      linkedinConnect.replaceChildren();
+      linkedinConnect.appendChild(linkedinEl('span', 'block-label', 'LinkedIn'));
+      linkedinConnect.appendChild(linkedinEl('p', 'attention-copy', 'Connected on ' + (data.computer || 'your computer') + '. ' + data.conversation_count + ' conversations, ' + data.message_count + ' messages. Last synced: ' + linkedinWhen(data.last_synced_at) + '.'));
+      var note = '';
+      if (data.state === 'needs_login') note = 'LinkedIn needs you to log in again. In Claude, say: sync my LinkedIn.';
+      else if (data.state === 'error') note = 'The last check did not finish. It tries again on its own next hour.';
+      else if (!data.first_done) note = 'Bringing in your last 3 months. This can take a while, and your computer has to stay on.';
+      else if (data.capped) note = 'You have a lot of conversations: the first sync brought in the most recent 300.';
+      if (note) linkedinConnect.appendChild(linkedinEl('p', 'attention-copy', note));
+      var actions = linkedinEl('div', 'card-actions');
+      var sync = linkedinEl('button', 'btn btn-secondary btn-small', data.sync_requested ? 'Sync asked for: within 15 minutes' : 'Sync now');
+      sync.type = 'button';
+      sync.disabled = data.sync_requested;
+      sync.addEventListener('click', function () {
+        sync.disabled = true;
+        linkedinPost('/api/linkedin/sync/run').then(function () { sync.textContent = 'Sync asked for: within 15 minutes'; })
+          .catch(function (err) { sync.textContent = err.message; });
+      });
+      var off = linkedinEl('button', 'subtle-link-btn', 'Disconnect');
+      off.type = 'button';
+      off.addEventListener('click', function () {
+        if (!window.confirm('Disconnect LinkedIn? It stops bringing in messages. Messages already saved stay. You can remove LyteKeepr LinkedIn from the Claude app too.')) return;
+        linkedinPost('/api/linkedin/link/disconnect').then(checkLinkedinStatus).catch(function (err) { window.alert(err.message); });
+      });
+      actions.appendChild(sync);
+      actions.appendChild(off);
+      linkedinConnect.appendChild(actions);
+    }
+
+    function checkLinkedinStatus() {
+      return fetch('/api/linkedin/status')
+        .then(function (res) { return res.json().then(function (data) { if (!res.ok) throw new Error(data.error || 'Something went wrong'); return data; }); })
         .then(function (data) {
-          linkedinSyncSection.hidden = false;
-          if (!data.backfilled) {
-            linkedinSyncStatusText.textContent = 'Not backfilled yet — run the 7-day backfill once to start saving history.';
-            linkedinBackfillBtn.hidden = false;
-            linkedinSyncNowBtn.hidden = true;
+          if (data.connected) {
+            renderLinkedinConnected(data);
+            if (data.last_synced_at !== linkedinLastKnownSyncedAt || linkedinMessagesSection.hidden) {
+              linkedinLastKnownSyncedAt = data.last_synced_at;
+              loadLinkedinMessages();
+            }
             return;
           }
-          linkedinBackfillBtn.hidden = true;
-          linkedinSyncNowBtn.hidden = false;
-          linkedinSyncStatusText.textContent =
-            data.conversation_count + ' conversations, ' + data.message_count +
-            ' messages saved. Last synced: ' + (data.last_synced_at || 'never') +
-            '. Auto-sync runs hourly, 8am-9pm.';
-          linkedinLastKnownSyncedAt = data.last_synced_at || null;
+          renderLinkedinSetup();
+          if (data.message_count) loadLinkedinMessages();
+          else linkedinMessagesSection.hidden = true;
         })
-        .catch(function () {
-          linkedinSyncSection.hidden = true;
+        .catch(function (err) {
+          linkedinConnect.replaceChildren(linkedinEl('p', 'attention-copy', 'Could not check LinkedIn: ' + err.message));
         });
     }
 
     function startLinkedinAutoRefresh() {
       stopLinkedinAutoRefresh();
-      linkedinAutoRefreshTimer = setInterval(function () {
-        fetch('/api/linkedin/sync/status')
-          .then(function (res) { return res.json(); })
-          .then(function (data) {
-            // Catches the hourly background auto-sync (runs with no
-            // connection to this browser) landing while the panel is open.
-            if (data.last_synced_at && data.last_synced_at !== linkedinLastKnownSyncedAt) {
-              refreshSyncStatus();
-              loadLinkedinMessages();
-            }
-          })
-          .catch(function () {});
-      }, 60000);
+      linkedinAutoRefreshTimer = setInterval(function () { checkLinkedinStatus(); }, 15000);
     }
 
     function stopLinkedinAutoRefresh() {
@@ -739,119 +776,8 @@
       }
     }
 
-    function pollLinkedinActivity(button, fallbackText) {
-      button.textContent = fallbackText;
-      var timer = setInterval(function () {
-        fetch('/api/linkedin/sync/status')
-          .then(function (res) { return res.json(); })
-          .then(function (data) {
-            button.textContent = data.current_activity || fallbackText;
-          })
-          .catch(function () {});
-      }, 1000);
-      return function () { clearInterval(timer); };
-    }
-
-    if (linkedinBackfillBtn) {
-      linkedinBackfillBtn.addEventListener('click', function () {
-        linkedinBackfillBtn.disabled = true;
-        var stopPolling = pollLinkedinActivity(linkedinBackfillBtn, 'Pulling messages…');
-        fetch('/api/linkedin/backfill', { method: 'POST' })
-          .then(function (res) { return res.json(); })
-          .then(function () {
-            stopPolling();
-            linkedinBackfillBtn.disabled = false;
-            linkedinBackfillBtn.textContent = 'Run 7-day backfill';
-            refreshSyncStatus();
-            loadLinkedinMessages();
-          })
-          .catch(function (err) {
-            stopPolling();
-            linkedinBackfillBtn.disabled = false;
-            linkedinBackfillBtn.textContent = 'Run 7-day backfill';
-            linkedinSyncStatusText.textContent = 'Backfill failed: ' + err.message;
-          });
-      });
-    }
-
-    if (linkedinSyncNowBtn) {
-      linkedinSyncNowBtn.addEventListener('click', function () {
-        linkedinSyncNowBtn.disabled = true;
-        var stopPolling = pollLinkedinActivity(linkedinSyncNowBtn, 'Pulling messages…');
-        fetch('/api/linkedin/sync/run', { method: 'POST' })
-          .then(function (res) { return res.json(); })
-          .then(function () {
-            stopPolling();
-            linkedinSyncNowBtn.disabled = false;
-            linkedinSyncNowBtn.textContent = 'Sync now';
-            refreshSyncStatus();
-            loadLinkedinMessages();
-          })
-          .catch(function (err) {
-            stopPolling();
-            linkedinSyncNowBtn.disabled = false;
-            linkedinSyncNowBtn.textContent = 'Sync now';
-            linkedinSyncStatusText.textContent = 'Sync failed: ' + err.message;
-          });
-      });
-    }
-
-    var linkedinResetBtn = document.getElementById('linkedinResetBtn');
-    if (linkedinResetBtn) {
-      linkedinResetBtn.addEventListener('click', function () {
-        linkedinResetBtn.disabled = true;
-        linkedinResetBtn.textContent = 'Resetting…';
-        fetch('/api/linkedin/reset', { method: 'POST' })
-          .then(function (res) { return res.json(); })
-          .then(function () {
-            linkedinResetBtn.disabled = false;
-            linkedinResetBtn.textContent = 'Reset test data';
-            linkedinConversationList.innerHTML = '';
-            linkedinMessagesSection.hidden = true;
-            refreshSyncStatus();
-          })
-          .catch(function (err) {
-            linkedinResetBtn.disabled = false;
-            linkedinResetBtn.textContent = 'Reset test data';
-            linkedinSyncStatusText.textContent = 'Reset failed: ' + err.message;
-          });
-      });
-    }
-
-    function checkLinkedinStatus() {
-      linkedinStatusText.textContent = 'Checking connection…';
-      linkedinMessagesSection.hidden = true;
-      linkedinSyncSection.hidden = true;
-      fetch('/api/linkedin/status')
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          if (!data.installed) {
-            linkedinStatusText.textContent = 'LinkedIn is not installed.';
-            return;
-          }
-          if (data.connected) {
-            linkedinStatusText.textContent = 'Connected to LinkedIn.';
-            refreshSyncStatus();
-            loadLinkedinMessages();
-            return;
-          }
-          if (data.login_browser_open) {
-            linkedinStatusText.textContent = 'A LinkedIn login window is open — log in there, then click Refresh.';
-          } else if (data.authentication_state) {
-            linkedinStatusText.textContent = 'Not connected (' + data.authentication_state + '). Click Refresh to try again.';
-          } else {
-            linkedinStatusText.textContent = data.error || 'Not connected.';
-          }
-        })
-        .catch(function (err) {
-          linkedinStatusText.textContent = 'Could not reach the LinkedIn integration: ' + err.message;
-        });
-    }
-
     function loadLinkedinMessages() {
-      // Reads what's actually saved in the CRM (reflects reset/backfill
-      // state) — not a live LinkedIn re-search, so it won't repopulate
-      // itself after a reset the way the old version did.
+      // Reads what's saved in the CRM, not LinkedIn itself.
       fetch('/api/linkedin/crm/conversations')
         .then(function (res) { return res.json(); })
         .then(function (data) {
@@ -868,7 +794,7 @@
           if (!conversations.length) {
             var emptyRow = document.createElement('p');
             emptyRow.className = 'attention-copy';
-            emptyRow.textContent = 'Nothing saved yet — run the backfill above.';
+            emptyRow.textContent = 'Nothing saved yet.';
             linkedinConversationList.appendChild(emptyRow);
             return;
           }
@@ -1061,8 +987,10 @@
         row.style.marginTop = '6px';
         var who = msg.direction === 'outgoing' ? 'You' : (contactName || msg.sender || 'Them');
         var when = msg.timestamp ? ' (' + msg.timestamp + ')' : '';
-        row.innerHTML = '<strong>' + who + when + ':</strong> ';
-        row.appendChild(document.createTextNode(msg.message_text || ''));
+        var label = document.createElement('strong');
+        label.textContent = who + when + ':';
+        row.appendChild(label);
+        row.appendChild(document.createTextNode(' ' + (msg.message_text || '')));
         container.appendChild(row);
       });
     }
@@ -1082,9 +1010,6 @@
         content.hidden = false;
         stopLinkedinAutoRefresh();
       });
-    }
-    if (linkedinCheckConnectionBtn) {
-      linkedinCheckConnectionBtn.addEventListener('click', checkLinkedinStatus);
     }
 
     var aiPanel = document.getElementById('aiPanel');

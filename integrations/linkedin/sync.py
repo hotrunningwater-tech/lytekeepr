@@ -243,6 +243,15 @@ def _ingest_conversation(summary: dict, run_id: str) -> int:
     crm_db.log_activity(run_id, 4, "linkedin_sync", "fetch_conversation", detail=f"{participant_name}: {len(messages)} message(s) in thread")
     if not messages:
         return 0
+    return save_conversation(summary, messages, run_id)
+
+
+def save_conversation(summary: dict, messages: list[dict], run_id: str) -> int:
+    """Steps 5-6 for one conversation already read from LinkedIn (here, or on
+    the user's own computer by the LinkedIn helper). A message may carry
+    sent_at, its time already worked out where it was read."""
+    ref = summary.get("conversation_ref")
+    participant_name = summary.get("participant_name", "Unknown")
 
     # participant_profile_slug is frequently null in what LinkedIn actually
     # returns. Falling back to conversation_ref would split one real person
@@ -265,6 +274,14 @@ def _ingest_conversation(summary: dict, run_id: str) -> int:
             crm_db.log_activity(run_id, 5, "linkedin_sync", "resolve_contact", detail=f"{participant_name} ({channel_identifier}): excluded by user — skipped entirely", conn=conn)
             conn.commit()
             return 0  # explicitly removed by the user — never silently re-created
+        if channel_identifier.startswith("name:"):
+            # No profile link came with this thread: someone imported with a link is the same person if the name is unique.
+            same_name = conn.execute(
+                "SELECT channel_identifier FROM channel_accounts WHERE channel = 'linkedin' AND lower(display_name) = lower(?)",
+                (participant_name,),
+            ).fetchall()
+            if len(same_name) == 1:
+                channel_identifier = same_name[0]["channel_identifier"]
         person_id, account_id = crm_db.get_or_create_person_for_channel(
             conn, "linkedin", channel_identifier, participant_name, contact_status=initial_status
         )
@@ -278,7 +295,7 @@ def _ingest_conversation(summary: dict, run_id: str) -> int:
         added = 0
         for msg in messages:
             resolved = _parse_activity_text(msg.get("sent_at_text"), now)
-            timestamp = resolved.isoformat() if resolved else msg.get("sent_at_text")
+            timestamp = msg.get("sent_at") or (resolved.isoformat() if resolved else msg.get("sent_at_text"))
             sender = msg.get("sender_name") or ("You" if msg.get("direction") == "outgoing" else participant_name)
             was_new = crm_db.insert_message(
                 conn,

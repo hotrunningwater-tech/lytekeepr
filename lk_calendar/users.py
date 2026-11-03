@@ -291,13 +291,13 @@ def register(app):
         out["share_emails"] = bool(user.get("share_emails"))          # may see the admin's saved emails (their own contacts' only)
         if user.get("role") == "admin":              # the admin's name is the one saved in Settings > Profile
             out["name"] = store.get_setting("sender_name").strip() or out["name"]
-        from profiles.store import get_active_profile_id, home_profile_id
+        from profiles.store import get_active_profile_id
         from . import directory
         acct = directory.account_for_profile(get_active_profile_id()) or {}
         out["account_status"] = acct.get("status", "active")
         out["workspace"] = acct.get("name", "")
         out["is_super_admin"] = directory.is_super_admin(out.get("email") or "") and user.get("role") == "admin"
-        out["features"] = {"linkedin": get_active_profile_id() == home_profile_id()}       # LinkedIn is the first workspace's only
+        out["features"] = {"linkedin": True}
         # An approved admin with no mailbox yet is taken to Google once, with their own account chosen (see /auth/google/start).
         try:
             from google_oauth.store import has_refresh_token

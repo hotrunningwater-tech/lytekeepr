@@ -9,6 +9,11 @@ from profiles import store as profile_store
 
 
 class GmailSyncWindowTest(unittest.TestCase):
+    def test_first_sync_looks_back_three_months_unless_told_otherwise(self):
+        for value, expected in (("", 92), ("30", 30), ("all", None), ("0", None)):
+            with mock.patch.dict("os.environ", {"GMAIL_SYNC_WINDOW_DAYS": value}):
+                self.assertEqual(gmail_sync.GmailSyncConfig.from_env().sync_window_days, expected)
+
     def test_full_window_query_omits_newer_than_when_unbounded(self):
         config = gmail_sync.GmailSyncConfig(sync_window_days=None)
 

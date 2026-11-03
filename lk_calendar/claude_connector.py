@@ -655,6 +655,27 @@ TOOLS = [
                                                       "subject": {"type": "string"}, "body": {"type": "string"},
                                                       "confirm_code": {"type": "string", "description": "From the first call, only after the user said yes to exactly that email"}},
                      "required": ["contact", "subject", "body"]}, "read": False},
+    {"name": "linkedin_inbox", "title": "LinkedIn people waiting for review",
+     "description": ("People who wrote to the user on LinkedIn but whom the user never wrote to: they wait for review before they become contacts. "
+                     "Each with their last message. For 'sort my LinkedIn': if the LyteKeepr LinkedIn add-on is installed, call its sync_linkedin first, "
+                     "then this, then suggest who to keep (real prospects, people the user knows) and who to remove (spam, recruiters, sales pitches), "
+                     "and do it with sort_linkedin_inbox."),
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "sort_linkedin_inbox", "title": "Sort LinkedIn people waiting for review",
+     "description": "Keep some as contacts and remove others (a removed person is never brought back by a later sync, and can be restored for 30 days).",
+     "inputSchema": {"type": "object", "properties": {"keep": {"type": "array", "items": {"type": "integer"}, "description": "person_ids to keep as contacts"},
+                                                      "remove": {"type": "array", "items": {"type": "integer"}, "description": "person_ids to remove"}}},
+     "read": False},
+    {"name": "send_linkedin_message", "title": "Send a LinkedIn message", "destructive": True,
+     "description": ("Send a LinkedIn message to one contact: in their existing conversation, or a first message if LyteKeepr has their LinkedIn profile. "
+                     "It goes out from the user's own computer through the LyteKeepr LinkedIn add-on (within a minute while it is on). "
+                     "SENDING: call first WITHOUT confirm_code. Nothing is sent: you get show_the_user, the message exactly as it will go out. Show it word "
+                     "for word and ask 'Send? yes / no'. Only after their yes, call again with the same contact and text and that confirm_code. "
+                     "Several people: one message each, each shown and approved."),
+     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string", "description": "The contact's name (one LinkedIn contact must match)"},
+                                                      "text": {"type": "string"},
+                                                      "confirm_code": {"type": "string", "description": "From the first call, only after the user said yes to exactly that message"}},
+                     "required": ["contact", "text"]}, "read": False},
     {"name": "draft_linkedin_message", "title": "Draft a LinkedIn message",
      "description": "Write a LinkedIn message to one contact and leave it in LyteKeepr for the user to send. NOTHING is sent until they press Send now in LyteKeepr.",
      "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "text": {"type": "string"}}, "required": ["contact", "text"]}, "read": False},
@@ -677,7 +698,7 @@ RUN_ONLY_TOOLS = {        # name -> what Claude is told when it reaches for one 
     "save_onboarding": "Nothing was saved: this is for the scheduled run only. In a chat, write the welcome email and save it with save_email_draft when the user asks; reminders with create_task.",
     "save_followup_draft": "Nothing was saved: this is for the scheduled run only. In a chat, save an email draft with save_email_draft when the user asks.",
 }
-SENDS = {"send_email", "reply_email", "send_draft"}          # these show the email itself (_send_preview)
+SENDS = {"send_email", "reply_email", "send_draft", "send_linkedin_message"}          # these show the message itself (_send_preview, _linkedin_preview)
 SHOWN_FIRST = {t["name"] for t in TOOLS if not t["read"]} - SENDS - set(RUN_ONLY_TOOLS)
 RUN_MAY_SKIP = {"save_meeting_prep", "save_call_summary"}    # also the scheduled run's: nobody to ask there, so its run key is enough
 SHOW_RULE = ("SHOWN FIRST: call first WITHOUT confirm_code. Nothing is done: you get show_the_user, exactly what LyteKeepr will do (who, what, "
@@ -1137,6 +1158,22 @@ def _run_tool(call, name: str, args: dict):
             if c["email"] in intro:
                 c["why"] = intro[c["email"]]
         return {"opportunity": o["name"], "already_on_it": [p["name"] for p in o["participants"]], "maybe": out[:20]}
+    if name == "linkedin_inbox":
+        convs = need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review"))["conversations"]
+        return [{"person_id": c["person_id"], "name": c["participant_name"], "company": c.get("company_name"),
+                 "last_message": (c.get("last_message_text") or "")[:400], "when": c.get("last_message_at")} for c in convs]
+    if name == "sort_linkedin_inbox":
+        waiting = {c["person_id"]: c for c in need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review"))["conversations"]}
+        kept, removed = [], []
+        for pid in args.get("keep") or []:
+            if int(pid) in waiting:
+                need(*call("POST", f"/api/linkedin/crm/contacts/{waiting[int(pid)]['account_id']}/approve", {}))
+                kept.append(waiting[int(pid)]["participant_name"])
+        for pid in args.get("remove") or []:
+            if int(pid) in waiting:
+                need(*call("POST", f"/api/crm/people/{int(pid)}/delete", {}))
+                removed.append(waiting[int(pid)]["participant_name"])
+        return {"kept": kept, "removed": removed}
     if name == "list_suggestions":
         items = need(*call("GET", "/api/crm/suggestions"))["suggestions"]
         if args.get("opportunity_id"):
@@ -1185,6 +1222,20 @@ def _run_tool(call, name: str, args: dict):
             call("POST", "/api/email/send-pending/cancel")
             return shown
         return need(*call("POST", "/api/email/send-pending/confirm"))
+    if name == "send_linkedin_message":
+        out = need(*call("POST", "/api/claude/home/draft_linkedin_message", {"person_name": args["contact"], "message_text": args["text"]}))
+        if out.get("status") != "pending_confirmation":
+            return out                              # no such LinkedIn contact, or two match: nothing was sent
+        p = (need(*call("GET", "/api/linkedin/send-pending")) or {}).get("pending") or {}
+        to, text = p.get("person_name") or out.get("person_name") or args["contact"], p.get("message_text") or args["text"]
+        shown_text = (f"To: {to} (LinkedIn)\n\n{text}\n\nIt goes out from your computer through the LyteKeepr LinkedIn add-on.")
+        shown = {"sent": False, "show_the_user": shown_text, "then_ask": "Send? yes / no",
+                 "confirm_code": hashlib.sha256(json.dumps(["send_linkedin_message", to, text]).encode()).hexdigest()[:10],
+                 "rule": "Show show_the_user word for word. Send only after the user's yes, calling again with this confirm_code."}
+        if not _confirmed(args, shown):
+            call("POST", "/api/linkedin/send-pending/cancel")
+            return shown
+        return need(*call("POST", "/api/linkedin/send-pending/confirm"))
     if name == "draft_linkedin_message":
         out = need(*call("POST", "/api/claude/home/draft_linkedin_message", {"person_name": args["contact"], "message_text": args["text"]}))
         if out.get("status") == "pending_confirmation":
@@ -1219,7 +1270,7 @@ def _confirmed(args: dict, shown: dict) -> bool:
     """Send only with the code of exactly what the user was shown; anything different is shown again instead."""
     given = str(args.get("confirm_code") or "").strip()
     if given and given != shown["confirm_code"]:
-        shown["message"] = "Nothing was sent: the email changed since the user saw it. Show this version and ask again."
+        shown["message"] = "Nothing was sent: the message changed since the user saw it. Show this version and ask again."
     return bool(given) and given == shown["confirm_code"]
 
 
@@ -1401,6 +1452,15 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
         lines.append(f"Draft {a['draft']}: to {to or '?'}, subject '{d.get('subject') or ''}'")
         current = d
         shown_ids.add("draft")
+    if name == "sort_linkedin_inbox":
+        waiting = {c["person_id"]: c for c in need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review")).get("conversations") or []}
+        def who(ids):
+            return [waiting[int(i)]["participant_name"] if int(i) in waiting else f"#{i} (not waiting for review: skipped)" for i in ids or []]
+        if a.get("keep"):
+            lines.append("Keep as contacts: " + ", ".join(who(a["keep"])))
+        if a.get("remove"):
+            lines.append("Remove (restorable for 30 days, never synced back): " + ", ".join(who(a["remove"])))
+        shown_ids |= {"keep", "remove"}
     if name == "remove_follow_ups":
         out = need(*call("POST", "/api/calendar/follow-ups/clear", {**_follow_ups_body(call, need, args), "preview": True}))
         lines.append(f"Removes {out['count']} follow-up(s)" + (f" in funnel {args.get('funnel')}" if args.get("funnel") and not args.get("contact_id") else "")
@@ -1733,6 +1793,11 @@ def register(app):
                                         "For the user's calendar, email, contacts, tasks, goals and documents, use only LyteKeepr's tools. Never use another connector for these "
                                         "(Google Calendar, Gmail, Drive or any other), to read or to change anything, unless the user names that connector in this request. "
                                         "If LyteKeepr can't do something, say so and ask; don't reach for another tool on your own. "
+                                        "When the user asks to sort, sync, check, update or bring in their LinkedIn, in any wording ('sort my LinkedIn', "
+                                        "'sort out my linked in', 'sync LinkedIn'), don't ask what they mean: call sync_linkedin from the LyteKeepr LinkedIn add-on "
+                                        "if it is there, then linkedin_inbox, then suggest who to keep and who to remove and do it with sort_linkedin_inbox after their yes. "
+                                        "To message someone on LinkedIn, use send_linkedin_message (shown first). If the user only says 'message X' and X has both "
+                                        "email and LinkedIn, ask which. "
                                         "Dates are YYYY-MM-DD and times HH:MM in the user's local time. Find a contact's id with search_contacts "
                                         "before get_contact; when the user names someone or something, use find first. Funnels hold two kinds of entries: contacts (one person) and opportunities (one shared "
                                         "deal or project with several participants). Never turn one into the other, and never assume everyone at a "

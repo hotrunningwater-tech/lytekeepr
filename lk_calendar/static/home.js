@@ -65,7 +65,20 @@
   function startAction(s) {
     if (s.action === 'gmail') location.href = (window.LK_PREFIX || '') + '/auth/google/start';
     else if (s.action === 'crm') { var crm = $('crmTab'); if (crm) crm.click(); }
+    else if (s.action === 'linkedin') {                 // downloads the Claude add-on, then says exactly what to do with the file
+      location.href = (window.LK_PREFIX || '') + '/api/linkedin/addon';
+      try { sessionStorage.setItem('lkLinkedinDownloaded', '1'); } catch (e) { /* storage blocked */ }
+      loadStart();
+    }
     else if (s.action && s.action.indexOf('settings:') === 0 && window.lkOpenSettings) window.lkOpenSettings(s.action.slice(9));
+  }
+  function linkedinNext(s) {           // after the download: the next steps, one per line
+    var downloaded = false;
+    try { downloaded = s.key === 'linkedin' && sessionStorage.getItem('lkLinkedinDownloaded') === '1'; } catch (e) { /* storage blocked */ }
+    if (!downloaded) return null;
+    return h('ol', { class: 'gs-why gs-next' }, ['Open your Downloads folder.', 'Double-click "LyteKeepr LinkedIn.mcpb". The Claude app opens.',
+      'In Claude, click Install.', 'A LyteKeepr page opens in your browser: click Approve.', 'Log in to LinkedIn if a window asks.']
+      .map(function (t) { return h('li', {}, t); }));
   }
   function renderStart(d) {
     var box = $('homeStart');
@@ -77,9 +90,9 @@
         h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ dismissed: true }); } }, 'Hide')]),
       h('div', { class: 'gs-list' }, d.steps.map(function (s) {
         var doit = s.done ? null : s.manual ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ tick: s.key }); } }, 'I did this')
-                                            : h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, 'Open');
+                                            : h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.key === 'linkedin' ? 'Download' : 'Open');
         return h('div', { class: 'gs-step' + (s.done ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
-          h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), s.done ? null : h('div', { class: 'gs-why' }, s.why)]), doit]);
+          h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), s.done ? null : linkedinNext(s) || h('div', { class: 'gs-why' }, s.why)]), doit]);
       }))])]);
   }
   loadStart();

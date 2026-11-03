@@ -57,8 +57,18 @@ if ! python3 scripts/check_brands.py > /tmp/lk-brands.log 2>&1; then
   exit 1
 fi
 grep "PASSED" /tmp/lk-brands.log
+# Never ship a LinkedIn helper that puts messages in the wrong workspace or goes past its limits.
+echo "Checking LinkedIn..."
+if ! python3 scripts/check_linkedin.py > /tmp/lk-linkedin.log 2>&1; then
+  grep -E "FAILED|REFUSED|Error" /tmp/lk-linkedin.log | head -20
+  echo "Deploy stopped: the LinkedIn check did not pass (full output in /tmp/lk-linkedin.log)."
+  exit 1
+fi
+grep "PASSED" /tmp/lk-linkedin.log
 rsync -az --delete --filter="merge $FILTER" ./ "$HOST:$DEST"
 ssh "$HOST" 'chown -R lkcal:lkcal /opt/lytekeepr-calendar/app &&
+  install -o root -g root -m 700 /opt/lytekeepr-calendar/app/scripts/calendar_backup.py /opt/lytekeepr-calendar/backup.py &&
+  install -o root -g root -m 700 /opt/lytekeepr-calendar/app/scripts/offsite_backup.py /opt/lytekeepr-calendar/offsite_backup.py &&
   su -s /bin/bash lkcal -c "cd /opt/lytekeepr-calendar && venv/bin/pip install -q --disable-pip-version-check -r app/requirements.txt" &&
   systemctl restart lytekeepr-calendar && sleep 3 && systemctl is-active lytekeepr-calendar'
 echo "Deployed. Check https://lytekeepr.xyz/app/"

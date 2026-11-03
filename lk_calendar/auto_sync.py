@@ -16,6 +16,7 @@ from . import google_sync, store
 
 log = logging.getLogger(__name__)
 _started = False
+_last_backup_check = 0.0
 
 
 def _settings() -> tuple[int, int, int]:
@@ -67,6 +68,15 @@ def _purge_daily() -> None:
         log.warning("Erased a deleted workspace for good: %s", name)
 
 
+def _backup_watch_hourly() -> None:
+    global _last_backup_check
+    if time.time() - _last_backup_check < 3600:
+        return
+    _last_backup_check = time.time()
+    from . import backup_watch
+    backup_watch.check()
+
+
 def _loop() -> None:
     _, tick, delay = _settings()
     time.sleep(delay)
@@ -75,6 +85,7 @@ def _loop() -> None:
             from . import directory
             directory.run_in_each_workspace(run_if_due, "Google Calendar sync")       # each workspace's own Google account
             _purge_daily()
+            _backup_watch_hourly()
         except Exception:                      # a scheduler must never die
             log.exception("Google auto-sync tick crashed")
         time.sleep(tick)

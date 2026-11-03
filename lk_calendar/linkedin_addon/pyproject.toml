@@ -1,0 +1,6 @@
+[project]
+name = "lytekeepr-linkedin"
+version = "1.0.0"
+description = "LyteKeepr LinkedIn: the Claude add-on that brings LinkedIn messages into LyteKeepr"
+requires-python = ">=3.12,<3.14"
+dependencies = ["linkedin-mcp-local==0.16.0", "mcp>=1.27,<2"]      # the LinkedIn tool decides the mcp version

@@ -2990,3 +2990,7 @@ body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .a
 .gs-list { display: flex; flex-direction: column; gap: 4px; }
 .gs-step { display: flex; align-items: center; gap: 10px; padding: 6px 0; } .gs-step.done .hm-title { color: var(--ink-soft); font-weight: 500; }
 .gs-step .hm-main { flex: 1; min-width: 0; } .gs-why { font-size: 13px; color: var(--ink-soft); }
+
+/* Get started: the next steps after downloading the LinkedIn add-on */
+.gs-next { margin: 6px 0 0; padding-left: 20px; }
+.gs-next li { margin: 2px 0; }

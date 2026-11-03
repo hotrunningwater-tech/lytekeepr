@@ -25,11 +25,14 @@ def _ensure_env_loaded() -> None:
         _ENV_LOADED = True
 
 
+FIRST_SYNC_DAYS = 92      # 3 months
+
+
 @dataclass
 class GmailSyncConfig:
-    # Optional initial backfill window. Empty/0 means "scan the full mailbox
-    # slice allowed by the rest of the query filters" instead of truncating
-    # historical imported/demo mail.
+    # How far back the first sync of a mailbox looks: 3 months unless
+    # GMAIL_SYNC_WINDOW_DAYS says otherwise ("all" or 0 = the whole mailbox).
+    # After that each scan only fetches what changed since the last one.
     sync_window_days: int | None = None
     # Optional fixed start date (e.g. "2026-04-27"). Preferred over
     # sync_window_days: a rolling day-count keeps drifting relative to
@@ -51,8 +54,8 @@ class GmailSyncConfig:
             sync_since_date = since_raw
 
         raw = (os.getenv("GMAIL_SYNC_WINDOW_DAYS", "") or "").strip()
-        sync_window_days = None
-        if raw and raw not in {"0", "all", "ALL"}:
-            sync_window_days = int(raw)
+        sync_window_days = FIRST_SYNC_DAYS
+        if raw:
+            sync_window_days = None if raw in {"0", "all", "ALL"} else int(raw)
 
         return cls(sync_window_days=sync_window_days, sync_since_date=sync_since_date)

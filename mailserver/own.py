@@ -31,7 +31,7 @@ from gmail.parser import html_to_text
 from profiles.store import profile_component_dir
 
 log = logging.getLogger(__name__)
-FIRST_SYNC_DAYS = 90
+FIRST_SYNC_DAYS = 92
 SENT_NAMES = ("Sent", "INBOX.Sent", "Sent Items", "Sent Messages", "INBOX.Sent Items")
 FIELDS = ("address", "from_name", "imap_host", "imap_port", "imap_user", "smtp_host", "smtp_port", "smtp_user")
 

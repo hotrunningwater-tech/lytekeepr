@@ -12,12 +12,10 @@ from __future__ import annotations
 import difflib
 import json
 import logging
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from crm import db as crm_db
-from integrations.linkedin import client
 from profiles.store import profile_component_dir
 
 logger = logging.getLogger(__name__)
@@ -117,6 +115,17 @@ def resolve_linkedin_contact(person_name: str) -> dict:
 
     distinct_people = {row["person_id"]: row for row in rows}
     if not distinct_people:
+        # No conversation yet: someone with a LinkedIn profile in LyteKeepr can still get a first message.
+        from lk_calendar import linkedin_outbox
+        conn = crm_db.get_connection()
+        try:
+            for r in conn.execute("SELECT DISTINCT p.person_id, p.name FROM people p JOIN channel_accounts ca ON ca.person_id = p.person_id AND ca.channel = 'linkedin' "
+                                  "WHERE p.name LIKE ?", (f"%{person_name}%",)).fetchall():
+                if linkedin_outbox.profile_slug(conn, r["person_id"]):
+                    distinct_people[r["person_id"]] = {"person_id": r["person_id"], "name": r["name"], "thread_id": None}
+        finally:
+            conn.close()
+    if not distinct_people:
         return {
             "status": "not_found",
             "message": f"No LinkedIn contact matching '{person_name}'.",
@@ -168,99 +177,21 @@ def create_pending_send(person_name: str, message_text: str) -> dict:
 
 
 def confirm_pending_send() -> dict:
+    """The user said yes to exactly this message: it waits in the outbox until the LyteKeepr LinkedIn add-on on their computer sends it
+    (lk_calendar/linkedin_outbox.py). Nothing goes to LinkedIn from the server."""
     payload = load_pending_send()
     if not payload:
         return {"status": "no_pending_send", "message": "There is no active draft to send."}
-
-    conversation_ref = payload.get("conversation_ref")
-    message_text = payload.get("message_text")
-    if not conversation_ref or not message_text:
+    message_text = (payload.get("message_text") or "").strip()
+    if not message_text or not payload.get("person_id"):
         clear_pending_send()
         return {"status": "invalid_pending_send", "message": "The pending draft was invalid and was cleared."}
-
-    # Prefer sending via the person's profile rather than the existing
-    # conversation thread — LinkedIn can flag a thread as a "group"
-    # conversation even when it looks like a plain 1:1, and the send tool
-    # refuses those; targeting the profile's own Message button sidesteps
-    # that entirely. Falls back to conversation_ref if we can't resolve one.
-    profile_slug = None
-    search_res = client.search_people(payload.get("person_name", ""))
-    if search_res.get("ok"):
-        candidates = ((search_res.get("result") or {}).get("people")) or []
-        match = next(
-            (c for c in candidates if c.get("name", "").strip().lower() == payload.get("person_name", "").strip().lower()),
-            candidates[0] if len(candidates) == 1 else None,
-        )
-        if match:
-            profile_slug = match.get("profile_slug")
-
-    try:
-        res = client.send_message(message_text, conversation_ref=conversation_ref, profile_slug=profile_slug)
-    finally:
-        clear_pending_send()
-
-    logger.warning("linkedin send_message raw response: %s", json.dumps(res)[:2000])
-
-    if not res.get("ok"):
-        return {"status": "failed", "message": res.get("error", "Send failed."), "person_name": payload.get("person_name")}
-
-    # The send call returning ok just means the request round-tripped
-    # without an exception — it is NOT confirmation anything was actually
-    # sent. The only real confirmation is an independent re-check: wait a
-    # moment for LinkedIn's UI to settle, then re-read the conversation
-    # ourselves via a second MCP call and look for the exact text we sent
-    # as the latest outgoing message.
-    time.sleep(3)
-    verify = client.get_conversation(conversation_ref, max_messages=5)
-    logger.warning("linkedin post-send verify raw response: %s", json.dumps(verify)[:2000])
-    matched_message = None
-    if verify.get("ok"):
-        recent_messages = ((verify.get("result") or {}).get("conversation") or {}).get("messages") or []
-        matched_message = next(
-            (
-                m for m in recent_messages
-                if m.get("direction") == "outgoing" and (m.get("text") or "").strip() == message_text.strip()
-            ),
-            None,
-        )
-    verified_in_history = matched_message is not None
-
-    if verified_in_history:
-        # We already have the confirmed message in hand from the check
-        # above — save it into the CRM now instead of waiting for the next
-        # scheduled sync, so it shows up on the board immediately.
-        conn = crm_db.get_connection()
-        try:
-            channel_identifier = f"name:{payload.get('person_name')}"
-            person_id, account_id = crm_db.get_or_create_person_for_channel(
-                conn, "linkedin", channel_identifier, payload.get("person_name")
-            )
-            crm_db.insert_message(
-                conn,
-                person_id=person_id,
-                account_id=account_id,
-                thread_id=conversation_ref,
-                channel="linkedin",
-                sender="You",
-                direction="outgoing",
-                message_text=message_text,
-                timestamp=datetime.now().isoformat(),
-                external_message_id=matched_message.get("message_ref"),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-        from assistant import followup_engine  # local import: avoids a circular import with followup_engine -> linkedin_send_flow
-        followup_engine.record_outreach(payload.get("person_id"), "linkedin", conversation_ref)
-
-    return {
-        "status": "sent" if verified_in_history else "not_confirmed",
-        "message": (
-            f"Sent to {payload.get('person_name')}."
-            if verified_in_history
-            else f"Not sent to {payload.get('person_name')}."
-        ),
-        "person_name": payload.get("person_name"),
-        "message_text": message_text,
-    }
+    from profiles.store import get_active_profile_id
+    from lk_calendar import linkedin_link, linkedin_outbox
+    if not linkedin_link.current_link(get_active_profile_id()):
+        return {"status": "not_connected", "message": "LinkedIn isn't connected yet: connect it on Home (Get started), then send again. Nothing was sent."}
+    linkedin_outbox.queue(int(payload["person_id"]), payload.get("person_name") or "", message_text, payload.get("conversation_ref"))
+    clear_pending_send()
+    return {"status": "queued", "person_name": payload.get("person_name"), "message_text": message_text,
+            "message": f"Sending to {payload.get('person_name')} from your computer, through the LyteKeepr LinkedIn add-on: within a minute while your computer "
+                       "and the Claude app are on, otherwise as soon as they are. It shows on their timeline once LinkedIn has it."}

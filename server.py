@@ -42,7 +42,6 @@ from gmail.errors import GmailSyncError
 from gmail.message_access import load_full_message
 from gmail.storage import load_sync_state
 from gmail.sync import get_active_account_id, get_pending_candidates, save_candidates, scan_for_candidates, set_active_account_id
-from integrations.linkedin import client as linkedin_client
 from integrations.linkedin import sync as linkedin_sync
 from integrations.linkedin import storage as linkedin_sync_storage
 from crm import db as crm_db
@@ -1002,27 +1001,6 @@ def linkedin_leads_update(lead_id):
     return jsonify({"ok": True})
 
 
-@app.get("/api/linkedin/status")
-def linkedin_status():
-    # Starts the local LinkedIn MCP server and checks session status. If no
-    # session is saved yet, the server itself opens a real login browser —
-    # only reachable by explicitly clicking the LinkedIn tab in the UI.
-    return jsonify(linkedin_client.get_status())
-
-
-@app.get("/api/linkedin/messages")
-def linkedin_messages():
-    return jsonify(linkedin_client.search_messages())
-
-
-@app.get("/api/linkedin/conversation")
-def linkedin_conversation():
-    ref = request.args.get("ref", "")
-    if not ref:
-        return jsonify({"ok": False, "error": "missing ref"}), 400
-    return jsonify(linkedin_client.get_conversation(ref))
-
-
 @app.get("/api/linkedin/crm/conversations")
 def linkedin_crm_conversations():
     """What's actually saved in the CRM right now — reflects reset/backfill
@@ -1083,23 +1061,6 @@ def linkedin_sync_status():
             "current_activity": linkedin_sync.get_current_activity(),
         }
     )
-
-
-@app.post("/api/linkedin/backfill")
-def linkedin_backfill():
-    days = request.get_json(silent=True) or {}
-    return jsonify(linkedin_sync.run_backfill(max_age_days=days.get("days", 7)))
-
-
-@app.post("/api/linkedin/reset")
-def linkedin_reset():
-    return jsonify(linkedin_sync.reset())
-
-
-@app.post("/api/linkedin/sync/run")
-def linkedin_sync_run():
-    body = request.get_json(silent=True) or {}
-    return jsonify(linkedin_sync.run_incremental_sync(max_age_days=body.get("days", 7)))
 
 
 @app.post("/api/gmail/accounts/activate")
@@ -1197,7 +1158,7 @@ def run_gmail_scan(since_date=None) -> dict:
 
 @app.post("/api/gmail/scan")
 def gmail_scan():
-    # Scans for new/changed Gmail messages (full 90-day window on first
+    # Scans for new/changed Gmail messages (the last 3 months on first
     # run, historyId-based diff afterward — see gmail.sync.scan_for_candidates).
     # A message from an address that's already a trusted email contact in
     # the CRM is auto-saved immediately below — same "trust, once earned,
@@ -1544,7 +1505,6 @@ if os.getenv("LK_GMAIL_DAILY", "1") != "0":
 
 
 if __name__ == "__main__":
-    linkedin_sync.start_scheduler()
     followup_engine.start_scheduler()
     leads_importer.start_scheduler()
 
