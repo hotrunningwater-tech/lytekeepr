@@ -25,7 +25,6 @@ from datetime import datetime, timedelta
 
 from assistant.config import AssistantConfig
 from crm import db as crm_db
-from integrations.linkedin import client as linkedin_client
 from services.openai.client import OpenAIServiceError, generate_text
 
 logger = logging.getLogger(__name__)
@@ -117,41 +116,15 @@ def record_outreach(person_id: int, channel: str, conversation_ref: str | None, 
         conn.close()
 
 
-def _ingest_and_find_new_incoming(conn, person_id: int, conversation_ref: str) -> list[dict]:
-    """Re-pulls the conversation, writes every message into the CRM (same
-    dedup as normal sync), and returns just the ones that were genuinely
-    new AND incoming — the only ones that count as "a reply since last
-    outreach"."""
-    conv_res = linkedin_client.get_conversation(conversation_ref, max_messages=10)
-    if not conv_res.get("ok"):
-        return []
-    messages = ((conv_res.get("result") or {}).get("conversation") or {}).get("messages") or []
-
+def _ingest_and_find_new_incoming(conn, person_id: int, since: str | None) -> list[dict]:
+    """Replies since the last outreach, from what LyteKeepr already holds: the LyteKeepr LinkedIn add-on on the user's computer
+    brings every new message in. Nothing here talks to LinkedIn."""
     rows = conn.execute(
-        "SELECT account_id FROM channel_accounts WHERE person_id = ? AND channel = 'linkedin' LIMIT 1",
-        (person_id,),
-    ).fetchone()
-    if not rows:
-        return []
-    account_id = rows["account_id"]
-
-    new_incoming = []
-    for msg in messages:
-        was_new = crm_db.insert_message(
-            conn,
-            person_id=person_id,
-            account_id=account_id,
-            thread_id=conversation_ref,
-            channel="linkedin",
-            sender=msg.get("sender_name"),
-            direction=msg.get("direction", "incoming"),
-            message_text=msg.get("text"),
-            timestamp=msg.get("sent_at_text"),
-            external_message_id=msg.get("message_ref"),
-        )
-        if was_new and msg.get("direction") == "incoming":
-            new_incoming.append(msg)
-    return new_incoming
+        "SELECT sender, message_text, timestamp FROM messages WHERE person_id = ? AND channel = 'linkedin' AND direction = 'incoming' "
+        "AND (? IS NULL OR timestamp > ?) ORDER BY timestamp",
+        (person_id, since, since),
+    ).fetchall()
+    return [{"sender_name": r["sender"], "text": r["message_text"], "sent_at": r["timestamp"]} for r in rows]
 
 
 def _process_due_follow_up(row, api_key: str | None, model: str) -> None:
@@ -169,7 +142,7 @@ def _process_due_follow_up(row, api_key: str | None, model: str) -> None:
     run_id = crm_db.new_run_id()
     conn = crm_db.get_connection()
     try:
-        new_incoming = _ingest_and_find_new_incoming(conn, person_id, conversation_ref)
+        new_incoming = _ingest_and_find_new_incoming(conn, person_id, row["last_outreach_at"] if "last_outreach_at" in row.keys() else None)
         crm_db.log_activity(run_id, 1, "followup", "check_for_reply", detail=f"{person_name}: {len(new_incoming)} new incoming message(s)", conn=conn)
         conn.commit()
         logger.warning("follow_up_id=%s: %d new incoming message(s) found", row["follow_up_id"], len(new_incoming))

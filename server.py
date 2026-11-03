@@ -42,8 +42,6 @@ from gmail.errors import GmailSyncError
 from gmail.message_access import load_full_message
 from gmail.storage import load_sync_state
 from gmail.sync import get_active_account_id, get_pending_candidates, save_candidates, scan_for_candidates, set_active_account_id
-from integrations.linkedin import sync as linkedin_sync
-from integrations.linkedin import storage as linkedin_sync_storage
 from crm import db as crm_db
 from linkedin_leads import importer as leads_importer
 from linkedin_leads.csv_writeback import write_lead_to_csv
@@ -1039,28 +1037,6 @@ def linkedin_crm_conversation(person_id):
     finally:
         conn.close()
     return jsonify({"ok": True, "messages": messages})
-
-
-@app.get("/api/linkedin/sync/status")
-def linkedin_sync_status():
-    state = linkedin_sync_storage.load()
-    crm_db.init_db()
-    conn = crm_db.get_connection()
-    try:
-        conversation_count = crm_db.count_people(conn, channel="linkedin")
-        message_count = crm_db.count_messages(conn, channel="linkedin")
-    finally:
-        conn.close()
-    return jsonify(
-        {
-            "backfilled": state.get("backfilled", False),
-            "backfilled_at": state.get("backfilled_at"),
-            "last_synced_at": state.get("last_synced_at"),
-            "conversation_count": conversation_count,
-            "message_count": message_count,
-            "current_activity": linkedin_sync.get_current_activity(),
-        }
-    )
 
 
 @app.post("/api/gmail/accounts/activate")

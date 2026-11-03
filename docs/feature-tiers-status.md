@@ -18,7 +18,7 @@ Ratings show how close each feature is to fully built (10 = fully built), checke
 | # | Feature | Type | Status | Rating |
 |---|---|---|---|---|
 | 1 | Unified customer history | Client-requested | LinkedIn messages, emails, calls, notes and logged conversations are all in it. Team members only see messages if given access | 9 |
-| 2 | Customer information lookup | Client-requested | search_contacts, get_contact, full history | 9 |
+| 2 | Customer information lookup | Client-requested | find, get_contact, full history | 9 |
 | 3 | Search across communications | Client-requested | Messages, notes, docs, and emails by words (subject, preview, sender; in_body for the full text), with or without a contact. Added 2026-10-24: the admin's search also covers Primary-inbox emails from people who are not contacts yet | 9 |
 | 4 | CRM updates through Claude | Client-requested | Update contact, notes, stage moves, opportunities, tasks, follow-up dates | 9 |
 | 5 | Email and follow-up drafting | Client-requested | LinkedIn drafts, email send/reply (the text is approved first) | 9 |

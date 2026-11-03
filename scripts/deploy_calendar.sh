@@ -41,6 +41,14 @@ if [ "${1:-}" = "--dry-run" ]; then
   rsync -azi --delete --dry-run --filter="merge $FILTER" ./ "$HOST:$DEST" | grep -v '^\.' || true
   exit 0
 fi
+# Never ship with a failing test (the Claude tool list among them: no tool added or left behind unnoticed).
+echo "Running the tests..."
+if ! python3 -m unittest discover -s tests -q > /tmp/lk-tests.log 2>&1; then
+  tail -20 /tmp/lk-tests.log
+  echo "Deploy stopped: a test failed (full output in /tmp/lk-tests.log)."
+  exit 1
+fi
+echo "TESTS PASSED"
 # Never ship code that lets one workspace see another's data.
 echo "Checking that workspaces are kept apart..."
 if ! python3 scripts/check_isolation.py > /tmp/lk-isolation.log 2>&1; then

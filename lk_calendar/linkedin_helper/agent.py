@@ -3,15 +3,17 @@
 # requires-python = ">=3.12,<3.14"
 # dependencies = ["mcp==2.2.0"]
 # ///
-"""The LinkedIn helper: runs on the USER's own computer, reads their LinkedIn with the LinkedIn MCP tool (their own login, their own
-address) and hands the messages to their LyteKeepr workspace. Their LinkedIn login never leaves the computer; LyteKeepr only gets
-a key that lets this helper add messages to that one workspace.
+"""The LinkedIn helper: the working part of the LyteKeepr LinkedIn add-on in the Claude app, on the USER's own computer. It reads their
+LinkedIn with the LinkedIn MCP tool (their own login, their own address), hands the messages to their LyteKeepr workspace and sends the
+messages they approved. Their LinkedIn login never leaves the computer; LyteKeepr only gives a key that lets it add messages to that
+one workspace.
 
-    agent.py pair <code> <address>     once, from the installer: swaps the one-time code for the key
-    agent.py tick                      every 15 minutes from the computer's scheduler; reads LinkedIn only when due
+The add-on (lk_calendar/linkedin_addon/server.py) is a small starter that never changes; it runs this file from the user's LyteKeepr
+folder and calls addon_run every minute. This file updates itself (update_self) to the version LyteKeepr says is current, checked
+against its fingerprint, so a fix reaches every computer without a reinstall.
 
-When to read: straight away the first time (LyteKeepr asks for 3 months), then hourly from 8am to 9pm while the computer is on, and soon after
-"Sync now". A returning read looks back as far as LyteKeepr says, at most 7 days. Conversations whose "last activity" has not
+When to read: straight away the first time (LyteKeepr asks for 3 months), then hourly from 8am to 9pm while the computer is on, and soon
+after "Sync now". A returning read looks back as far as LyteKeepr says, at most 7 days. Conversations whose "last activity" has not
 changed since the last read are skipped, so LinkedIn sees as few requests as possible."""
 
 import asyncio
@@ -119,19 +121,6 @@ def call(cfg, method, path, body=None):
         if exc.code in (401, 403):
             raise Refused(str(exc.code)) from exc
         raise
-
-
-def pair(code, address):
-    name = platform.node() or "this computer"
-    try:
-        out = call({"address": address.rstrip("/")}, "POST", "pair", {"code": code, "computer": name[:80]})
-    except Refused:
-        print("That code did not work. It may have expired: get a new one in LyteKeepr (LinkedIn tab).")
-        return 1
-    save(CONFIG, {"address": address.rstrip("/"), "key": out["key"]})
-    save(STATE, {})
-    print("Connected to your LyteKeepr workspace.")
-    return 0
 
 
 def _mcp_args(*args):
@@ -337,19 +326,9 @@ def update_self(cfg, wanted):
     return True
 
 
-def remove_schedule():
-    if os.environ.get("LK_LINKEDIN_HOME"):         # a test copy has no schedule of its own
-        return
-    if platform.system() == "Darwin":
-        plist = Path.home() / "Library/LaunchAgents/xyz.lytekeepr.linkedin.plist"
-        plist.unlink(missing_ok=True)
-        subprocess.run(["launchctl", "remove", "xyz.lytekeepr.linkedin"], capture_output=True)
-    elif platform.system() == "Windows":
-        subprocess.run(["schtasks", "/Delete", "/TN", "LyteKeepr LinkedIn", "/F"], capture_output=True)
-
-
-def tick(force=False):
-    """force: read now whatever the hour (the user asked, through Claude)."""
+def tick(force=False, launcher=0):
+    """force: read now whatever the hour (the user asked, through Claude). launcher: the add-on starter's version, so LyteKeepr can
+    say when a starter is too old."""
     cfg = load(CONFIG)
     if not cfg.get("key"):
         return 0
@@ -357,9 +336,8 @@ def tick(force=False):
         return 0
     state = load(STATE)
     try:
-        plan = call(cfg, "GET", "plan")
+        plan = call(cfg, "GET", f"plan?launcher={int(launcher)}")
     except Gone:
-        remove_schedule()
         CONFIG.unlink(missing_ok=True)
         print("Disconnected in LyteKeepr: the helper has stopped.")
         return 0
@@ -406,10 +384,108 @@ def tick(force=False):
     return 0
 
 
+# ---- the add-on's own work (the starter calls these; they live here so they update with this file)
+LINK_FILE = HOME_DIR / "linking.json"
+LINK_MINUTES = 15
+
+
+def _post(address, path, body):
+    req = urllib.request.Request(address + "/linkedin-helper/" + path, data=json.dumps(body).encode(), method="POST", headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            return res.status, json.loads(res.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        return exc.code, {}
+
+
+def linked():
+    return bool(load(CONFIG).get("key"))
+
+
+def link(address):
+    """Link this computer to the USER's workspace: a LyteKeepr page opens in their browser, they click Approve, this waits for that.
+    Returns "linked", "just linked" or a sentence for the user."""
+    if linked():
+        return "linked"
+    pending = load(LINK_FILE)
+    if not pending or time.time() - pending.get("at", 0) > LINK_MINUTES * 60:
+        status, pending = _post(address, "link/start", {"computer": (platform.node() or "this computer")[:80]})
+        if status != 200:
+            return "LyteKeepr could not be reached. Check the internet connection; this tries again by itself."
+        pending["at"] = time.time()
+        save(LINK_FILE, pending)
+        if os.environ.get("LK_NO_BROWSER"):
+            print("approve at " + pending["url"], file=sys.stderr, flush=True)
+        else:
+            import webbrowser
+            webbrowser.open(pending["url"])
+    deadline = time.time() + LINK_MINUTES * 60
+    while time.time() < deadline:
+        status, out = _post(address, "link/poll", {"link_id": pending["link_id"], "secret": pending["secret"]})
+        if status == 200 and out.get("key"):
+            save(CONFIG, {"address": address, "key": out["key"]})
+            save(STATE, {})
+            LINK_FILE.unlink(missing_ok=True)
+            log_in()
+            return "just linked"
+        if status == 410:
+            LINK_FILE.unlink(missing_ok=True)
+            return "The LyteKeepr page was not approved in time. Say 'sync my LinkedIn' to get a new one."
+        time.sleep(3)
+    return "Waiting for you to click Approve on the LyteKeepr page in your browser."
+
+
+def log_in():
+    """A LinkedIn window opens; with a saved login it closes by itself."""
+    if os.environ.get("LK_LINKEDIN_NO_LOGIN"):     # checks: there is no LinkedIn to log in to
+        return
+    for args in (("profile", "create"), ("setup",), ("login",)):
+        try:
+            subprocess.run(_mcp_args(*args), capture_output=True, timeout=1800)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
+def status(address):
+    try:
+        req = urllib.request.Request(address + "/linkedin-helper/status", headers={"Authorization": "Bearer " + load(CONFIG).get("key", "")})
+        with urllib.request.urlopen(req, timeout=30) as res:
+            return json.loads(res.read())
+    except (OSError, ValueError):
+        return {}
+
+
+def addon_run(address, launcher, force=False):
+    """One minute's work: link if needed, send what was approved, read when due; a LinkedIn window at most once a day when logged out."""
+    state = link(address)
+    if state not in ("linked", "just linked"):
+        return state
+    tick(force=force or state == "just linked", launcher=launcher)      # right after linking it reads at once, whatever the hour
+    if status(address).get("state") == "needs_login":
+        st = load(STATE)
+        if time.time() - st.get("login_tried", 0) > 86400:
+            st["login_tried"] = time.time()
+            save(STATE, st)
+            log_in()
+    return "linked"
+
+
+def addon_status_text(address):
+    if not linked():
+        return "Not linked yet. Call sync_linkedin to link this computer to LyteKeepr."
+    s = status(address)
+    if not s:
+        return "Linked, but LyteKeepr could not be reached just now."
+    note = {"needs_login": "LinkedIn needs a new login: call sync_linkedin and log in in the window that opens.",
+            "error": "The last read did not finish; it tries again within the hour."}.get(s.get("state"), "")
+    waiting = f"{s['outbox_waiting']} LinkedIn message(s) waiting to be sent. " if s.get("outbox_waiting") else ""
+    return (f"Linked. {s.get('message_count', 0)} LinkedIn messages from {s.get('conversation_count', 0)} people in LyteKeepr. "
+            f"Last synced: {s.get('last_synced_at') or 'not yet'}. " + ("" if s.get("first_done") else "The first sync (3 months) is still running. ")
+            + waiting + note).strip()
+
+
 if __name__ == "__main__":
-    if len(sys.argv) == 4 and sys.argv[1] == "pair":
-        sys.exit(pair(sys.argv[2], sys.argv[3]))
     if len(sys.argv) == 2 and sys.argv[1] == "tick":
         sys.exit(tick())
-    print("usage: agent.py pair <code> <address> | agent.py tick")
+    print("usage: agent.py tick")
     sys.exit(2)

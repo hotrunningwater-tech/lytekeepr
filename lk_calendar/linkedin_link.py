@@ -1,11 +1,12 @@
-"""LinkedIn per workspace: the USER logs in on their own computer and keeps it on; a small helper there (linkedin_helper/agent.py)
-reads LinkedIn with the MCP tool and hands the messages to this file's addresses. We never hold a LinkedIn login. Admin only, like
-Gmail. One connected computer per workspace.
+"""LinkedIn per workspace: the USER logs in on their own computer and keeps it on; the LyteKeepr LinkedIn add-on in their Claude app
+(linkedin_addon, with linkedin_helper/agent.py doing the work) reads LinkedIn with the MCP tool and hands the messages to this file's
+addresses, and sends the messages they approved (linkedin_outbox). We never hold a LinkedIn login. Admin only, like Gmail. One connected
+computer per workspace.
 
-Connecting: the admin accepts the account risk and gets a one-time code inside a line to paste (30 minutes, one use). The helper swaps
-it for its own key. Both are stored only as hashes, in the directory (a key says which workspace it belongs to). What a key can do:
-ask what to read, add messages to that workspace. Disconnecting (or a new computer) ends the old key for good; the helper then
-removes itself from the computer's schedule. Messages already saved stay."""
+Connecting: the add-on asks for a link, the admin clicks Approve on a LyteKeepr page (accepting the account risk), the add-on picks up its
+own key. The key is stored only as a hash, in the directory (a key says which workspace it belongs to). What a key can do: ask what to
+do, add messages to that workspace, pick up approved messages to send. Disconnecting (or a new computer) ends the old key for good; the
+add-on then stops. Messages already saved stay. The add-on reports its starter's version; one older than MIN_LAUNCHER is asked to update."""
 
 import hashlib
 import json
@@ -19,14 +20,11 @@ from . import directory
 FIRST_SYNC_DAYS = 92          # 3 months
 RETURN_SYNC_DAYS = 7          # the most a returning read looks back
 MARGIN_DAYS = 1               # LinkedIn shows "Monday", not a time, so a read also looks a day behind the last one
-CODE_MINUTES = 30
-CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-MAX_BAD_CODES = 10            # per address, per BAD_CODE_SECONDS
 BAD_CODE_SECONDS = 15 * 60
 MAX_BATCH = 50
 MAX_MESSAGES = 200
 MAX_TEXT = 20000
-UV_VERSION = "0.12.19"
+MIN_LAUNCHER = 2              # lk_calendar/linkedin_addon/server.py LAUNCHER: an older starter is asked to update
 HELPER_DIR = Path(__file__).parent / "linkedin_helper"
 ADDON_DIR = Path(__file__).parent / "linkedin_addon"
 LINK_MINUTES = 15             # the Claude add-on's Approve page
@@ -39,7 +37,6 @@ CREATE TABLE IF NOT EXISTS linkedin_pending (
     expires REAL NOT NULL,
     key TEXT NOT NULL DEFAULT ''
 );
-CREATE TABLE IF NOT EXISTS linkedin_codes (code_hash TEXT PRIMARY KEY, profile_id TEXT NOT NULL, user_id INTEGER NOT NULL, expires REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS linkedin_links (
     key_hash TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL,
@@ -58,6 +55,13 @@ _bad_codes: dict = {}
 def _db():
     conn = directory._conn()
     conn.executescript(SCHEMA)
+    if "launcher" not in {r["name"] for r in conn.execute("PRAGMA table_info(linkedin_links)")}:
+        conn.execute("ALTER TABLE linkedin_links ADD COLUMN launcher INTEGER NOT NULL DEFAULT 0")
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(linkedin_pending)")}
+    for column, ddl in (("profile_id", "TEXT NOT NULL DEFAULT ''"), ("user_id", "INTEGER NOT NULL DEFAULT 0")):
+        if column not in have:
+            conn.execute(f"ALTER TABLE linkedin_pending ADD COLUMN {column} {ddl}")
+    conn.execute("DROP TABLE IF EXISTS linkedin_codes")          # the old pasted-line pairing
     return conn
 
 
@@ -67,28 +71,6 @@ def _hash(secret: str) -> str:
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
-
-
-def new_code(profile_id: str, user_id: int) -> str:
-    code = "".join(secrets.choice(CODE_LETTERS) for _ in range(10))
-    with _db() as conn:
-        conn.execute("DELETE FROM linkedin_codes WHERE profile_id = ? OR expires < ?", (profile_id, time.time()))
-        conn.execute("INSERT INTO linkedin_codes VALUES (?, ?, ?, ?)", (_hash(code), profile_id, user_id, time.time() + CODE_MINUTES * 60))
-    return code
-
-
-def pair(code: str, computer: str) -> str | None:
-    """The helper's key for a good code, else None. A code works once; a new computer ends the old one's key."""
-    key = secrets.token_urlsafe(32)
-    with _db() as conn:
-        row = conn.execute("SELECT * FROM linkedin_codes WHERE code_hash = ? AND expires > ?", (_hash(code.strip().upper()), time.time())).fetchone()
-        if not row:
-            return None
-        conn.execute("DELETE FROM linkedin_codes WHERE code_hash = ?", (row["code_hash"],))
-        conn.execute("UPDATE linkedin_links SET ended_at = ? WHERE profile_id = ? AND ended_at = ''", (_now(), row["profile_id"]))
-        conn.execute("INSERT INTO linkedin_links (key_hash, profile_id, user_id, computer, connected_at) VALUES (?, ?, ?, ?, ?)",
-                     (_hash(key), row["profile_id"], row["user_id"], computer[:80], _now()))
-    return key
 
 
 # ---- the Claude add-on: it asks for a link, the admin clicks Approve on a LyteKeepr page, the add-on picks up its key
@@ -107,29 +89,30 @@ def pending_link(link_id: str):
 
 
 def approve_link(link_id: str, profile_id: str, user_id: int) -> bool:
-    """The admin said yes: the key waits in the pending row until the add-on picks it up (once, within LINK_MINUTES)."""
+    """The admin said yes. The add-on's key is made only when it picks it up (poll_link), so no key is ever stored readable."""
     row = pending_link(link_id)
     if not row or row["key"]:
         return False
-    key = secrets.token_urlsafe(32)
     with _db() as conn:
-        conn.execute("UPDATE linkedin_links SET ended_at = ? WHERE profile_id = ? AND ended_at = ''", (_now(), profile_id))
-        conn.execute("INSERT INTO linkedin_links (key_hash, profile_id, user_id, computer, connected_at) VALUES (?, ?, ?, ?, ?)",
-                     (_hash(key), profile_id, user_id, row["computer"], _now()))
-        conn.execute("UPDATE linkedin_pending SET key = ? WHERE link_id = ?", (key, link_id))
+        conn.execute("UPDATE linkedin_pending SET key = 'approved', profile_id = ?, user_id = ? WHERE link_id = ?", (profile_id, user_id, link_id))
     return True
 
 
 def poll_link(link_id: str, secret: str):
-    """(status, key): 200 with the key once approved (then the row is gone), 202 while waiting, 410 when unknown or expired."""
+    """(status, key): 200 with the key once approved (then the request is gone), 202 while waiting, 410 when unknown or expired."""
     row = pending_link(link_id)
     if not row or not secrets.compare_digest(row["secret_hash"], _hash(secret)):
         return 410, None
-    if not row["key"]:
+    if row["key"] != "approved":
         return 202, None
+    key = secrets.token_urlsafe(32)
     with _db() as conn:
-        conn.execute("DELETE FROM linkedin_pending WHERE link_id = ?", (link_id,))
-    return 200, row["key"]
+        if not conn.execute("DELETE FROM linkedin_pending WHERE link_id = ? AND key = 'approved'", (link_id,)).rowcount:
+            return 410, None                      # picked up a moment ago by another request: one key per Approve
+        conn.execute("UPDATE linkedin_links SET ended_at = ? WHERE profile_id = ? AND ended_at = ''", (_now(), row["profile_id"]))
+        conn.execute("INSERT INTO linkedin_links (key_hash, profile_id, user_id, computer, connected_at) VALUES (?, ?, ?, ?, ?)",
+                     (_hash(key), row["profile_id"], row["user_id"], row["computer"], _now()))
+    return 200, key
 
 
 def addon_file(address: str) -> bytes:
@@ -160,7 +143,6 @@ def link_for_key(key: str):
 def disconnect(profile_id: str) -> None:
     with _db() as conn:
         conn.execute("UPDATE linkedin_links SET ended_at = ? WHERE profile_id = ? AND ended_at = ''", (_now(), profile_id))
-        conn.execute("DELETE FROM linkedin_codes WHERE profile_id = ?", (profile_id,))
 
 
 def request_sync(profile_id: str) -> bool:
@@ -248,7 +230,8 @@ def status(profile_id: str) -> dict:
         conn.close()
     from . import linkedin_outbox
     outbox = linkedin_outbox.counts()
-    return {"outbox_waiting": outbox["waiting"], "outbox_problems": outbox["problems"], "connected": bool(link), "computer": link["computer"] if link else "", "connected_at": link["connected_at"] if link else "",
+    return {"outbox_waiting": outbox["waiting"], "outbox_problems": outbox["problems"],
+            "addon_update_needed": bool(link and link["last_seen"] and (link["launcher"] or 0) < MIN_LAUNCHER), "connected": bool(link), "computer": link["computer"] if link else "", "connected_at": link["connected_at"] if link else "",
             "last_seen": link["last_seen"] if link else "", "state": link["last_state"] if link else "",
             "sync_requested": bool(link and link["sync_requested"]), "first_done": bool(state.get("backfilled")), "last_synced_at": state.get("last_synced_at"),
             "capped": bool(state.get("capped")), "conversation_count": conversations, "message_count": messages}
@@ -258,18 +241,6 @@ def helper_fingerprint() -> str:
     """Which helper version is current: the helpers on USERs' computers update themselves to it (agent.update_self)."""
     import hashlib
     return hashlib.sha256((HELPER_DIR / "agent.py").read_bytes()).hexdigest()
-
-
-def _installer(name: str, address: str) -> str:
-    text = (HELPER_DIR / name).read_text(encoding="utf-8")
-    return text.replace("__ADDRESS__", address).replace("__UV_VERSION__", UV_VERSION).replace("__PACKAGE__", _package())
-
-
-def _package() -> str:
-    for line in (HELPER_DIR / "agent.py").read_text(encoding="utf-8").splitlines():
-        if line.startswith("MCP_PACKAGE"):
-            return line.split('"')[1]
-    raise RuntimeError("helper package not found")
 
 
 _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -324,27 +295,6 @@ def register(app):
     @app.get("/linkedin-helper/agent.py")
     def linkedin_helper_file():
         return Response((HELPER_DIR / "agent.py").read_bytes(), mimetype="text/plain")
-
-    @app.get("/linkedin-helper/install.sh")
-    def linkedin_helper_install_mac():
-        return Response(_installer("install.sh", address()), mimetype="text/plain")
-
-    @app.get("/linkedin-helper/install.ps1")
-    def linkedin_helper_install_windows():
-        return Response(_installer("install.ps1", address()), mimetype="text/plain")
-
-    @app.post("/linkedin-helper/pair")
-    def linkedin_helper_pair():
-        ip, now = who(), time.time()
-        recent = [t for t in _bad_codes.get(ip, []) if now - t < BAD_CODE_SECONDS]
-        if len(recent) >= MAX_BAD_CODES:
-            return jsonify({"error": "too many tries"}), 403
-        body = request.get_json(silent=True) or {}
-        key = pair(str(body.get("code") or ""), str(body.get("computer") or ""))
-        if not key:
-            _bad_codes[ip] = recent + [now]
-            return jsonify({"error": "bad code"}), 403
-        return jsonify({"key": key})
 
     @app.post("/linkedin-helper/link/start")
     def linkedin_helper_link_start():
@@ -415,6 +365,8 @@ def register(app):
     def linkedin_helper_plan():
         def job(link):
             from . import linkedin_outbox
+            with _db() as conn:
+                conn.execute("UPDATE linkedin_links SET launcher = ? WHERE key_hash = ?", (request.args.get("launcher", 0, type=int), link["key_hash"]))
             return jsonify(dict(plan(), sync_now=bool(link["sync_requested"]), helper=helper_fingerprint(), outbox=linkedin_outbox.counts()["waiting"]))
         return with_key(job)
 
@@ -446,15 +398,6 @@ def register(app):
     @app.get("/api/linkedin/status")
     def linkedin_status():
         return jsonify(status(get_active_profile_id()))
-
-    @app.post("/api/linkedin/link/code")
-    def linkedin_link_code():
-        if (request.get_json(silent=True) or {}).get("accepted_risk") is not True:
-            return jsonify({"error": "Please accept the account risk first."}), 400
-        code = new_code(get_active_profile_id(), int((g.get("user") or {}).get("id") or 0))
-        base = address()
-        return jsonify({"code": code, "minutes": CODE_MINUTES, "mac": f"curl -fsSL {base}/linkedin-helper/install.sh | sh -s -- {code}",
-                        "windows": f'& ([scriptblock]::Create((irm {base}/linkedin-helper/install.ps1))) "{code}"'})
 
     @app.post("/api/linkedin/link/disconnect")
     def linkedin_link_disconnect():

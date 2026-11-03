@@ -1,0 +1,95 @@
+# Every tool Claude sees through the LyteKeepr connector, one per line: name | what it is for.
+# tests/test_connector_tools.py fails when this list and the code differ. Adding or removing a tool means changing this file too,
+# and a new tool must not do what an existing one already does (say here what it replaces). Shown to the owner before each deploy.
+
+find | Find a person, company or opportunity
+list_brands | List brands
+create_brand | Add a brand
+create_funnel | Create a funnel
+set_funnel_brand | Set a funnel's brand
+get_contact | Contact details
+contacts_gone_quiet | Who is waiting (gone quiet)
+snooze_quiet_contact | Not now (gone quiet)
+list_funnels | List funnels
+get_funnel | Funnel board
+get_agenda | Agenda
+list_calendar | Calendar items
+autopilot_queue | Scheduled run: work to do
+save_message_review | Scheduled run: save message review
+save_onboarding | Scheduled run: save onboarding
+set_stage_won | Mark a funnel stage as Won
+save_meeting_prep | Save meeting prep
+save_call_summary | Save call summary
+link_call_to_contact | Link a call to a contact
+save_followup_draft | Scheduled run: save follow-up draft
+calls_to_review | Calls to review
+get_call | Call transcript
+create_task | Create a task
+mark_task_done | Mark a task done
+create_contact | Add a contact
+update_contact | Update a contact
+move_contact_stage | Move to a funnel stage
+set_outreach_status | Set outreach status
+remove_follow_ups | Remove follow-ups
+set_follow_up_date | Set follow-up date
+update_calendar_item | Reschedule or rename
+move_overdue | Move overdue items
+set_meeting_status | Meeting status
+last_exchange | Did they reply? (last messages)
+search_messages | Search messages and emails
+book_meeting | Book a meeting
+get_meeting_notes | A meeting's private notes
+write_meeting_notes | Write private meeting notes
+set_meeting_agenda | Write the meeting's description (guests see it)
+set_meeting_recording | Record a meeting with Fathom (on/off)
+cancel_meeting | Cancel a meeting
+get_opportunity | Opportunity details
+create_opportunity | Create an opportunity
+add_participant | Add a person to an opportunity
+update_participant | Change a participant
+clear_primary_contact | No lead
+remove_participant | Remove a participant (added by mistake)
+move_opportunity_stage | Move an opportunity
+add_opportunity_task | Task for an opportunity
+docs_places | Where documents are
+docs_list | List folders and documents
+docs_search | Search documents
+doc_read | Read a document
+doc_create | Create a document
+doc_write | Write in a document
+doc_update | Rename or move a document
+doc_delete | Delete a document
+tab_create | Add a tab to a document
+tab_update | Rename or reorder a tab
+tab_delete | Delete a tab
+folder_create | Create a folder
+folder_update | Rename or move a folder
+folder_delete | Delete a folder
+save_email_draft | Save email draft
+list_drafts | Email drafts
+open_draft | Open an email draft
+update_draft | Change an email draft
+discard_draft | Discard an email draft
+send_draft | Send an email draft
+get_company | Company overview
+update_company | Update a company
+add_contact_note | Add a note to a contact
+log_conversation | Log a call or conversation
+edit_contact_record | Edit a note or logged conversation
+delete_contact_record | Delete a note or logged conversation
+search_contact_notes | Search notes and logged conversations
+get_contact_history | A contact's communication history
+get_opportunity_history | An opportunity's communication history
+reply_email | Reply to an email
+email_thread | A whole email thread
+list_goals | Goals
+add_goal | Add a goal
+update_goal | Change a goal
+delete_goal | Delete a goal
+related_people | Who else belongs here
+accept_suggestion | Accept a suggestion
+dismiss_suggestion | Dismiss a suggestion
+send_email | Send an email
+linkedin_inbox | LinkedIn people waiting for review
+sort_linkedin_inbox | Sort LinkedIn people waiting for review
+send_linkedin_message | Send a LinkedIn message

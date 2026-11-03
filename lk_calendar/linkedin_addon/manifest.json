@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "lytekeepr-linkedin",
   "display_name": "LyteKeepr LinkedIn",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Brings your LinkedIn messages into LyteKeepr and sends the ones you approve, from this computer. Your LinkedIn login stays here.",
   "long_description": "Reads your LinkedIn messages on this computer, with your own LinkedIn login, and puts them in your LyteKeepr workspace: the last 3 months the first time, then every hour from 8am to 9pm while this computer and Claude are on. It sends a LinkedIn message only after you approved its exact text in LyteKeepr or Claude. It never posts anything. Claude sees two tools: sync LinkedIn and LinkedIn status.",
   "author": {

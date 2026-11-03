@@ -121,8 +121,9 @@ def seed(c, mark, owner_email, workspace, padding=0):
         email_send_flow._remember_draft({"id": f"{mark}draft", "person_name": f"{mark} Person", "to_email": f"{mark}.person@example.com",
                                           "subject": f"{mark} subject", "body": f"{mark} body", "createdAt": "2026-10-16T00:00:00"})
     # a LinkedIn conversation, handed in the way the helper on the USER's computer does it
-    code = c.post("/api/linkedin/link/code", json={"accepted_risk": True}).get_json()["code"]
-    key = app.test_client().post("/linkedin-helper/pair", json={"code": code, "computer": f"{mark} computer"}).get_json()["key"]
+    started = app.test_client().post("/linkedin-helper/link/start", json={"computer": f"{mark} computer"}).get_json()
+    c.post("/linkedin/approve", data={"l": started["link_id"], "risk": "yes"})
+    key = app.test_client().post("/linkedin-helper/link/poll", json={"link_id": started["link_id"], "secret": started["secret"]}).get_json()["key"]
     saved = app.test_client().post("/linkedin-helper/conversations", headers={"Authorization": "Bearer " + key}, json={"conversations": [{
         "summary": {"conversation_ref": f"{mark}-thread", "participant_name": f"{mark} LinkedIn", "participant_profile_slug": f"{mark}-slug"},
         "messages": [{"message_ref": f"{mark}-m1", "direction": "outgoing", "text": f"{mark} linkedin message", "sent_at": SOON}]}]}).get_json()

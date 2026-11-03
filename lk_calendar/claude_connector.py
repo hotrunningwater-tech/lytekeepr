@@ -196,8 +196,10 @@ TOOLS = [
                      "a contact (with their own funnel and stage, if any) and every opportunity they are on (with their role), plus opportunities "
                      "whose name or company matches, and funnels whose name matches. A person can be a single contact entry in a funnel, a participant in an opportunity, or both. "
                      "Names often arrive misspelled by speech-to-text: when nothing matches exactly, the result has did_you_mean with the closest names; "
-                     "then just ask 'Did you mean …?' in one line."),
-     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}, "read": True},
+                     "then just ask 'Did you mean …?' in one line. With a brand, or no words, it lists contacts (id, name, company, email, channel, brand, funnel, stage)."),
+     "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Name, company, email or words from notes; empty lists the newest contacts."},
+                                                      "brand": {"type": "string", "description": "Only contacts of this brand (name or key); 'none' = contacts with no brand yet. Lists contacts."},
+                                                      "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 15}}}, "read": True},
     {"name": "list_brands", "title": "List brands",
      "description": ("The brands (businesses) this account runs, e.g. LyteKeepr, Aspan, Nexy. Contacts, funnels and calendar items each belong to one brand; "
                      "a contact in a funnel has the funnel's brand. Contacts with no brand yet show brand ''."),
@@ -213,13 +215,8 @@ TOOLS = [
      "description": "Make a funnel belong to a brand. Everyone in the funnel takes that brand, and their follow-ups are filed under it. Empty brand clears the funnel's brand.",
      "inputSchema": {"type": "object", "properties": {"funnel_id": {"type": "integer"}, "brand": {"type": "string", "description": "The brand (name or key, see list_brands). When it is unclear which brand the user means, ask; never guess."}},
                      "required": ["funnel_id", "brand"]}, "read": False},
-    {"name": "search_contacts", "title": "Search contacts",
-     "description": "Find contacts in LyteKeepr by name, company, email or notes. Returns id, name, company, email, channel, brand, funnel and stage.",
-     "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "description": "Words to look for; empty lists the newest contacts."},
-                                                      "brand": {"type": "string", "description": "Only contacts of this brand (name or key); 'none' = contacts with no brand yet."},
-                                                      "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 15}}}, "read": True},
     {"name": "get_contact", "title": "Contact details",
-     "description": "Everything about one contact: profile, notes, funnel and stage, LinkedIn/Instagram messages, follow-ups and their recorded calls (with summaries). Use search_contacts first to get the id.",
+     "description": "Everything about one contact: profile, notes, funnel and stage, LinkedIn/Instagram messages, follow-ups and their recorded calls (with summaries). Use find first to get the id.",
      "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
     {"name": "contacts_gone_quiet", "title": "Who is waiting (gone quiet)",
      "description": "A full sweep of every contact whose conversation stopped, split by who owes the next message: waiting_on_you = they wrote last and the user "
@@ -302,7 +299,7 @@ TOOLS = [
     {"name": "calls_to_review", "title": "Calls to review", "description": "Recorded calls with a transcript not summarized yet, and meetings that passed with no recording (possible no-shows).",
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "get_call", "title": "Call transcript", "description": "One recorded call (from Fathom): who was on it (contacts), the summary if any, and the full transcript. Before summarizing: if contacts is empty, "
-                    "ask the user who the call was with (suggest from what they said or the names in the transcript), find them with search_contacts and link the call "
+                    "ask the user who the call was with (suggest from what they said or the names in the transcript), find them with find and link the call "
                     "with link_call_to_contact after they confirm. Then summarize and save the summary with save_call_summary.",
      "inputSchema": {"type": "object", "properties": {"call_id": {"type": "integer"}}, "required": ["call_id"]}, "read": True},
     {"name": "create_task", "title": "Create a task",
@@ -323,7 +320,7 @@ TOOLS = [
     # --- added for everyday phone use: the same actions the three LyteKeepr AI chats have ---
     {"name": "create_contact", "title": "Add a contact",
      "description": "Add a new contact. It needs a name or a company, a way to reach them (email, phone, LinkedIn or Instagram) and a brand: ask for what's missing first. "
-                    "Then call search_contacts first (no duplicates; update_contact if they exist). An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'. From a business card photo "
+                    "Then call find first (no duplicates; update_contact if they exist). An Instagram handle goes in 'instagram' (never in the name); a LinkedIn link in 'linkedin'. From a business card photo "
                     "or a voice note: read the details the same way; what the user adds about them (e.g. 'met at the expo, decides with her partner') goes in notes. "
                     "Notes hold only what the user tells you that LyteKeepr doesn't already keep: never summaries or copies of emails, LinkedIn or Instagram messages, call recordings or logged conversations (those are already in the contact's communication history).",
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string", "description": "The person's name; leave empty if only a handle is known"},
@@ -551,7 +548,7 @@ TOOLS = [
                                                       "confirm_code": {"type": "string", "description": "From the first call, only after the user said yes to exactly that email"}},
                      "required": ["draft", "follow_up_days"]}},
     {"name": "get_company", "title": "Company overview",
-     "description": "One company (company_id from a contact's details or search_contacts): name, website, notes, its people (with funnel and stage), its opportunities, and the recent history of everyone there (newest first).",
+     "description": "One company (company_id from a contact's details or find): name, website, notes, its people (with funnel and stage), its opportunities, and the recent history of everyone there (newest first).",
      "inputSchema": {"type": "object", "properties": {"company_id": {"type": "integer"}}, "required": ["company_id"]}, "read": True},
     {"name": "update_company", "title": "Update a company",
      "description": CONFIRM_RULE + " (This applies to add_note.) " + "Change a company's name or website, or add a note to it (added at the end, nothing is replaced). To put a contact in a company, use update_contact with company.",
@@ -634,16 +631,13 @@ TOOLS = [
     {"name": "delete_goal", "title": "Delete a goal", "destructive": True, "description": "Delete one of the user's goals. Only when asked.",
      "inputSchema": {"type": "object", "properties": {"goal_id": {"type": "integer"}}, "required": ["goal_id"]}, "read": False},
     # --- who is in touch with whom (counted from email addresses, no AI) ---
-    {"name": "who_is_connected", "title": "Who is connected to a contact",
-     "description": "The people a contact keeps appearing with in emails (From, To, CC), with how many separate threads they share. Facts from email headers, not guesses.",
-     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}}, "required": ["contact_id"]}, "read": True},
-    {"name": "find_related_people", "title": "People who may belong to an opportunity",
-     "description": ("People who appear in emails with an opportunity's active participants but are not on it yet, strongest first (threads shared), "
-                     "with who brought them in when known. Show them to the user; add only the ones the user confirms (add_participant)."),
-     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}}, "required": ["opportunity_id"]}, "read": True},
-    {"name": "list_suggestions", "title": "Suggested people",
-     "description": "LyteKeepr's own suggestions from repeated email patterns: someone to add to an opportunity, or someone to save as a contact. Optionally for one opportunity.",
-     "inputSchema": {"type": "object", "properties": {"opportunity_id": {"type": "integer"}}}, "read": True},
+    {"name": "related_people", "title": "Who else belongs here",
+     "description": ("People who may belong with a contact or an opportunity, from email facts (who appears together in From, To, CC, and in how many "
+                     "separate threads) and LyteKeepr's own suggestions. With contact_id: who that person keeps emailing with. With opportunity_id: "
+                     "people who appear with its active participants but are not on it yet, strongest first, with who brought them in. With neither: "
+                     "every open suggestion (someone to add to an opportunity, or to save as a contact). A suggestion has a suggestion_id for "
+                     "accept_suggestion / dismiss_suggestion; add others only when the user confirms (add_participant)."),
+     "inputSchema": {"type": "object", "properties": {"contact_id": {"type": "integer"}, "opportunity_id": {"type": "integer"}}}, "read": True},
     {"name": "accept_suggestion", "title": "Accept a suggestion", "description": "Do what a suggestion proposes (create the contact if needed, add them with who introduced them). Only when the user says so.",
      "inputSchema": {"type": "object", "properties": {"suggestion_id": {"type": "integer"}}, "required": ["suggestion_id"]}, "read": False},
     {"name": "dismiss_suggestion", "title": "Dismiss a suggestion", "description": "Dismiss a suggestion; it will not come back.",
@@ -676,9 +670,6 @@ TOOLS = [
                                                       "text": {"type": "string"},
                                                       "confirm_code": {"type": "string", "description": "From the first call, only after the user said yes to exactly that message"}},
                      "required": ["contact", "text"]}, "read": False},
-    {"name": "draft_linkedin_message", "title": "Draft a LinkedIn message",
-     "description": "Write a LinkedIn message to one contact and leave it in LyteKeepr for the user to send. NOTHING is sent until they press Send now in LyteKeepr.",
-     "inputSchema": {"type": "object", "properties": {"contact": {"type": "string"}, "text": {"type": "string"}}, "required": ["contact", "text"]}, "read": False},
 ]
 
 
@@ -741,6 +732,17 @@ def _run_tool(call, name: str, args: dict):
                 shown["message"] = "Nothing was done: this is not exactly what the user saw (or it changed since). Show this version and ask again."
             return shown
 
+    if name == "find" and (args.get("brand") or not str(args.get("query") or "").strip()):
+        limit = max(1, min(int(args.get("limit") or 15), 50))
+        wanted = _brand_key(call, need, args.get("brand"))
+        q = urllib.parse.urlencode({"q": str(args.get("query") or ""), "limit": 500 if wanted is not None else limit})
+        rows = need(*call("GET", f"/api/calendar/contacts?{q}"))["contacts"]
+        if wanted is not None:
+            rows = [c for c in rows if (c.get("brand") or "") == wanted][:limit]
+        if not rows and str(args.get("query") or "").strip():
+            return _did_you_mean(_close_matches(call, need, args["query"], ("contact",)))
+        return [{"id": c["id"], "name": c.get("display"), "company": c.get("company"), "company_id": c.get("company_id"), "email": c.get("email"), "instagram": c.get("instagram") or None, "channel": c.get("channel"),
+                 "brand": c.get("brand") or "", "funnel": c.get("funnel_name") or "", "stage": c.get("stage_name") or "", "job_title": c.get("job_title")} for c in rows]
     if name == "find":
         text = str(args.get("query") or "").strip()
         q = urllib.parse.quote(text)
@@ -771,17 +773,6 @@ def _run_tool(call, name: str, args: dict):
         return {"created": True, "funnel_id": made["funnel_id"], "name": fname, "brand": key}
     if name == "set_funnel_brand":
         return need(*call("POST", f"/api/crm/funnels/{int(args['funnel_id'])}/brand", {"brand": args.get("brand", "")}))
-    if name == "search_contacts":
-        limit = max(1, min(int(args.get("limit") or 15), 50))
-        wanted = _brand_key(call, need, args.get("brand"))
-        q = urllib.parse.urlencode({"q": str(args.get("query") or ""), "limit": 500 if wanted is not None else limit})
-        rows = need(*call("GET", f"/api/calendar/contacts?{q}"))["contacts"]
-        if wanted is not None:
-            rows = [c for c in rows if (c.get("brand") or "") == wanted][:limit]
-        if not rows and str(args.get("query") or "").strip():
-            return _did_you_mean(_close_matches(call, need, args["query"], ("contact",)))
-        return [{"id": c["id"], "name": c.get("display"), "company": c.get("company"), "company_id": c.get("company_id"), "email": c.get("email"), "instagram": c.get("instagram") or None, "channel": c.get("channel"),
-                 "brand": c.get("brand") or "", "funnel": c.get("funnel_name") or "", "stage": c.get("stage_name") or "", "job_title": c.get("job_title")} for c in rows]
     if name == "get_contact":
         pid = int(args["contact_id"])
         detail = need(*call("GET", f"/api/crm/people/{pid}"))
@@ -1134,9 +1125,9 @@ def _run_tool(call, name: str, args: dict):
         return out or {"unchanged": True}
     if name == "delete_goal":
         return need(*call("POST", f"/api/calendar/goals/{int(args['goal_id'])}/delete"))
-    if name == "who_is_connected":
+    if name == "related_people" and args.get("contact_id"):
         return need(*call("GET", f"/api/crm/people/{int(args['contact_id'])}/connections"))["connections"]
-    if name == "find_related_people":
+    if name == "related_people" and args.get("opportunity_id"):
         o = need(*call("GET", f"/api/crm/opportunities/{int(args['opportunity_id'])}"))
         on = {p["contact_id"] for p in o["participants"]}
         found = {}
@@ -1157,7 +1148,8 @@ def _run_tool(call, name: str, args: dict):
         for c in out:
             if c["email"] in intro:
                 c["why"] = intro[c["email"]]
-        return {"opportunity": o["name"], "already_on_it": [p["name"] for p in o["participants"]], "maybe": out[:20]}
+        mine = [x for x in (sg or {}).get("suggestions", []) if x.get("opportunity_id") == o["opportunity_id"]] if st < 400 else []
+        return {"opportunity": o["name"], "already_on_it": [p["name"] for p in o["participants"]], "maybe": out[:20], "suggestions": mine}
     if name == "linkedin_inbox":
         convs = need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review"))["conversations"]
         return [{"person_id": c["person_id"], "name": c["participant_name"], "company": c.get("company_name"),
@@ -1174,11 +1166,8 @@ def _run_tool(call, name: str, args: dict):
                 need(*call("POST", f"/api/crm/people/{int(pid)}/delete", {}))
                 removed.append(waiting[int(pid)]["participant_name"])
         return {"kept": kept, "removed": removed}
-    if name == "list_suggestions":
-        items = need(*call("GET", "/api/crm/suggestions"))["suggestions"]
-        if args.get("opportunity_id"):
-            items = [x for x in items if x.get("opportunity_id") == int(args["opportunity_id"])]
-        return items
+    if name == "related_people":
+        return need(*call("GET", "/api/crm/suggestions"))["suggestions"]
     if name == "accept_suggestion":
         return need(*call("POST", f"/api/crm/suggestions/{int(args['suggestion_id'])}/accept", {}))
     if name == "dismiss_suggestion":
@@ -1236,11 +1225,6 @@ def _run_tool(call, name: str, args: dict):
             call("POST", "/api/linkedin/send-pending/cancel")
             return shown
         return need(*call("POST", "/api/linkedin/send-pending/confirm"))
-    if name == "draft_linkedin_message":
-        out = need(*call("POST", "/api/claude/home/draft_linkedin_message", {"person_name": args["contact"], "message_text": args["text"]}))
-        if out.get("status") == "pending_confirmation":
-            out["next_step"] = "Nothing was sent. Open LyteKeepr (Home) and press Send now."
-        return out
     raise ValueError(f"Unknown tool: {name}")
 
 
@@ -1331,7 +1315,6 @@ SHOW_NOTES = {
     "delete_contact_record": "The note or logged conversation is deleted.",
     "delete_goal": "The goal is deleted.",
     "discard_draft": "The draft is discarded (nothing is sent).",
-    "draft_linkedin_message": "Nothing is sent: it waits on Home for you to press Send.",
 }
 
 
@@ -1798,8 +1781,8 @@ def register(app):
                                         "if it is there, then linkedin_inbox, then suggest who to keep and who to remove and do it with sort_linkedin_inbox after their yes. "
                                         "To message someone on LinkedIn, use send_linkedin_message (shown first). If the user only says 'message X' and X has both "
                                         "email and LinkedIn, ask which. "
-                                        "Dates are YYYY-MM-DD and times HH:MM in the user's local time. Find a contact's id with search_contacts "
-                                        "before get_contact; when the user names someone or something, use find first. Funnels hold two kinds of entries: contacts (one person) and opportunities (one shared "
+                                        "Dates are YYYY-MM-DD and times HH:MM in the user's local time. Find a contact's id with find "
+                                        "before get_contact. Funnels hold two kinds of entries: contacts (one person) and opportunities (one shared "
                                         "deal or project with several participants). Never turn one into the other, and never assume everyone at a "
                                         "company is part of an opportunity. Ask the user before creating or changing anything (except the scheduled autopilot run, which follows autopilot_queue).")})
         if method == "ping":

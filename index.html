@@ -722,7 +722,15 @@
       else if (data.state === 'error') note = 'The last check did not finish. It tries again on its own next hour.';
       else if (!data.first_done) note = 'Bringing in your last 3 months. This can take a while, and your computer has to stay on.';
       else if (data.capped) note = 'You have a lot of conversations: the first sync brought in the most recent 300.';
+      if (data.outbox_waiting) note = (note ? note + ' ' : '') + data.outbox_waiting + ' LinkedIn message(s) waiting to be sent: they go out when your computer and the Claude app are on.';
+      (data.outbox_problems || []).forEach(function (x) { note = (note ? note + ' ' : '') + 'Message to ' + x.person_name + ' ' + (x.status === 'failed' ? 'was not sent' : 'may not have gone out') + (x.detail ? ': ' + x.detail : '') + '.'; });
       if (note) linkedinConnect.appendChild(linkedinEl('p', 'attention-copy', note));
+      if (data.addon_update_needed) {
+        linkedinConnect.appendChild(linkedinEl('p', 'attention-copy', 'Please update the LyteKeepr LinkedIn add-on once: click below, then double-click the downloaded file and click Install. No new login needed.'));
+        var upd = linkedinEl('a', 'btn btn-primary btn-small', 'Update the add-on');
+        upd.href = (window.LK_PREFIX || '') + '/api/linkedin/addon';
+        linkedinConnect.appendChild(upd);
+      }
       var actions = linkedinEl('div', 'card-actions');
       var sync = linkedinEl('button', 'btn btn-secondary btn-small', data.sync_requested ? 'Sync asked for: within 15 minutes' : 'Sync now');
       sync.type = 'button';

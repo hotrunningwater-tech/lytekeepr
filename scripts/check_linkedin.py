@@ -79,11 +79,6 @@ def tick():
     return subprocess.run([sys.executable, str(AGENT), "tick"], env=env, capture_output=True, text=True, timeout=120)
 
 
-def helper_run(*args):
-    env = dict(os.environ, LK_LINKEDIN_HOME=str(HELPER_HOME))
-    return subprocess.run([sys.executable, str(AGENT), *args], env=env, capture_output=True, text=True, timeout=60)
-
-
 def make_read_due():
     state = json.loads((HELPER_HOME / "state.json").read_text())
     state["last_read"] = 0
@@ -125,21 +120,22 @@ def main():
     # ---- connecting
     check(a_admin.get("/api/me").get_json().get("features", {}).get("linkedin") is True, "LinkedIn is not on for the admin")
     check(b_admin.get("/api/me").get_json().get("features", {}).get("linkedin") is True, "LinkedIn is not on for a customer workspace")
-    check(a_admin.post("/api/linkedin/link/code", json={}).status_code == 400, "a code was given without accepting the risk")
     for path in ("/api/linkedin/status", "/api/linkedin/crm/conversations"):
         check(a_member.get(path).status_code == 403, f"a team member could open {path}")
-    check(a_member.post("/api/linkedin/link/code", json={"accepted_risk": True}).status_code == 403, "a team member could connect LinkedIn")
     check(app.test_client().get("/api/linkedin/status").status_code == 401, "the status answers without a sign-in")
-    lines = a_admin.post("/api/linkedin/link/code", json={"accepted_risk": True}).get_json()
-    check(lines["code"] in lines["mac"] and lines["code"] in lines["windows"], "the lines to paste do not carry the code")
-    for name in ("install.sh", "install.ps1"):
-        text = app.test_client().get(f"/linkedin-helper/{name}").get_data(as_text=True)
-        check("__" not in text.replace("$", "") and "linkedin-mcp-local==" in text, f"{name} still has blanks in it")
-    check(helper_run("pair", "WRONGCODE1", address).returncode == 1, "a wrong code was accepted")
-    check(helper_run("pair", lines["code"], address).returncode == 0, "the right code was refused")
-    check(helper_run("pair", lines["code"], address).returncode == 1, "a code worked twice")
+    for gone in ("/linkedin-helper/install.sh", "/linkedin-helper/install.ps1"):
+        check(app.test_client().get(gone).status_code == 404, f"the old Terminal installer is still served: {gone}")
+    check(app.test_client().post("/linkedin-helper/pair", json={"code": "x"}).status_code in (404, 405), "the old code pairing still answers")
+    # linked the way the add-on links: it asks, the admin approves, it picks up its key
+    started = app.test_client().post("/linkedin-helper/link/start", json={"computer": "Check Mac"}).get_json()
+    a_admin.post("/linkedin/approve", data={"l": started["link_id"], "risk": "yes"})
+    got = app.test_client().post("/linkedin-helper/link/poll", json={"link_id": started["link_id"], "secret": started["secret"]}).get_json()
+    HELPER_HOME.mkdir(parents=True, exist_ok=True)
+    (HELPER_HOME / "config.json").write_text(json.dumps({"address": address, "key": got["key"]}))
+    (HELPER_HOME / "state.json").write_text("{}")
     config = json.loads((HELPER_HOME / "config.json").read_text())
-    check(config["key"] not in (TMP / "profiles" / "directory.db").read_bytes().decode("latin1"), "the helper's key is stored readable")
+    stored = b"".join(f.read_bytes() for f in (TMP / "profiles").glob("directory.db*"))
+    check(config["key"].encode() not in stored, "the helper's key is stored readable")
     status = a_admin.get("/api/linkedin/status").get_json()
     check(status["connected"] and not status["first_done"], f"status after connecting is wrong: {status}")
 
@@ -178,6 +174,7 @@ def main():
     check(b"zzleak first" not in b_admin.get("/api/linkedin/crm/conversation/1").get_data() and not names(b_admin), "messages reached another workspace")
     status = a_admin.get("/api/linkedin/status").get_json()
     check(status["first_done"] and status["last_synced_at"] and status["state"] == "ok", f"status after the first read is wrong: {status}")
+    check(status["addon_update_needed"] is True, "a helper with an old (or no) starter is not asked to update")
 
     # ---- returning reads
     fake(conversations=conversations, messages=messages)
@@ -407,6 +404,7 @@ def addon_check(address):
     asyncio.run(run())
     status = a_admin.get("/api/linkedin/status").get_json()
     check(status["connected"] and status["computer"] not in ("", "Test Mac"), f"the add-on's computer is not the connected one: {status}")
+    check(status["addon_update_needed"] is False, "the current add-on is asked to update")
 
 
 try:

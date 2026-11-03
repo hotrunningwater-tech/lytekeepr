@@ -4,10 +4,14 @@ import json
 import os
 import sys
 import unittest
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lk_calendar import claude_connector  # noqa: E402
+
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 class ToolListTest(unittest.TestCase):
@@ -23,6 +27,15 @@ class ToolListTest(unittest.TestCase):
             for req in schema.get("required", []):
                 self.assertIn(req, schema.get("properties", {}), f"{t['name']}: required {req} has no property")
             json.dumps(t)                                   # everything must be plain JSON
+
+    def test_tool_list_is_the_agreed_one(self):
+        """No tool comes or goes unnoticed, and nothing old is left behind: the code's tools must match lk_calendar/claude_tools.txt."""
+        listed = [line.split("|")[0].strip() for line in (ROOT / "lk_calendar" / "claude_tools.txt").read_text().splitlines()
+                  if line.strip() and not line.startswith("#")]
+        names = [t["name"] for t in claude_connector.TOOLS]
+        self.assertEqual(len(listed), len(set(listed)), "a tool is listed twice in claude_tools.txt")
+        self.assertEqual(sorted(set(names) - set(listed)), [], "new tools not in claude_tools.txt: add them there, and remove what they replace")
+        self.assertEqual(sorted(set(listed) - set(names)), [], "tools in claude_tools.txt that the code no longer has: take them off the list")
 
     def test_autopilot_tools_present(self):
         names = {t["name"] for t in claude_connector.tool_list()}
