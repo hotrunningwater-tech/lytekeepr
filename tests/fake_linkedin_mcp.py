@@ -47,11 +47,28 @@ def conversation(context_id: str, request_id: str, conversation_ref: str, max_me
     return {"conversation": {"messages": d["messages"][conversation_ref]}}
 
 
-@server.tool(name="linkedin.messaging.send", structured_output=True)
-def send(context_id: str, request_id: str, message: str, profile_slug: str | None = None, conversation_ref: str | None = None) -> dict[str, Any]:
-    note("send:" + (profile_slug or conversation_ref or "?"))
+@server.tool(name="linkedin.messaging.message.prepare", structured_output=True)
+def prepare(context_id: str, request_id: str, message: str, profile_slug: str | None = None, conversation_ref: str | None = None) -> dict[str, Any]:
+    note("prepare:" + (profile_slug or conversation_ref or "?"))
+    action_id = "action_" + str(abs(hash((message, profile_slug, conversation_ref))))
+    preview = {"action_id": action_id, "action_type": "message_send", "summary": message, "payload_hash": "h" + action_id}
+    return {"status": "ready_for_confirmation", "draft": {"action_id": action_id, "payload_hash": "h" + action_id, "payload": {"message": message}},
+            "approval_preview": preview}
+
+
+@server.tool(name="linkedin.messaging.message.execute", structured_output=True)
+def execute(context_id: str, request_id: str, action_id: str, payload_hash: str, approval_preview: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
+    if approval_preview.get("action_id") != action_id or approval_preview.get("payload_hash") != payload_hash:
+        raise ValueError("Approval preview does not match")
+    keys = PATH + ".keys"
+    done = open(keys).read().split() if os.path.exists(keys) else []
+    if idempotency_key in done:                       # like the real tool: the same key never sends twice
+        return {"status": "completed", "replayed": True, "result": {"outcome": "verified", "detail": "already sent"}}
+    note("send:" + idempotency_key)
+    with open(keys, "a") as f:
+        f.write(idempotency_key + "\n")
     with open(PATH + ".sent", "a") as f:
-        f.write(message + "\n")
+        f.write(approval_preview["summary"] + "\n")
     return {"status": "completed", "result": {"outcome": data().get("send_outcome", "verified"), "detail": "done"}}
 
 

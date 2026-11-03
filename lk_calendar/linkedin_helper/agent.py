@@ -264,8 +264,10 @@ async def send_waiting(cfg):
                 if n:
                     await asyncio.sleep(SEND_PAUSE_SECONDS)
                 target = {"profile_slug": item["profile_slug"]} if item.get("profile_slug") else {"conversation_ref": item.get("conversation_ref")}
-                try:
-                    result = (await li.tool("linkedin.messaging.send", message=item["text"], **target)).get("result") or {}
+                try:                    # LinkedIn's tool sends in two steps: an exact draft, then that draft (the key stops a second send)
+                    draft = await li.tool("linkedin.messaging.message.prepare", message=item["text"], **target)
+                    result = (await li.tool("linkedin.messaging.message.execute", action_id=draft["draft"]["action_id"], payload_hash=draft["draft"]["payload_hash"],
+                                            approval_preview=draft["approval_preview"], idempotency_key=f"lk-outbox-{item['id']}")).get("result") or {}
                     outcome = result.get("outcome") if result.get("outcome") in ("verified", "failed", "uncertain") else "uncertain"
                     detail = result.get("detail") or ""
                 except Exception as exc:  # noqa: BLE001 - LinkedIn refused or the tool broke: reported, never retried blindly

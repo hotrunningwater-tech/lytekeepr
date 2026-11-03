@@ -274,7 +274,7 @@ def main():
     check(done.get("status") == "queued", f"the approved message was not queued: {done}")
     check(a_admin.get("/api/linkedin/status").get_json()["outbox_waiting"] == 1, "the approved message is not waiting")
     tick()
-    check("send:new-person" in calls(), f"the add-on did not send it: {calls()}")
+    check("prepare:new-person" in calls() and any(c.startswith("send:lk-outbox-") for c in calls()), f"the add-on did not send it: {calls()}")
     check(a_admin.get("/api/linkedin/status").get_json()["outbox_waiting"] == 0, "a sent message is still waiting")
     sent_file = Path(str(LINKEDIN) + ".sent")
     check(sent_file.read_text().count("zz hello from LyteKeepr") == 1, "the message was not sent exactly once")
@@ -397,6 +397,15 @@ def addon_check(address):
     addon_python = folder / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if synced.returncode != 0:
         return
+    # every LinkedIn tool the helper calls (and the fake stands in for) must exist in the real LinkedIn tool, by that exact name
+    import re
+    real_source = subprocess.run([str(addon_python), "-c", "import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec('linkedin_mcp.server').origin).read_text())"],
+                                 capture_output=True, text=True, timeout=120).stdout
+    real = set(re.findall(r'name="(linkedin\.[a-z_.]+)"', real_source))
+    used = set(re.findall(r'"(linkedin\.[a-z_.]+)"', AGENT.read_text()))
+    faked = set(re.findall(r'name="(linkedin\.[a-z_.]+)"', FAKE.read_text()))
+    check(real and used <= real, f"the helper calls LinkedIn tools that do not exist: {sorted(used - real)}")
+    check(real and faked <= real, f"the fake LinkedIn has tools the real one does not: {sorted(faked - real)}")
 
     stranger = app.test_client()
     started = stranger.post("/linkedin-helper/link/start", json={"computer": "Test Mac"}).get_json()
