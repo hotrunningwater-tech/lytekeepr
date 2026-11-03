@@ -214,6 +214,47 @@ def attack(direction, attackers, victim_ids, victim_mark, victim_admin, attacker
     print(f"{direction}: {calls} requests checked")
 
 
+def claude_switch_check():
+    """Connecting Claude: the Allow page says whose LyteKeepr it is, and "Use another account" connects the one picked in Google instead,
+    with that workspace's data only."""
+    import base64, hashlib, html, re, secrets, urllib.parse
+    c = client()
+    google_login(c, "owner-b@example.com")
+    cid = c.post("/oauth/register", json={"redirect_uris": ["https://claude.ai/api/mcp/auth_callback"]}).get_json()["client_id"]
+    v = secrets.token_urlsafe(40)
+    ch = base64.urlsafe_b64encode(hashlib.sha256(v.encode()).digest()).rstrip(b"=").decode()
+    q = urllib.parse.urlencode({"response_type": "code", "client_id": cid, "redirect_uri": "https://claude.ai/api/mcp/auth_callback",
+                                "code_challenge": ch, "code_challenge_method": "S256", "state": "s1"})
+    page = c.get("/oauth/authorize?" + q).get_data(as_text=True)
+    found = re.search(r'class="switch" href="([^"]+)"', page)
+    if "owner-b@example.com" not in page or not found:
+        problems.append("CLAUDE: the Allow page does not say whose LyteKeepr it is, or has no 'Use another account'")
+        return
+    r = c.get(html.unescape(found.group(1)))
+    if r.status_code != 302 or not r.headers["Location"].endswith("/auth/google/login") or c.get("/api/crm/overview").status_code not in (401, 302):
+        problems.append("CLAUDE: 'Use another account' did not sign out and open Google's account list")
+        return
+    back = google_login(c, "owner-a@example.com")                      # picks the other account in Google's list
+    if back.status_code != 302 or "/oauth/authorize?" not in back.headers["Location"]:
+        problems.append(f"CLAUDE: after picking another account it did not come back to the Allow page ({back.headers.get('Location')})")
+        return
+    page = c.get(back.headers["Location"]).get_data(as_text=True)
+    grant = re.search(r'name="grant" value="([^"]+)"', page)
+    if "owner-a@example.com" not in page or not grant:
+        problems.append("CLAUDE: the Allow page after switching does not show the account picked")
+        return
+    done = c.post("/oauth/authorize", data={"grant": html.unescape(grant.group(1)), "choice": "allow"})
+    code = urllib.parse.parse_qs(urllib.parse.urlparse(done.headers["Location"]).query)["code"][0]
+    tok = c.post("/oauth/token", data={"grant_type": "authorization_code", "code": code, "client_id": cid, "code_verifier": v}).get_json()["access_token"]
+    seen = c.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "find", "arguments": {"query": "zzleak"}}},
+                  headers={"Authorization": "Bearer " + tok}).get_data(as_text=True).lower()
+    if "zzleaka" not in seen or "zzleakb" in seen:
+        problems.append("CLAUDE: after 'Use another account', Claude does not see the picked workspace (and only it)")
+    for bad in ("/oauth/authorize/switch?next=https://evil.test/", "/oauth/authorize/switch?next=/app/settings"):
+        if c.get(bad).status_code != 400:
+            problems.append(f"CLAUDE: 'Use another account' sends people to an address it should refuse: {bad}")
+
+
 def main():
     a_admin = client()
     assert a_admin.post("/login", data={"password": "isolation-test"}).status_code == 302
@@ -244,6 +285,7 @@ def main():
     attack("B -> A", [("B admin", b_admin), ("B member", b_member)], ids_a, "zzleaka", a_admin, ids_b, folder[ws_b])
     attack("A -> B", [("A admin", a_admin), ("A member", a_member)], ids_b, "zzleakb", b_admin, ids_a, folder[ws_a])
     own_data("after the attacks")
+    claude_switch_check()
     # A customer's own download and closing their account: only their own data, only their admin, and nobody else is touched
     import io
     import zipfile

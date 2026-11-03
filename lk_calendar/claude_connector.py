@@ -1621,7 +1621,7 @@ def register(app):
     import auth_gate
 
     prefix = os.getenv("LK_URL_PREFIX", "").rstrip("/")
-    for path in ("/mcp", "/oauth/register", "/oauth/token", "/oauth/authorize", "/.well-known/oauth-authorization-server",
+    for path in ("/mcp", "/oauth/register", "/oauth/token", "/oauth/authorize", "/oauth/authorize/switch", "/.well-known/oauth-authorization-server",
                  "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"):
         auth_gate.PUBLIC_PATHS.add(path)          # each checks its own token, code or sign-in
     recent: dict = {}                             # token -> request times (simple rate limit)
@@ -1725,9 +1725,22 @@ def register(app):
         grant = _signer().dumps({"client_id": client["client_id"], "redirect_uri": redirect_uri, "challenge": a.get("code_challenge"),
                                  "state": a.get("state", ""), "u": int(user.get("id") or 0), "w": get_active_profile_id()})
         who = user.get("name") or user.get("email") or "you"
+        switch = prefix + "/oauth/authorize/switch?" + urllib.parse.urlencode({"next": prefix + request.full_path})
         page = CONSENT_PAGE.replace("{{WHO}}", _esc(who)).replace("{{EMAIL}}", _esc(user.get("email") or "")).replace("{{GRANT}}", _esc(grant)) \
-                           .replace("{{ACTION}}", _esc(prefix + "/oauth/authorize"))
+                           .replace("{{ACTION}}", _esc(prefix + "/oauth/authorize")).replace("{{SWITCH}}", _esc(switch))
         return Response(page, mimetype="text/html", headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY"})
+
+    @app.get("/oauth/authorize/switch")
+    def oauth_authorize_switch():
+        """"Use another account" on the Allow page: sign out of LyteKeepr, pick the account in Google's list, back to the Allow page."""
+        nxt = request.args.get("next", "")
+        if not nxt.startswith(prefix + "/oauth/authorize?") or "\n" in nxt or "\r" in nxt:
+            return "Start connecting again from Claude.", 400
+        response = redirect(prefix + "/auth/google/login")
+        response.delete_cookie(auth_gate.COOKIE, path=prefix or "/")
+        response.set_cookie("lk_next", nxt, max_age=900, httponly=True, samesite="Lax", path="/",
+                            secure=request.headers.get("X-Forwarded-Proto") == "https" or request.is_secure)
+        return response
 
     @app.post("/oauth/token")
     def oauth_token():
@@ -1900,11 +1913,12 @@ h1{font-size:20px;margin:0 0 6px}p{font-size:14px;line-height:1.5;color:#657D86;
 ul{font-size:14px;line-height:1.6;margin:0 0 16px;padding-left:18px}b{color:#29434E}
 .row{display:flex;gap:10px;margin-top:8px}button{flex:1;border:none;border-radius:999px;padding:12px 16px;font-size:14px;font-weight:600;cursor:pointer}
 .allow{background:#29434E;color:#f2f8fa}.no{background:rgba(230,237,240,.9);color:#29434E}
+.switch{color:#29434E;font-weight:600;white-space:nowrap}
 </style></head><body><div class="card">
 <h1>Allow Claude to use your LyteKeepr?</h1>
-<p>Signed in as <b>{{WHO}}</b> {{EMAIL}}</p>
-<ul><li>See your contacts, funnels, tasks, reminders, recorded calls and LinkedIn/Instagram messages</li><li>Add and update contacts, stages, outreach statuses, tasks and reminders</li><li>Book or cancel meetings in your Google Calendar (invites go out from Google)</li><li>Create opportunities and manage who is on them</li><li>Write email and LinkedIn drafts that you send yourself from LyteKeepr</li></ul>
-<p>Claude sees only what you can see in LyteKeepr, and asks you before it changes anything. Disconnect any time in LyteKeepr Settings → Claude.</p>
+<p>Signed in as <b>{{WHO}}</b> {{EMAIL}} · <a class="switch" href="{{SWITCH}}">Use another account</a></p>
+<ul><li>See your contacts, funnels, tasks, reminders, recorded calls, emails and LinkedIn messages</li><li>Add and update contacts, stages, outreach statuses, tasks and reminders</li><li>Book or cancel meetings in your Google Calendar (invites go out from Google)</li><li>Create opportunities and manage who is on them</li><li>Send emails and LinkedIn messages for you, each shown to you word for word first</li></ul>
+<p>Claude sees only what you can see in LyteKeepr, and shows you every change before it makes it. Disconnect any time in LyteKeepr Settings → Claude.</p>
 <form method="post" action="{{ACTION}}"><input type="hidden" name="grant" value="{{GRANT}}">
 <div class="row"><button class="no" name="choice" value="deny" type="submit">Cancel</button><button class="allow" name="choice" value="allow" type="submit">Allow</button></div></form>
 </div></body></html>"""
