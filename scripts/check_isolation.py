@@ -214,6 +214,24 @@ def attack(direction, attackers, victim_ids, victim_mark, victim_admin, attacker
     print(f"{direction}: {calls} requests checked")
 
 
+def fresh_workspace_check():
+    """A brand-new USER's workspace, before anything is added: every page and list the app opens works (nothing assumes data exists).
+    Each address gets its own new workspace, so one page can't quietly set up what another needs."""
+    failed = []
+    directory.MAX_SIGNUPS_PER_HOUR = 10 ** 6            # many sign-ups in a row, here only
+    rules = sorted({r.rule for r in app.url_map.iter_rules()
+                    if "GET" in r.methods and not r.arguments and r.rule.startswith("/api/") and "superadmin" not in r.rule})
+    for n, path in enumerate(rules):
+        c, email = client(), f"fresh{n}@example.com"
+        google_login(c, email)
+        directory.set_status(next(x for x in directory.list_accounts() if x["owner_email"] == email)["id"], "active")
+        status = c.get(path).status_code
+        if status >= 500:
+            failed.append(f"{path} ({status})")
+    if failed:
+        problems.append("NEW WORKSPACE: these fail for a brand-new USER: " + ", ".join(failed))
+
+
 def claude_switch_check():
     """Connecting Claude: the Allow page says whose LyteKeepr it is, and "Use another account" connects the one picked in Google instead,
     with that workspace's data only."""
@@ -286,6 +304,7 @@ def main():
     attack("A -> B", [("A admin", a_admin), ("A member", a_member)], ids_b, "zzleakb", b_admin, ids_a, folder[ws_a])
     own_data("after the attacks")
     claude_switch_check()
+    fresh_workspace_check()
     # A customer's own download and closing their account: only their own data, only their admin, and nobody else is touched
     import io
     import zipfile

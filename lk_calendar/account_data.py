@@ -5,6 +5,7 @@ Closing works like deleting from the Owner console: nobody can sign in any more 
 import csv
 import io
 import json
+import sqlite3
 import zipfile
 
 from . import store
@@ -20,7 +21,12 @@ def _sheet(rows: list, columns: list) -> str:
 
 
 def _table(conn, sql, args=()) -> list:
-    return [dict(r) for r in conn.execute(sql, args).fetchall()]
+    try:
+        return [dict(r) for r in conn.execute(sql, args).fetchall()]
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc):                # a new workspace: lists only exist once first used, so that sheet is empty
+            return []
+        raise
 
 
 def build_zip() -> bytes:
@@ -34,7 +40,7 @@ def build_zip() -> bytes:
         messages = _table(conn, "SELECT person_id, channel, direction, sender, timestamp, message_text FROM messages ORDER BY timestamp")
         records = _table(conn, "SELECT person_id, kind, channel, happened_at, who, text FROM contact_records WHERE deleted_at = '' ORDER BY happened_at")
         calls = _table(conn, "SELECT title, started_at, duration_min, platform, share_url, invitees, summary, transcript FROM calls ORDER BY started_at")
-        documents = [dict(d) for d in conn.execute("SELECT * FROM docs WHERE deleted_at = '' ORDER BY doc_id").fetchall()]
+        documents = _table(conn, "SELECT * FROM docs WHERE deleted_at = '' ORDER BY doc_id")
         documents = [d for d in documents if docs._see(d)]
         ids = [d["doc_id"] for d in documents]
         tabs = _table(conn, f"SELECT doc_id, name, body FROM doc_tabs WHERE deleted_at = '' AND doc_id IN ({','.join('?' for _ in ids)})", ids) if ids else []
@@ -44,7 +50,7 @@ def build_zip() -> bytes:
         c["transcript"] = "\n".join(f"{t.get('speaker')}: {t.get('text')}" for t in json.loads(c["transcript"] or "[]"))
         c["invitees"] = ", ".join(i.get("email") or "" for i in json.loads(c["invitees"] or "[]"))
     with store._conn() as cal:
-        events = [dict(e) for e in cal.execute("SELECT * FROM events ORDER BY start_date, start_time").fetchall()]
+        events = _table(cal, "SELECT * FROM events ORDER BY start_date, start_time")
     events = [e for e in events if store.is_mine(e)]
     with goals._conn() as conn:
         my_goals = _table(conn, "SELECT period, period_start, brand, text, done, done_at FROM goals WHERE who = ? AND deleted_at = '' ORDER BY goal_id", (goals._me(),))

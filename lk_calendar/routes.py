@@ -291,7 +291,7 @@ def google_calendars():
     try:
         return jsonify({"calendars": google_sync.list_calendars()})
     except google_sync.GoogleSyncError as exc:
-        return jsonify({"error": str(exc)}), 502
+        return jsonify({"error": str(exc)}), 400 if exc.never_connected else 502      # not connected yet: the person's step, not a failure
 
 
 @bp.put("/api/calendar/google/calendars")

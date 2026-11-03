@@ -48,9 +48,10 @@ CREATE TABLE IF NOT EXISTS rel_suggestions (
 
 @contextmanager
 def _crm():
-    from . import contacts
+    from . import contacts, opportunities
     with contacts._crm() as conn:
         conn.executescript(SCHEMA)
+        conn.executescript(opportunities.SCHEMA)     # suggestions name their opportunity; a brand-new workspace has none yet
         yield conn
 
 
