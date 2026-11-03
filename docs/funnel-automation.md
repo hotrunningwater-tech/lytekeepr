@@ -31,8 +31,8 @@ funnel changes the shared rules for every funnel. This replaces that.
    |---|---|---|---|---|
    | First message sent | → contacted | log | log | log |
    | They replied | → conversation_started | log | log | log |
-   | Meeting booked | → meeting_booked | log upcoming | → appointment_booked (only a real service appointment) | log |
-   | Call recorded | log | → the matching completed-call stage | log | log |
+   | Meeting booked | → the funnel's Booked stage, if it has one (every pattern) | same | same | same |
+   | Call recorded | log | log | log | log |
    | Bounce | address unreachable | same | same | same |
    | Clearly not interested | → lost | same | same | same |
    | No reply after X days | follow-up due | same | same | same |
@@ -42,6 +42,8 @@ funnel changes the shared rules for every funnel. This replaces that.
    - A bounce marks the email address unreachable; it does NOT make the deal Lost (another channel may work). Today a bounce moves
      to Lost: this changes.
    - Only an explicit, unambiguous no is Lost; "not now" / "next month" is a follow-up.
+   - A calendar booking moves a contact only to a Booked stage, never to a completed, approved, signed or won stage. Only an
+     explicit confirmation closes a booking-based deal (#23, #31, #33...).
    - A calendar invite is not an accepted or held meeting; use the attendee's response and the meeting date.
    - A recorded call proves only that a call happened (and that the contact was on it), not agreement.
    - Forward only by default; won and lost are final unless USER reopens.

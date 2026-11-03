@@ -10,6 +10,13 @@ Choose by the sales process the user wants to manage, not only their industry. I
 outreach and following up, choose #1 whatever the industry. Otherwise choose the most fitting specialised process. When the
 description doesn't make the sales process clear, choose the most likely business-specific default rather than assuming outbound.
 
+## Booked stages (changed 2026-11-03)
+
+LyteKeepr sees a booking in the calendar but can't tell that a meeting happened, so 18 templates (1, 3, 4, 5, 8, 9, 10, 11, 13, 17,
+18, 20, 21, 22, 25, 26, 28, 38) use "... Booked" stages instead of "... Held / Viewed". A matching calendar booking moves a contact to
+the funnel's Booked stage; it never moves anyone to a completed, approved, signed or won stage. Completion stages (e.g. #14 Property
+Assessed, #19 Problem Assessed, #24 Assessment Completed, #27 Trial Completed, #30 Tour Completed) are moved by the user or Claude.
+
 ## Automation pattern per template
 
 | Pattern | Templates |
@@ -22,10 +29,9 @@ description doesn't make the sales process clear, choose the most likely busines
 ## Outbound sales and professional services
 
 1. **Outbound Prospecting & Sales**: B2B agency founder, independent consultant, outbound SaaS salesperson
-   Stages: Prospect Identified → First Contact → Conversation Started → Lead Qualified → Meeting Held → Proposal Sent → Deal Won / Closed Lost
+   Stages: Prospect Identified → First Contact → Conversation Started → Lead Qualified → Meeting Booked → Proposal Sent → Deal Won / Closed Lost
    Won: Deal Won. Lost: Closed Lost.
    Recognise: They primarily find prospects and initiate contact through LinkedIn, cold email, direct messages or phone calls, then manage conversations and follow-ups.
-   Note: per the automation decisions, a booked meeting is what P1 can observe; consider "Meeting Booked" in place of "Meeting Held".
 
 2. **Scoped Project Sales**: management consultant, freelance copywriter, graphic design studio
    Stages: New Lead → Needs Discussed → Scope Defined → Proposal Sent → Project Approved / Closed Lost
@@ -33,17 +39,17 @@ description doesn't make the sales process clear, choose the most likely busines
    Recognise: They sell customised, one-time professional projects where scoping, quoting and client approval are the main sales steps.
 
 3. **Monthly Retainer Sales**: marketing agency, bookkeeping firm, virtual assistant service
-   Stages: New Lead → Discovery Call → Needs Defined → Scope Agreed → Proposal Sent → Retainer Signed / Closed Lost
+   Stages: New Lead → Discovery Booked → Needs Defined → Scope Agreed → Proposal Sent → Retainer Signed / Closed Lost
    Won: Retainer Signed. Lost: Closed Lost.
    Recognise: They acquire clients for recurring monthly services and mainly track consultations, proposals and retainer agreements rather than cold outreach.
 
 4. **Professional Client Engagements**: family lawyer, immigration consultant, tax advisory practice
-   Stages: New Inquiry → Fit Checked → Consultation Held → Fees Agreed → Engagement Signed / Closed Lost
+   Stages: New Inquiry → Fit Checked → Consultation Booked → Fees Agreed → Engagement Signed / Closed Lost
    Won: Engagement Signed. Lost: Closed Lost.
    Recognise: They provide regulated or specialised professional services requiring intake, consultation, fee agreements or formal engagement.
 
 5. **Custom Software Project Sales**: app development studio, website agency, automation consultancy
-   Stages: New Lead → Requirements Call → Scope Documented → Estimate Sent → Technical Review → Contract Signed / Closed Lost
+   Stages: New Lead → Requirements Call Booked → Scope Documented → Estimate Sent → Technical Review → Contract Signed / Closed Lost
    Won: Contract Signed. Lost: Closed Lost.
    Recognise: They build custom software, websites or integrations where technical requirements and estimates decide the sale.
 
@@ -58,24 +64,24 @@ description doesn't make the sales process clear, choose the most likely busines
    Recognise: Organisations hire them to deliver specific employee training, seminars or workshops.
 
 8. **Demo-Led SaaS Sales**: small-business CRM, practice management software, customer support platform
-   Stages: New Lead → Lead Qualified → Demo Held → Product Evaluated → Pricing Sent → Subscription Started / Closed Lost
+   Stages: New Lead → Lead Qualified → Demo Booked → Product Evaluated → Pricing Sent → Subscription Started / Closed Lost
    Won: Subscription Started. Lost: Closed Lost.
    Recognise: They sell subscription software through conversations, demos, evaluations and pricing discussions.
 
 9. **Enterprise Software Procurement**: enterprise HR platform, cybersecurity suite, procurement software provider
-   Stages: New Lead → Discovery Call → Product Demo → Technical Review → Procurement Review → Contract Signed / Closed Lost
+   Stages: New Lead → Discovery Booked → Demo Booked → Technical Review → Procurement Review → Contract Signed / Closed Lost
    Won: Contract Signed. Lost: Closed Lost.
    Recognise: They sell complex technology with several decision-makers, technical validation, purchasing approval or contract negotiation.
 
 10. **Recruiting / Staffing Placements**: recruitment agency, executive search firm, specialist staffing company
-    Stages: New Employer → Hiring Brief → Terms Agreed → Candidates Presented → Interviews Held → Placement Confirmed / Closed Lost
+    Stages: New Employer → Hiring Brief → Terms Agreed → Candidates Presented → Interviews Booked → Placement Confirmed / Closed Lost
     Won: Placement Confirmed. Lost: Closed Lost.
     Recognise: Employers pay them to find and place candidates; they manage hiring assignments through candidate presentation and placement.
 
 ## Real estate, finance and business opportunities
 
 11. **Real Estate Buyer Transactions**: residential buyer's agent, condominium realtor, investment-property broker
-    Stages: New Buyer → Needs Discussed → Financing Checked → Properties Viewed → Offer Accepted → Purchase Closed / Closed Lost
+    Stages: New Buyer → Needs Discussed → Financing Checked → Viewings Booked → Offer Accepted → Purchase Closed / Closed Lost
     Won: Purchase Closed. Lost: Closed Lost.
     Recognise: They represent people buying homes or investment properties, through search, offers and closing.
 
@@ -85,7 +91,7 @@ description doesn't make the sales process clear, choose the most likely busines
     Recognise: They represent owners selling property and manage listings through offers and completed sales.
 
 13. **Commercial Leasing Deals**: office leasing broker, retail leasing agent, commercial tenant representative
-    Stages: New Client → Space Needs → Properties Toured → Offer Submitted → Lease Negotiated → Lease Signed / Closed Lost
+    Stages: New Client → Space Needs → Tours Booked → Offer Submitted → Lease Negotiated → Lease Signed / Closed Lost
     Won: Lease Signed. Lost: Closed Lost.
     Recognise: They help businesses lease offices, retail space, warehouses or other commercial property.
 
@@ -105,12 +111,12 @@ description doesn't make the sales process clear, choose the most likely busines
     Recognise: They assess insurance needs, compare coverage and help customers buy policies.
 
 17. **Financial Advisory Client Acquisition**: wealth manager, investment advisor, retirement planner
-    Stages: New Prospect → Intro Meeting → Goals Reviewed → Plan Presented → Client Signed / Closed Lost
+    Stages: New Prospect → Intro Booked → Goals Reviewed → Plan Presented → Client Signed / Closed Lost
     Won: Client Signed. Lost: Closed Lost.
     Recognise: They win clients for financial planning, investment management or ongoing advice.
 
 18. **Franchise / Licensing Sales**: franchise company, business licensor, dealership network
-    Stages: New Inquiry → Candidate Screened → Intro Call → Business Reviewed → Terms Reviewed → Franchise Signed / Closed Lost
+    Stages: New Inquiry → Candidate Screened → Intro Booked → Business Reviewed → Terms Reviewed → Franchise Signed / Closed Lost
     Won: Franchise Signed. Lost: Closed Lost.
     Recognise: They recruit people or companies to buy franchises, operating rights, licences or territories.
 
@@ -122,17 +128,17 @@ description doesn't make the sales process clear, choose the most likely busines
     Recognise: Customers describe a problem, get an assessment or estimate, and decide whether to authorise the work.
 
 20. **Construction / Renovation Contracts**: general contractor, kitchen renovation company, commercial remodelling firm
-    Stages: New Lead → Site Visited → Scope Agreed → Estimate Sent → Terms Negotiated → Contract Signed / Closed Lost
+    Stages: New Lead → Site Visit Booked → Scope Agreed → Estimate Sent → Terms Negotiated → Contract Signed / Closed Lost
     Won: Contract Signed. Lost: Closed Lost.
     Recognise: They sell substantial building or renovation projects with site visits, detailed estimates and formal contracts.
 
 21. **Technical Home Installation Sales**: solar installer, heat-pump company, home energy systems provider
-    Stages: New Lead → Home Qualified → Site Survey → System Designed → Financing Reviewed → Contract Signed / Closed Lost
+    Stages: New Lead → Home Qualified → Survey Booked → System Designed → Financing Reviewed → Contract Signed / Closed Lost
     Won: Contract Signed. Lost: Closed Lost.
     Recognise: They sell expensive installed home systems needing property evaluation, technical design or financing.
 
 22. **Recurring Property Service Contracts**: commercial cleaning business, landscaping company, pest control provider
-    Stages: New Inquiry → Site Assessed → Service Plan → Quote Sent → Service Agreed / Closed Lost
+    Stages: New Inquiry → Site Visit Booked → Service Plan → Quote Sent → Service Agreed / Closed Lost
     Won: Service Agreed. Lost: Closed Lost.
     Recognise: They win customers for recurring cleaning, landscaping, maintenance or treatment services.
 
@@ -149,12 +155,12 @@ description doesn't make the sales process clear, choose the most likely busines
     Recognise: Patients have a consultation or assessment before deciding on a proposed treatment plan.
 
 25. **Personal Care Service Contracts**: senior home care agency, disability support provider, private caregiving service
-    Stages: New Inquiry → Needs Discussed → Care Assessment → Plan Proposed → Agreement Signed / Closed Lost
+    Stages: New Inquiry → Needs Discussed → Care Assessment Booked → Plan Proposed → Agreement Signed / Closed Lost
     Won: Agreement Signed. Lost: Closed Lost.
     Recognise: Individuals or families arrange ongoing care after discussing needs and reviewing a care plan.
 
 26. **Coaching Package Sales**: business coach, life coach, nutrition coach
-    Stages: New Lead → Intro Call → Goals Defined → Program Offered → Program Purchased / Closed Lost
+    Stages: New Lead → Intro Booked → Goals Defined → Program Offered → Program Purchased / Closed Lost
     Won: Program Purchased. Lost: Closed Lost.
     Recognise: They sell structured coaching programmes after an introductory conversation about goals.
 
@@ -164,7 +170,7 @@ description doesn't make the sales process clear, choose the most likely busines
     Recognise: They turn prospects into members or training clients after a trial, introductory workout or consultation.
 
 28. **Private Lesson Bookings**: mathematics tutor, music teacher, language instructor
-    Stages: New Inquiry → Needs Discussed → Trial Lesson → Package Offered → Lessons Booked / Closed Lost
+    Stages: New Inquiry → Needs Discussed → Trial Booked → Package Offered → Lessons Booked / Closed Lost
     Won: Lessons Booked. Lost: Closed Lost.
     Recognise: They teach individuals through private or small-group lessons and sell recurring lesson packages.
 
@@ -218,7 +224,7 @@ description doesn't make the sales process clear, choose the most likely busines
     Recognise: They sell expensive or customised consumer products where buyers need advice, selection or a personal quote.
 
 38. **Vehicle Dealership Sales**: used car dealership, motorcycle dealer, recreational vehicle dealer
-    Stages: New Lead → Vehicle Chosen → Test Drive → Price Agreed → Terms Agreed → Sale Signed / Closed Lost
+    Stages: New Lead → Vehicle Chosen → Test Drive Booked → Price Agreed → Terms Agreed → Sale Signed / Closed Lost
     Won: Sale Signed. Lost: Closed Lost.
     Recognise: They sell vehicles through consultations, viewings or test drives, negotiation and purchase agreements.
 
