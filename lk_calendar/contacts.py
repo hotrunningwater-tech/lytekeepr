@@ -843,14 +843,23 @@ def link_leads() -> int:
 def sync_stage(conn, person_id: int) -> None:
     """Stage and status are separate fields; the one automation between them: if the person is in a funnel, a status
     moves the card forward to the furthest stage reached by any of their statuses. Never backward, so a card placed by hand stays."""
+    from . import funnel_rules
+    statuses = [r["status"] for r in conn.execute("SELECT status FROM leads WHERE person_id = ?", (person_id,))]
     rows = conn.execute("""SELECT s.stage_name FROM leads l JOIN status_stages s ON s.channel = l.channel AND s.status_key = l.status
                            WHERE l.person_id = ?""", (person_id,)).fetchall()
     names = {r["stage_name"].lower() for r in rows}
-    if not names:
-        return
     with _crm() as c:
         p = c.execute("SELECT funnel_id, funnel_stage_id FROM people WHERE person_id = ?", (person_id,)).fetchone()
         if not p or not p["funnel_id"]:
+            return
+        if funnel_rules.pattern(c, p["funnel_id"]):          # a template funnel: its pattern and its stages' marks decide
+            target = funnel_rules.target_for_statuses(c, p["funnel_id"], statuses)
+            order = [s["stage_id"] for s in funnel_rules.stages(c, p["funnel_id"])]
+            now = order.index(p["funnel_stage_id"]) if p["funnel_stage_id"] in order else -1
+            if target and order.index(target) > now:
+                c.execute("UPDATE people SET funnel_stage_id = ? WHERE person_id = ?", (target, person_id))
+            return
+        if not names:
             return
         stages = c.execute("SELECT stage_id, name, position FROM funnel_stages WHERE funnel_id = ? ORDER BY position", (p["funnel_id"],)).fetchall()
         order = [r["stage_id"] for r in stages]
@@ -882,16 +891,22 @@ def lost_on_stage(person_id: int) -> list:
 def _stage_place(person_id: int, stage_id=None) -> dict | None:
     """Where a card is (or would be): its funnel's stage names in order, the position of `stage_id` (or of its current stage), and the
     position of the conversation stage (the one "replied" leads to)."""
+    from . import funnel_rules
     with _crm() as c:
         p = c.execute("SELECT name, funnel_id, funnel_stage_id FROM people WHERE person_id = ?", (int(person_id),)).fetchone()
         if not p or not p["funnel_id"]:
             return None
         rows = c.execute("SELECT stage_id, name FROM funnel_stages WHERE funnel_id = ? ORDER BY position", (p["funnel_id"],)).fetchall()
+        pat = funnel_rules.pattern(c, p["funnel_id"])
+        marks = [s["mark"] for s in funnel_rules.stages(c, p["funnel_id"])]
     ids = [r["stage_id"] for r in rows]
     names = [r["name"].strip().lower() for r in rows]
-    with store._conn() as conn:
-        talk = {r["stage_name"].strip().lower() for r in conn.execute("SELECT stage_name FROM status_stages WHERE status_key = 'replied'")}
-    conv = next((i for i, n in enumerate(names) if n in talk), None)
+    if pat:                                                    # a template funnel: the stage marked "conversation", if it has one
+        conv = marks.index("conversation") if "conversation" in marks else None
+    else:
+        with store._conn() as conn:
+            talk = {r["stage_name"].strip().lower() for r in conn.execute("SELECT stage_name FROM status_stages WHERE status_key = 'replied'")}
+        conv = next((i for i, n in enumerate(names) if n in talk), None)
     target = int(stage_id) if stage_id else p["funnel_stage_id"]
     return {"name": p["name"], "pos": ids.index(target) if target in ids else -1, "now": ids.index(p["funnel_stage_id"]) if p["funnel_stage_id"] in ids else -1,
             "conv": conv, "stage_name": rows[ids.index(target)]["name"] if target in ids else "", "funnel_id": p["funnel_id"],
@@ -919,12 +934,16 @@ def status_on_stage(person_id: int, allow_back: bool = False) -> dict:
     """A card moved by hand: each channel's status follows the stage, forward only, so stage and status never disagree.
     Lost -> "not interested"; In conversation -> "replied"; Confirmed / Onboarding / Completed -> those statuses. Uses the same
     status -> stage links that move a card when a status changes (a renamed stage keeps them). Returns {channel: new status}."""
+    from . import funnel_rules
     with _crm() as c:
-        row = c.execute("""SELECT fs.name, p.funnel_id FROM people p JOIN funnel_stages fs ON fs.stage_id = p.funnel_stage_id WHERE p.person_id = ?""",
+        row = c.execute("""SELECT fs.name, fs.mark, p.funnel_id FROM people p JOIN funnel_stages fs ON fs.stage_id = p.funnel_stage_id WHERE p.person_id = ?""",
                         (int(person_id),)).fetchone()
         if not row:
             return {}
         order = [r["name"].strip().lower() for r in c.execute("SELECT name FROM funnel_stages WHERE funnel_id = ? ORDER BY position", (row["funnel_id"],))]
+        pat = funnel_rules.pattern(c, row["funnel_id"])
+    if pat:
+        return _template_status_on_stage(int(person_id), pat, row["mark"], allow_back)
     stage = row["name"].strip().lower()
     changed = {}
     with store._conn() as conn:
@@ -954,6 +973,34 @@ def status_on_stage(person_id: int, allow_back: bool = False) -> dict:
         with store._conn() as conn:
             sent = store.bucket_for(conn, channel, target) == "cold"
         set_outreach(int(person_id), channel, target, STAGE_FOLLOW_UP_DAYS if sent else None)    # moved to Contacted: reached out, follow up in 3 days
+        changed[channel] = leads.label_for(channel, target)
+    return changed
+
+
+def _template_status_on_stage(person_id: int, pat: str, mark: str, allow_back: bool) -> dict:
+    """A template funnel's card moved by hand: a stage whose mark a status moves to (in this pattern) sets that status on each channel
+    that has it, forward only unless moved back on purpose; "lost" always (they're not interested). Other stages change no status."""
+    from . import funnel_rules
+    wanted = funnel_rules.statuses_for_stage(pat, mark)
+    if not wanted:
+        return {}
+    rank = {"new": 0, "contacted": 1, "conversation": 2, "lost": 9}
+    changed = {}
+    with store._conn() as conn:
+        leads_now = {r["channel"]: r["status"] for r in conn.execute("SELECT channel, status FROM leads WHERE person_id = ?", (person_id,))}
+        known = {(r["channel"], r["status_key"]) for r in conn.execute("SELECT channel, status_key FROM status_stages")}
+    for ch in outreach(person_id)["channels"]:
+        channel = ch["channel"]
+        target = next((s for s in wanted if (channel, s) in known), None)
+        current = leads_now.get(channel, "new")
+        if not target or current == target:
+            continue
+        was = rank.get(funnel_rules.STATUS_MARK.get(current, "new"), 0)
+        if mark != "lost" and was >= rank[mark] and not allow_back:
+            continue
+        with store._conn() as conn:
+            sent = store.bucket_for(conn, channel, target) == "cold"
+        set_outreach(person_id, channel, target, STAGE_FOLLOW_UP_DAYS if sent else None)
         changed[channel] = leads.label_for(channel, target)
     return changed
 

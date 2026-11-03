@@ -1,6 +1,6 @@
 # Funnel templates and automatic stage moves
 
-Agreed 2026-11-03 (Peter, with GPT's analysis checked by Claude). Not built yet. The list of funnel templates goes in
+Agreed 2026-11-03 (Peter, with GPT's analysis checked by Claude). Built 2026-11-03: lk_calendar/funnel_rules.py, check: scripts/check_funnels.py. The list of funnel templates goes in
 `docs/funnel-templates.md`.
 
 ## Why
@@ -42,7 +42,8 @@ funnel changes the shared rules for every funnel. This replaces that.
    - A bounce marks the email address unreachable; it does NOT make the deal Lost (another channel may work). Today a bounce moves
      to Lost: this changes.
    - Only an explicit, unambiguous no is Lost; "not now" / "next month" is a follow-up.
-   - A calendar booking moves a contact only to a Booked stage, never to a completed, approved, signed or won stage. Only an
+   - A calendar booking moves a contact only to the funnel's FIRST Booked stage, if they haven't reached it (so one meeting never
+     counts twice; #9's second one, Demo Booked, is moved by USER or Claude), never to a completed, approved, signed or won stage. Only an
      explicit confirmation closes a booking-based deal (#23, #31, #33...).
    - A calendar invite is not an accepted or held meeting; use the attendee's response and the meeting date.
    - A recorded call proves only that a call happened (and that the contact was on it), not agreement.
@@ -52,8 +53,8 @@ funnel changes the shared rules for every funnel. This replaces that.
    USER first. Most templates are P4, so this is where most progress comes from.
 5. **Outbound prospecting is a sales method, not an industry.** If USER says they find clients by reaching out (cold email,
    LinkedIn), Claude picks the outbound funnel even if they also call themselves a consultant, agency or freelancer.
-6. **Existing funnels keep working exactly as today**: their stages get roles from today's names (New lead → new, Contacted →
-   contacted, In conversation → conversation_started, Lost → lost, the won stage → won). The deploy checks must prove this.
+6. **Existing funnels keep working exactly as today**: they keep the older rules by stage name (pattern ''), untouched; only funnels
+   made from a template use patterns and marks. The deploy checks prove this.
 
 ## Later signals worth adding (detectable from email, calendar, calls)
 

@@ -1,6 +1,6 @@
 # LyteKeepr funnel templates (47)
 
-Agreed 2026-11-03: drafted by GPT, checked by Claude, accepted by Peter. Not built yet. How they move contacts automatically:
+Agreed 2026-11-03: drafted by GPT, checked by Claude, accepted by Peter. Built: lk_calendar/funnel_templates.json (made from this file). How they move contacts automatically:
 `docs/funnel-automation.md`. Stage names are defaults: users can rename or skip them; the engine goes by each stage's role, not its
 name. "Won / Closed Lost" are two alternative endings, not a sequence.
 

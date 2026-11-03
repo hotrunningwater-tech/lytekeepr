@@ -5,6 +5,7 @@
 find | Find a person, company or opportunity
 list_brands | List brands
 create_brand | Add a brand
+funnel_templates | Funnel templates
 create_funnel | Create a funnel
 set_funnel_brand | Set a funnel's brand
 get_contact | Contact details

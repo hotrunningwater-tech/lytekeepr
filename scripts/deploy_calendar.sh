@@ -81,6 +81,14 @@ if ! python3 scripts/check_email_sort.py > /tmp/lk-email-sort.log 2>&1; then
   exit 1
 fi
 grep "PASSED" /tmp/lk-email-sort.log
+# Never ship funnel rules that change how existing funnels move, or move a template funnel wrongly.
+echo "Checking funnels..."
+if ! python3 scripts/check_funnels.py > /tmp/lk-funnels.log 2>&1; then
+  grep -E "FAILED|REFUSED|Error" /tmp/lk-funnels.log | head -20
+  echo "Deploy stopped: the funnel check did not pass (full output in /tmp/lk-funnels.log)."
+  exit 1
+fi
+grep "PASSED" /tmp/lk-funnels.log
 rsync -az --delete --filter="merge $FILTER" ./ "$HOST:$DEST"
 ssh "$HOST" 'chown -R lkcal:lkcal /opt/lytekeepr-calendar/app &&
   install -o root -g root -m 700 /opt/lytekeepr-calendar/app/scripts/calendar_backup.py /opt/lytekeepr-calendar/backup.py &&

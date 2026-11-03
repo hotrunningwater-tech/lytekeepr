@@ -33,7 +33,7 @@ def _events_url(calendar_id: str = "primary") -> str:
 PAST_DAYS, FUTURE_DAYS = 30, 180
 CALL_RE = re.compile(r"(zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|gotomeeting\.com|gotomeet\.me)", re.I)
 FIELDS = ("nextPageToken,items(id,iCalUID,status,summary,description,location,hangoutLink,start,end,"
-          "conferenceData(entryPoints(uri,entryPointType)),attendees(email,displayName,self,organizer))")
+          "conferenceData(entryPoints(uri,entryPointType)),attendees(email,displayName,self,organizer,responseStatus))")
 
 
 class GoogleSyncError(Exception):
@@ -240,7 +240,8 @@ def _convert(item: dict) -> dict | None:
     has_call = bool(join) or bool(CALL_RE.search(f"{location} {description}"))
     notes = "\n".join(x for x in (f"Join: {join}" if join else "", f"Location: {location}" if location else "") if x)
     notes = (notes + "\n\n" + description).strip() if description else notes
-    attendees = [{"email": (a.get("email") or "").lower(), "name": a.get("displayName") or ""}
+    attendees = [{"email": (a.get("email") or "").lower(), "name": a.get("displayName") or "",
+                  **({"declined": True} if a.get("responseStatus") == "declined" else {})}       # a "no" never counts as a booked meeting
                  for a in item.get("attendees") or [] if a.get("email") and not a.get("self")]      # everyone invited except you
     return {"external_id": _prefix() + item["id"], "title": (item.get("summary") or "(no title)").strip()[:200],
             "start_date": s.date().isoformat(), "start_time": s.strftime("%H:%M"),
@@ -341,6 +342,8 @@ def sync(trigger: str = "manual") -> dict:
             _record(trigger, False, str(exc))
             raise
         _record(trigger, True, result=result)
+        from . import funnel_rules
+        funnel_rules.apply_bookings_quietly()          # a meeting booked with someone in a template funnel moves them to its booked stage
         return result
 
 

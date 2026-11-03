@@ -89,6 +89,8 @@ def seed(c, mark, owner_email, workspace, padding=0):
     so this workspace's ids differ from the other's: an attacker using the victim's ids then hits only filler of its own,
     never its own marked data (which would weaken the check in the other direction)."""
     ids = {}
+    if not any(b["key"] == "lytekeepr" for b in c.get("/api/crm/brands").get_json()["brands"]):
+        c.post("/api/crm/brands", json={"name": "LyteKeepr"})      # a new workspace starts with no brands: its admin makes them
     if padding:
         pad_funnel = c.post("/api/crm/funnels", json={"name": "filler funnel"}).get_json()["funnel_id"]
         pad_people = [c.post("/api/calendar/contacts", json={"name": f"Filler {i}", "email": f"filler{i}@{mark}-filler.test", "brand": "lytekeepr"}).get_json()["id"] for i in range(padding)]

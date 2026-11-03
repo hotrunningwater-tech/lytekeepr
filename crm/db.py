@@ -272,8 +272,10 @@ def init_db() -> None:
                         "owner_id": "INTEGER",         # who added the contact (empty = the admin)
                         "brand": "TEXT NOT NULL DEFAULT ''"}),   # the brand (key) the contact belongs to; '' = none yet
             ("channel_accounts", {"url": "TEXT"}),
-            ("funnels", {"brand": "TEXT NOT NULL DEFAULT ''"}),     # a funnel's people take its brand
-            ("funnel_stages", {"is_won": "INTEGER NOT NULL DEFAULT 0"}),   # reaching this stage = a won deal (onboarding starts)
+            ("funnels", {"brand": "TEXT NOT NULL DEFAULT ''",      # a funnel's people take its brand
+                         "pattern": "TEXT NOT NULL DEFAULT ''"}),   # '' = the standard funnel (moves by stage name); P1-P4 = from a template
+            ("funnel_stages", {"is_won": "INTEGER NOT NULL DEFAULT 0",   # reaching this stage = a won deal (onboarding starts)
+                               "mark": "TEXT NOT NULL DEFAULT ''"}),     # template funnels: what moves a contact here (lk_calendar/funnel_rules.py)
         ):
             have = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
             for col, ddl in cols.items():
@@ -314,16 +316,15 @@ def init_db() -> None:
 DEFAULT_FUNNEL_STAGES = ["New lead", "Contacted", "In conversation", "Confirmed", "Onboarding", "Completed", "Lost"]
 
 
-def create_funnel(conn: sqlite3.Connection, name: str) -> int:
-    cur = conn.execute(
-        "INSERT INTO funnels (name, created_at) VALUES (?, ?)",
-        (name, datetime.now().isoformat()),
-    )
-    funnel_id = cur.lastrowid
+def create_funnel(conn: sqlite3.Connection, name: str, template: dict | None = None) -> int:
+    """The standard stages, or a template's (lk_calendar/funnel_templates.json): its stages with their marks, its won stage, its pattern."""
     now = datetime.now().isoformat()
+    cur = conn.execute("INSERT INTO funnels (name, created_at, pattern) VALUES (?, ?, ?)", (name, now, template["pattern"] if template else ""))
+    funnel_id = cur.lastrowid
+    stages = template["stages"] if template else [{"name": n, "mark": ""} for n in DEFAULT_FUNNEL_STAGES]
     conn.executemany(
-        "INSERT INTO funnel_stages (funnel_id, name, position, created_at) VALUES (?, ?, ?, ?)",
-        [(funnel_id, stage_name, i, now) for i, stage_name in enumerate(DEFAULT_FUNNEL_STAGES)],
+        "INSERT INTO funnel_stages (funnel_id, name, position, created_at, mark, is_won) VALUES (?, ?, ?, ?, ?, ?)",
+        [(funnel_id, st["name"], i, now, st["mark"], 1 if st["mark"] == "won" else 0) for i, st in enumerate(stages)],
     )
     return funnel_id
 

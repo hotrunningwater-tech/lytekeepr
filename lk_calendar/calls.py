@@ -747,6 +747,8 @@ def register(app):
                                                  bool(body.get("expect_recording", True)))
         except google_sync.GoogleSyncError as exc:
             raise CallsError(str(exc))
+        from . import funnel_rules
+        funnel_rules.apply_bookings_quietly()          # booked with someone in a template funnel: they move to its booked stage
         return jsonify(meeting), 201
 
     @app.delete("/api/calendar/meetings/<int:event_id>")

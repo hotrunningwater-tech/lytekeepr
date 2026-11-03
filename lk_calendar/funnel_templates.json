@@ -1,0 +1,1621 @@
+[
+ {
+  "number": 1,
+  "name": "Outbound Prospecting & Sales",
+  "examples": "B2B agency founder, independent consultant, outbound SaaS salesperson",
+  "pattern": "P1",
+  "recognise": "They primarily find prospects and initiate contact through LinkedIn, cold email, direct messages or phone calls, then manage conversations and follow-ups.",
+  "stages": [
+   {
+    "name": "Prospect Identified",
+    "mark": "new"
+   },
+   {
+    "name": "First Contact",
+    "mark": "contacted"
+   },
+   {
+    "name": "Conversation Started",
+    "mark": "conversation"
+   },
+   {
+    "name": "Lead Qualified",
+    "mark": ""
+   },
+   {
+    "name": "Meeting Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Proposal Sent",
+    "mark": ""
+   },
+   {
+    "name": "Deal Won",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 2,
+  "name": "Scoped Project Sales",
+  "examples": "management consultant, freelance copywriter, graphic design studio",
+  "pattern": "P4",
+  "recognise": "They sell customised, one-time professional projects where scoping, quoting and client approval are the main sales steps.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Needs Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Scope Defined",
+    "mark": ""
+   },
+   {
+    "name": "Proposal Sent",
+    "mark": ""
+   },
+   {
+    "name": "Project Approved",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 3,
+  "name": "Monthly Retainer Sales",
+  "examples": "marketing agency, bookkeeping firm, virtual assistant service",
+  "pattern": "P2",
+  "recognise": "They acquire clients for recurring monthly services and mainly track consultations, proposals and retainer agreements rather than cold outreach.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Discovery Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Needs Defined",
+    "mark": ""
+   },
+   {
+    "name": "Scope Agreed",
+    "mark": ""
+   },
+   {
+    "name": "Proposal Sent",
+    "mark": ""
+   },
+   {
+    "name": "Retainer Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 4,
+  "name": "Professional Client Engagements",
+  "examples": "family lawyer, immigration consultant, tax advisory practice",
+  "pattern": "P2",
+  "recognise": "They provide regulated or specialised professional services requiring intake, consultation, fee agreements or formal engagement.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Fit Checked",
+    "mark": ""
+   },
+   {
+    "name": "Consultation Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Fees Agreed",
+    "mark": ""
+   },
+   {
+    "name": "Engagement Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 5,
+  "name": "Custom Software Project Sales",
+  "examples": "app development studio, website agency, automation consultancy",
+  "pattern": "P2",
+  "recognise": "They build custom software, websites or integrations where technical requirements and estimates decide the sale.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Requirements Call Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Scope Documented",
+    "mark": ""
+   },
+   {
+    "name": "Estimate Sent",
+    "mark": ""
+   },
+   {
+    "name": "Technical Review",
+    "mark": ""
+   },
+   {
+    "name": "Contract Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 6,
+  "name": "Managed IT Service Contracts",
+  "examples": "managed IT provider, cybersecurity service company, outsourced IT firm",
+  "pattern": "P4",
+  "recognise": "They sell recurring technology support or security services after evaluating a client's systems.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Systems Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Needs Identified",
+    "mark": ""
+   },
+   {
+    "name": "Service Plan",
+    "mark": ""
+   },
+   {
+    "name": "Proposal Sent",
+    "mark": ""
+   },
+   {
+    "name": "Agreement Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 7,
+  "name": "Corporate Training Bookings",
+  "examples": "corporate trainer, leadership workshop provider, workplace safety instructor",
+  "pattern": "P4",
+  "recognise": "Organisations hire them to deliver specific employee training, seminars or workshops.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Training Brief",
+    "mark": ""
+   },
+   {
+    "name": "Program Agreed",
+    "mark": ""
+   },
+   {
+    "name": "Quote Sent",
+    "mark": ""
+   },
+   {
+    "name": "Date Reserved",
+    "mark": ""
+   },
+   {
+    "name": "Booking Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 8,
+  "name": "Demo-Led SaaS Sales",
+  "examples": "small-business CRM, practice management software, customer support platform",
+  "pattern": "P2",
+  "recognise": "They sell subscription software through conversations, demos, evaluations and pricing discussions.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Lead Qualified",
+    "mark": ""
+   },
+   {
+    "name": "Demo Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Product Evaluated",
+    "mark": ""
+   },
+   {
+    "name": "Pricing Sent",
+    "mark": ""
+   },
+   {
+    "name": "Subscription Started",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 9,
+  "name": "Enterprise Software Procurement",
+  "examples": "enterprise HR platform, cybersecurity suite, procurement software provider",
+  "pattern": "P2",
+  "recognise": "They sell complex technology with several decision-makers, technical validation, purchasing approval or contract negotiation.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Discovery Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Demo Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Technical Review",
+    "mark": ""
+   },
+   {
+    "name": "Procurement Review",
+    "mark": ""
+   },
+   {
+    "name": "Contract Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 10,
+  "name": "Recruiting / Staffing Placements",
+  "examples": "recruitment agency, executive search firm, specialist staffing company",
+  "pattern": "P4",
+  "recognise": "Employers pay them to find and place candidates; they manage hiring assignments through candidate presentation and placement.",
+  "stages": [
+   {
+    "name": "New Employer",
+    "mark": "new"
+   },
+   {
+    "name": "Hiring Brief",
+    "mark": ""
+   },
+   {
+    "name": "Terms Agreed",
+    "mark": ""
+   },
+   {
+    "name": "Candidates Presented",
+    "mark": ""
+   },
+   {
+    "name": "Interviews Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Placement Confirmed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 11,
+  "name": "Real Estate Buyer Transactions",
+  "examples": "residential buyer's agent, condominium realtor, investment-property broker",
+  "pattern": "P4",
+  "recognise": "They represent people buying homes or investment properties, through search, offers and closing.",
+  "stages": [
+   {
+    "name": "New Buyer",
+    "mark": "new"
+   },
+   {
+    "name": "Needs Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Financing Checked",
+    "mark": ""
+   },
+   {
+    "name": "Viewings Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Offer Accepted",
+    "mark": ""
+   },
+   {
+    "name": "Purchase Closed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 12,
+  "name": "Real Estate Seller Transactions",
+  "examples": "listing agent, residential realtor, property sales broker",
+  "pattern": "P4",
+  "recognise": "They represent owners selling property and manage listings through offers and completed sales.",
+  "stages": [
+   {
+    "name": "New Seller",
+    "mark": "new"
+   },
+   {
+    "name": "Property Valued",
+    "mark": ""
+   },
+   {
+    "name": "Listing Signed",
+    "mark": ""
+   },
+   {
+    "name": "Offers Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Offer Accepted",
+    "mark": ""
+   },
+   {
+    "name": "Sale Closed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 13,
+  "name": "Commercial Leasing Deals",
+  "examples": "office leasing broker, retail leasing agent, commercial tenant representative",
+  "pattern": "P4",
+  "recognise": "They help businesses lease offices, retail space, warehouses or other commercial property.",
+  "stages": [
+   {
+    "name": "New Client",
+    "mark": "new"
+   },
+   {
+    "name": "Space Needs",
+    "mark": ""
+   },
+   {
+    "name": "Tours Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Offer Submitted",
+    "mark": ""
+   },
+   {
+    "name": "Lease Negotiated",
+    "mark": ""
+   },
+   {
+    "name": "Lease Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 14,
+  "name": "Property Management Contracts",
+  "examples": "residential property manager, short-term rental manager, commercial property manager",
+  "pattern": "P4",
+  "recognise": "Owners hire them to handle rentals, tenants, maintenance and day-to-day operations.",
+  "stages": [
+   {
+    "name": "New Owner",
+    "mark": "new"
+   },
+   {
+    "name": "Property Assessed",
+    "mark": ""
+   },
+   {
+    "name": "Services Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Fee Proposal",
+    "mark": ""
+   },
+   {
+    "name": "Management Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 15,
+  "name": "Mortgage / Loan Applications",
+  "examples": "residential mortgage broker, commercial loan broker, business financing broker",
+  "pattern": "P4",
+  "recognise": "They arrange financing through lenders and track applications from qualification to funding.",
+  "stages": [
+   {
+    "name": "New Applicant",
+    "mark": "new"
+   },
+   {
+    "name": "Financial Review",
+    "mark": ""
+   },
+   {
+    "name": "Financing Options",
+    "mark": ""
+   },
+   {
+    "name": "Application Submitted",
+    "mark": ""
+   },
+   {
+    "name": "Lender Approved",
+    "mark": ""
+   },
+   {
+    "name": "Loan Funded",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 16,
+  "name": "Insurance Policy Sales",
+  "examples": "life insurance broker, home insurance agent, commercial insurance broker",
+  "pattern": "P4",
+  "recognise": "They assess insurance needs, compare coverage and help customers buy policies.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Coverage Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Quotes Prepared",
+    "mark": ""
+   },
+   {
+    "name": "Options Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Policy Issued",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 17,
+  "name": "Financial Advisory Client Acquisition",
+  "examples": "wealth manager, investment advisor, retirement planner",
+  "pattern": "P2",
+  "recognise": "They win clients for financial planning, investment management or ongoing advice.",
+  "stages": [
+   {
+    "name": "New Prospect",
+    "mark": "new"
+   },
+   {
+    "name": "Intro Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Goals Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Plan Presented",
+    "mark": ""
+   },
+   {
+    "name": "Client Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 18,
+  "name": "Franchise / Licensing Sales",
+  "examples": "franchise company, business licensor, dealership network",
+  "pattern": "P2",
+  "recognise": "They recruit people or companies to buy franchises, operating rights, licences or territories.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Candidate Screened",
+    "mark": ""
+   },
+   {
+    "name": "Intro Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Business Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Terms Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Franchise Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 19,
+  "name": "Quoted Repair / Installation Sales",
+  "examples": "plumbing contractor, auto repair shop, computer repair business",
+  "pattern": "P4",
+  "recognise": "Customers describe a problem, get an assessment or estimate, and decide whether to authorise the work.",
+  "stages": [
+   {
+    "name": "New Request",
+    "mark": "new"
+   },
+   {
+    "name": "Problem Assessed",
+    "mark": ""
+   },
+   {
+    "name": "Estimate Sent",
+    "mark": ""
+   },
+   {
+    "name": "Work Approved",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 20,
+  "name": "Construction / Renovation Contracts",
+  "examples": "general contractor, kitchen renovation company, commercial remodelling firm",
+  "pattern": "P4",
+  "recognise": "They sell substantial building or renovation projects with site visits, detailed estimates and formal contracts.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Site Visit Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Scope Agreed",
+    "mark": ""
+   },
+   {
+    "name": "Estimate Sent",
+    "mark": ""
+   },
+   {
+    "name": "Terms Negotiated",
+    "mark": ""
+   },
+   {
+    "name": "Contract Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 21,
+  "name": "Technical Home Installation Sales",
+  "examples": "solar installer, heat-pump company, home energy systems provider",
+  "pattern": "P4",
+  "recognise": "They sell expensive installed home systems needing property evaluation, technical design or financing.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Home Qualified",
+    "mark": ""
+   },
+   {
+    "name": "Survey Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "System Designed",
+    "mark": ""
+   },
+   {
+    "name": "Financing Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Contract Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 22,
+  "name": "Recurring Property Service Contracts",
+  "examples": "commercial cleaning business, landscaping company, pest control provider",
+  "pattern": "P4",
+  "recognise": "They win customers for recurring cleaning, landscaping, maintenance or treatment services.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Site Visit Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Service Plan",
+    "mark": ""
+   },
+   {
+    "name": "Quote Sent",
+    "mark": ""
+   },
+   {
+    "name": "Service Agreed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 23,
+  "name": "Personal Service Appointment Sales",
+  "examples": "hair salon, massage therapist, pet groomer",
+  "pattern": "P3",
+  "recognise": "They turn customer inquiries into booked individual service appointments.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Service Chosen",
+    "mark": ""
+   },
+   {
+    "name": "Availability Checked",
+    "mark": ""
+   },
+   {
+    "name": "Appointment Confirmed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 24,
+  "name": "Clinical Treatment Plan Sales",
+  "examples": "orthodontic clinic, physiotherapy practice, elective dental clinic",
+  "pattern": "P3",
+  "recognise": "Patients have a consultation or assessment before deciding on a proposed treatment plan.",
+  "stages": [
+   {
+    "name": "New Patient",
+    "mark": "new"
+   },
+   {
+    "name": "Consultation Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Assessment Completed",
+    "mark": ""
+   },
+   {
+    "name": "Treatment Proposed",
+    "mark": ""
+   },
+   {
+    "name": "Plan Accepted",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 25,
+  "name": "Personal Care Service Contracts",
+  "examples": "senior home care agency, disability support provider, private caregiving service",
+  "pattern": "P4",
+  "recognise": "Individuals or families arrange ongoing care after discussing needs and reviewing a care plan.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Needs Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Care Assessment Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Plan Proposed",
+    "mark": ""
+   },
+   {
+    "name": "Agreement Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 26,
+  "name": "Coaching Package Sales",
+  "examples": "business coach, life coach, nutrition coach",
+  "pattern": "P2",
+  "recognise": "They sell structured coaching programmes after an introductory conversation about goals.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Intro Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Goals Defined",
+    "mark": ""
+   },
+   {
+    "name": "Program Offered",
+    "mark": ""
+   },
+   {
+    "name": "Program Purchased",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 27,
+  "name": "Fitness Trial-to-Membership Sales",
+  "examples": "personal training studio, boutique gym, group fitness studio",
+  "pattern": "P3",
+  "recognise": "They turn prospects into members or training clients after a trial, introductory workout or consultation.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Trial Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Trial Completed",
+    "mark": ""
+   },
+   {
+    "name": "Plan Offered",
+    "mark": ""
+   },
+   {
+    "name": "Membership Started",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 28,
+  "name": "Private Lesson Bookings",
+  "examples": "mathematics tutor, music teacher, language instructor",
+  "pattern": "P3",
+  "recognise": "They teach individuals through private or small-group lessons and sell recurring lesson packages.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Needs Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Trial Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Package Offered",
+    "mark": ""
+   },
+   {
+    "name": "Lessons Booked",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 29,
+  "name": "Course / Program Enrollment",
+  "examples": "online course creator, coding bootcamp, vocational training provider",
+  "pattern": "P4",
+  "recognise": "They sell structured courses, cohorts or training programmes to individual learners.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Course Selected",
+    "mark": ""
+   },
+   {
+    "name": "Questions Answered",
+    "mark": ""
+   },
+   {
+    "name": "Registration Started",
+    "mark": ""
+   },
+   {
+    "name": "Enrollment Paid",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 30,
+  "name": "School / Childcare Admissions",
+  "examples": "private school, preschool, daycare centre",
+  "pattern": "P3",
+  "recognise": "Families apply for admission, often with tours, applications, acceptance and paperwork.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Tour Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Tour Completed",
+    "mark": ""
+   },
+   {
+    "name": "Application Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Place Offered",
+    "mark": ""
+   },
+   {
+    "name": "Enrollment Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 31,
+  "name": "Date-Based Professional Bookings",
+  "examples": "wedding photographer, event DJ, keynote speaker",
+  "pattern": "P3",
+  "recognise": "They are hired for a specific service on a particular date, usually with a booking agreement or deposit.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Date Checked",
+    "mark": ""
+   },
+   {
+    "name": "Package Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Quote Sent",
+    "mark": ""
+   },
+   {
+    "name": "Booking Confirmed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 32,
+  "name": "Custom Event Service Contracts",
+  "examples": "wedding planner, event caterer, event decoration company",
+  "pattern": "P4",
+  "recognise": "They sell customised event services where planning, scope and proposals win the client.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Event Brief",
+    "mark": ""
+   },
+   {
+    "name": "Plan Prepared",
+    "mark": ""
+   },
+   {
+    "name": "Proposal Sent",
+    "mark": ""
+   },
+   {
+    "name": "Contract Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 33,
+  "name": "Venue / Group Hospitality Bookings",
+  "examples": "wedding venue, restaurant private-dining room, hotel group-booking service",
+  "pattern": "P3",
+  "recognise": "Customers reserve venues, private dining, group accommodation or event facilities.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Date Checked",
+    "mark": ""
+   },
+   {
+    "name": "Space Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Package Quoted",
+    "mark": ""
+   },
+   {
+    "name": "Booking Confirmed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 34,
+  "name": "Custom Travel Bookings",
+  "examples": "travel advisor, luxury vacation planner, private tour operator",
+  "pattern": "P4",
+  "recognise": "They design customised itineraries or tours and guide clients through choosing and booking.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Trip Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Itinerary Prepared",
+    "mark": ""
+   },
+   {
+    "name": "Options Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Booking Confirmed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 35,
+  "name": "Equipment / Item Rental Bookings",
+  "examples": "event equipment rental, camera rental business, construction equipment rental firm",
+  "pattern": "P4",
+  "recognise": "They rent equipment or items for set periods and manage availability, pricing and reservations.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Dates Checked",
+    "mark": ""
+   },
+   {
+    "name": "Items Selected",
+    "mark": ""
+   },
+   {
+    "name": "Quote Sent",
+    "mark": ""
+   },
+   {
+    "name": "Rental Confirmed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 36,
+  "name": "Conversational Online Product Sales",
+  "examples": "Instagram boutique, WhatsApp product seller, handmade goods business",
+  "pattern": "P4",
+  "recognise": "They sell physical products through messages and follow-ups rather than relying only on automated checkout.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Product Selected",
+    "mark": ""
+   },
+   {
+    "name": "Questions Answered",
+    "mark": ""
+   },
+   {
+    "name": "Payment Link",
+    "mark": ""
+   },
+   {
+    "name": "Order Paid",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 37,
+  "name": "Consultative Consumer Product Sales",
+  "examples": "luxury furniture showroom, custom jewellery retailer, premium bicycle shop",
+  "pattern": "P4",
+  "recognise": "They sell expensive or customised consumer products where buyers need advice, selection or a personal quote.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Needs Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Options Shown",
+    "mark": ""
+   },
+   {
+    "name": "Quote Sent",
+    "mark": ""
+   },
+   {
+    "name": "Order Confirmed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 38,
+  "name": "Vehicle Dealership Sales",
+  "examples": "used car dealership, motorcycle dealer, recreational vehicle dealer",
+  "pattern": "P4",
+  "recognise": "They sell vehicles through consultations, viewings or test drives, negotiation and purchase agreements.",
+  "stages": [
+   {
+    "name": "New Lead",
+    "mark": "new"
+   },
+   {
+    "name": "Vehicle Chosen",
+    "mark": ""
+   },
+   {
+    "name": "Test Drive Booked",
+    "mark": "booked"
+   },
+   {
+    "name": "Price Agreed",
+    "mark": ""
+   },
+   {
+    "name": "Terms Agreed",
+    "mark": ""
+   },
+   {
+    "name": "Sale Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 39,
+  "name": "B2B Equipment / Product Sales",
+  "examples": "industrial machinery supplier, commercial copier dealer, medical equipment seller",
+  "pattern": "P4",
+  "recognise": "They sell business equipment or products through conversations, specifications, quotes and purchase orders.",
+  "stages": [
+   {
+    "name": "New Account",
+    "mark": "new"
+   },
+   {
+    "name": "Needs Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Options Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Quote Sent",
+    "mark": ""
+   },
+   {
+    "name": "Order Received",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 40,
+  "name": "Wholesale Account Sales",
+  "examples": "food wholesaler, clothing distributor, beauty-products wholesaler",
+  "pattern": "P4",
+  "recognise": "They open new accounts with retailers or resellers who buy in bulk.",
+  "stages": [
+   {
+    "name": "New Retailer",
+    "mark": "new"
+   },
+   {
+    "name": "Account Qualified",
+    "mark": ""
+   },
+   {
+    "name": "Catalog Sent",
+    "mark": ""
+   },
+   {
+    "name": "Pricing Agreed",
+    "mark": ""
+   },
+   {
+    "name": "Samples Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "First Order",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 41,
+  "name": "Custom Manufacturing Orders",
+  "examples": "packaging manufacturer, metal fabrication shop, custom furniture manufacturer",
+  "pattern": "P4",
+  "recognise": "They make goods to order from customer specifications, designs or drawings.",
+  "stages": [
+   {
+    "name": "New Inquiry",
+    "mark": "new"
+   },
+   {
+    "name": "Specs Confirmed",
+    "mark": ""
+   },
+   {
+    "name": "Design Reviewed",
+    "mark": ""
+   },
+   {
+    "name": "Quote Sent",
+    "mark": ""
+   },
+   {
+    "name": "Order Approved",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 42,
+  "name": "Government Tender / RFP Sales",
+  "examples": "government IT contractor, public construction bidder, institutional equipment supplier",
+  "pattern": "P4",
+  "recognise": "They win business through formal tenders, public procurement, institutional bidding or RFPs.",
+  "stages": [
+   {
+    "name": "Tender Found",
+    "mark": "new"
+   },
+   {
+    "name": "Eligibility Checked",
+    "mark": ""
+   },
+   {
+    "name": "Bid Prepared",
+    "mark": ""
+   },
+   {
+    "name": "Bid Submitted",
+    "mark": ""
+   },
+   {
+    "name": "Contract Awarded",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 43,
+  "name": "Freight / Logistics Bookings",
+  "examples": "freight broker, shipping agent, third-party logistics provider",
+  "pattern": "P4",
+  "recognise": "They arrange shipments and win customers through rate quotes and booking confirmations.",
+  "stages": [
+   {
+    "name": "New Shipper",
+    "mark": "new"
+   },
+   {
+    "name": "Shipment Details",
+    "mark": ""
+   },
+   {
+    "name": "Rate Quoted",
+    "mark": ""
+   },
+   {
+    "name": "Terms Accepted",
+    "mark": ""
+   },
+   {
+    "name": "Shipment Booked",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 44,
+  "name": "Major Donor Fundraising",
+  "examples": "charitable foundation, community charity, educational nonprofit",
+  "pattern": "P4",
+  "recognise": "They build donor relationships and ask for contributions or pledges.",
+  "stages": [
+   {
+    "name": "Donor Identified",
+    "mark": "new"
+   },
+   {
+    "name": "Contact Made",
+    "mark": ""
+   },
+   {
+    "name": "Interest Confirmed",
+    "mark": ""
+   },
+   {
+    "name": "Gift Requested",
+    "mark": ""
+   },
+   {
+    "name": "Donation Committed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 45,
+  "name": "Grant Application Pipeline",
+  "examples": "arts nonprofit, community development organisation, research foundation",
+  "pattern": "P4",
+  "recognise": "They seek funding by applying to foundations, governments or other grant-makers.",
+  "stages": [
+   {
+    "name": "Grant Found",
+    "mark": "new"
+   },
+   {
+    "name": "Eligibility Checked",
+    "mark": ""
+   },
+   {
+    "name": "Application Prepared",
+    "mark": ""
+   },
+   {
+    "name": "Application Submitted",
+    "mark": ""
+   },
+   {
+    "name": "Grant Awarded",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 46,
+  "name": "Sponsorship / Brand Partnership Sales",
+  "examples": "conference organiser, creator sponsorship agency, community sports club",
+  "pattern": "P4",
+  "recognise": "They sell brand exposure, promotional placements, sponsorship packages or commercial partnerships.",
+  "stages": [
+   {
+    "name": "Sponsor Identified",
+    "mark": "new"
+   },
+   {
+    "name": "Contact Made",
+    "mark": ""
+   },
+   {
+    "name": "Package Presented",
+    "mark": ""
+   },
+   {
+    "name": "Terms Negotiated",
+    "mark": ""
+   },
+   {
+    "name": "Sponsorship Signed",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ },
+ {
+  "number": 47,
+  "name": "Paid Membership Sales",
+  "examples": "professional association, private business club, paid networking community",
+  "pattern": "P4",
+  "recognise": "They recruit paying members to organisations, associations, clubs or private communities.",
+  "stages": [
+   {
+    "name": "New Prospect",
+    "mark": "new"
+   },
+   {
+    "name": "Benefits Discussed",
+    "mark": ""
+   },
+   {
+    "name": "Membership Chosen",
+    "mark": ""
+   },
+   {
+    "name": "Application Approved",
+    "mark": ""
+   },
+   {
+    "name": "Membership Paid",
+    "mark": "won"
+   },
+   {
+    "name": "Closed Lost",
+    "mark": "lost"
+   }
+  ]
+ }
+]

@@ -152,6 +152,13 @@ def _asked_to_save(words) -> bool:
     return False
 
 
+def _int_or(value, default=-1) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _brand_key(call, need, text):
     """A brand name or key → its key; None when no brand was asked for; '' for 'none'. Unknown brands are an error listing the real ones."""
     t = str(text or "").strip()
@@ -206,10 +213,20 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "create_brand", "title": "Add a brand", "description": "Add a new brand (business). Only when the user asks for it.",
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}, "read": False},
+    {"name": "funnel_templates", "title": "Funnel templates",
+     "description": ("The standard funnels LyteKeepr can create, one per kind of sales process: number, name, examples, how to recognise "
+                     "the business, and the stages. Use it to pick the template for create_funnel."),
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "create_funnel", "title": "Create a funnel",
-     "description": "Create a new sales funnel. It needs a name and a brand (everyone put in the funnel takes its brand): ask for whichever the user didn't say; never guess the brand. "
-                    "It starts with the standard stages (New lead, Contacted, In conversation, Confirmed, Onboarding, Completed, Lost); they can be changed later in the app (Edit funnel).",
-     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "brand": {"type": "string", "description": "The brand the user named (name or key, see list_brands)"}},
+     "description": ("Create a sales funnel from a template (funnel_templates). Pick the template from what the user says about their "
+                     "business: by the sales process they manage, not only their industry; if their main work is finding prospects by cold "
+                     "outreach and following up, template 1 whatever the industry. It needs a name and a brand (everyone in the funnel takes its "
+                     "brand): use the user's business as the brand (create_brand first if it doesn't exist yet); never guess a brand that isn't "
+                     "theirs. Leave template empty only for the older standard stages (New lead, Contacted, In conversation, Confirmed, "
+                     "Onboarding, Completed, Lost). Stages can be renamed later in the app."),
+     "inputSchema": {"type": "object", "properties": {"name": {"type": "string"},
+                                                      "brand": {"type": "string", "description": "The brand (name or key, see list_brands)"},
+                                                      "template": {"type": "integer", "description": "Template number from funnel_templates"}},
                      "required": ["name", "brand"]}, "read": False},
     {"name": "set_funnel_brand", "title": "Set a funnel's brand",
      "description": "Make a funnel belong to a brand. Everyone in the funnel takes that brand, and their follow-ups are filed under it. Empty brand clears the funnel's brand.",
@@ -781,9 +798,13 @@ def _run_tool(call, name: str, args: dict):
         return need(*call("GET", "/api/crm/brands"))["brands"]
     if name == "create_brand":
         return need(*call("POST", "/api/crm/brands", {"name": args.get("name", "")}))["brand"]
+    if name == "funnel_templates":
+        return [{"number": t["number"], "name": t["name"], "examples": t["examples"], "recognise": t["recognise"],
+                 "stages": [st["name"] for st in t["stages"]]} for t in need(*call("GET", "/api/crm/funnel-templates"))["templates"]]
     if name == "create_funnel":
         fname, key = str(args["name"]).strip(), _brand_key(call, need, args.get("brand"))       # checked in _precheck
-        made = need(*call("POST", "/api/crm/funnels", {"name": fname, "brand": key}))
+        body = {"name": fname, "brand": key, **({"template": int(args["template"])} if args.get("template") not in (None, "") else {})}
+        made = need(*call("POST", "/api/crm/funnels", body))
         return {"created": True, "funnel_id": made["funnel_id"], "name": fname, "brand": key}
     if name == "set_funnel_brand":
         return need(*call("POST", f"/api/crm/funnels/{int(args['funnel_id'])}/brand", {"brand": args.get("brand", "")}))
@@ -1299,6 +1320,9 @@ def _precheck(call, need, name: str, args: dict):
             raise ValueError("The funnel needs a brand: ask the user which one (see list_brands).")
         if any(f["name"].strip().lower() == fname.lower() for f in need(*call("GET", "/api/crm/funnels"))["funnels"]):
             raise ValueError(f"There is already a funnel called '{fname}'. Ask the user for another name.")
+        if args.get("template") not in (None, "") and not any(t["number"] == _int_or(args.get("template"))
+                                                             for t in need(*call("GET", "/api/crm/funnel-templates"))["templates"]):
+            raise ValueError("There is no funnel template with that number: see funnel_templates.")
     if name == "save_email_draft" and not _asked_to_save(args.get("user_said")):           # only when the user asked for it
         return {"saved": False, "message": "Nothing was saved: drafts are saved only when the user asks ('save it'). You may ask them: 'Save it as a draft?'"}
     return None
@@ -1454,6 +1478,12 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
         lines.append(f"Draft {a['draft']}: to {to or '?'}, subject '{d.get('subject') or ''}'")
         current = d
         shown_ids.add("draft")
+    if name == "create_funnel" and a.get("template") not in (None, ""):
+        t = next((x for x in need(*call("GET", "/api/crm/funnel-templates")).get("templates") or [] if x["number"] == _int_or(a["template"])), None)
+        if t:
+            lines.append(f"From template {t['number']}: {t['name']}")
+            lines.append("Stages: " + " → ".join(st["name"] for st in t["stages"][:-1]) + f" (or {t['stages'][-1]['name']})")
+        shown_ids.add("template")
     if name == "sort_email_inbox":
         counts = {x["sender"].lower(): x["emails"] for g in need(*call("GET", "/api/email/senders")).get("groups") or [] for x in g.get("senders") or []}
         def senders(addrs):
@@ -1823,6 +1853,9 @@ def register(app):
                                         "When the user asks to sort, sync, check, update or bring in their LinkedIn, in any wording ('sort my LinkedIn', "
                                         "'sort out my linked in', 'sync LinkedIn'), don't ask what they mean: call sync_linkedin from the LyteKeepr LinkedIn add-on "
                                         "if it is there, then linkedin_inbox, then suggest who to keep and who to remove and do it with sort_linkedin_inbox after their yes. "
+                                        "When the user tells you about their business (what they sell, to whom, how they find clients), set up their funnel: "
+                                        "funnel_templates, pick the best fit, then create_funnel (shown first) with their business as the brand (create_brand "
+                                        "first if it isn't there). Don't ask them to choose from the list; choose, show, and let them say yes or change it. "
                                         "When the user asks to sort, clean up or go through their email or inbox, in any wording ('sort my email', 'sort my inbox'), "
                                         "don't ask what they mean: call email_inbox, decide per group and per sender, then show one summary (how many senders "
                                         "you'd keep and remove, by group, and the few you can't judge, each with its example) and do it with sort_email_inbox "

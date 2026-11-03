@@ -232,6 +232,15 @@ class _ClosingConnection(sqlite3.Connection):
             self.close()
 
 
+def _is_home_workspace() -> bool:
+    """The first workspace (the owner's): it keeps the owner's starting brands. Every other workspace starts with none."""
+    try:
+        from profiles.store import get_active_profile_id, home_profile_id
+        return get_active_profile_id() == home_profile_id()
+    except Exception:
+        return True
+
+
 def _conn():
     conn = sqlite3.connect(db_path(), timeout=10, factory=_ClosingConnection)
     conn.row_factory = sqlite3.Row
@@ -276,7 +285,7 @@ def _conn():
     conn.execute("INSERT OR IGNORE INTO status_buckets (channel, status_key, bucket) VALUES ('linkedin', 'done', 'closed')")
     conn.execute("INSERT OR IGNORE INTO status_stages (channel, status_key, stage_name) VALUES ('linkedin', 'done', ?)",
                  (DEFAULT_STAGES[("linkedin", "done")],))
-    if conn.execute("SELECT COUNT(*) FROM brands").fetchone()[0] == 0:
+    if conn.execute("SELECT COUNT(*) FROM brands").fetchone()[0] == 0 and _is_home_workspace():    # a new USER makes their own brands
         conn.executemany("INSERT OR IGNORE INTO brands (key, name, color, position) VALUES (?, ?, ?, ?)",
                          [(k, n, c, i) for i, (k, n, c) in enumerate(DEFAULT_BRANDS)])
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_events_external ON events(external_id) WHERE external_id != ''")

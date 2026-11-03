@@ -584,9 +584,15 @@ def crm_create_funnel():
     name = (body.get("name") or "").strip()
     if not name:
         return jsonify({"error": "Funnel name is required."}), 400
+    template = None
+    if body.get("template") not in (None, ""):
+        from lk_calendar import funnel_rules
+        template = funnel_rules.template(body.get("template"))
+        if not template:
+            return jsonify({"error": "There is no funnel template with that number."}), 400
     conn = crm_db.get_connection()
     try:
-        funnel_id = crm_db.create_funnel(conn, name)
+        funnel_id = crm_db.create_funnel(conn, name, template)
         conn.commit()
     finally:
         conn.close()
@@ -601,6 +607,12 @@ def crm_create_funnel():
     if creator and not access.is_full():             # the person who makes a funnel always sees it
         lk_users.share_funnel(creator, funnel_id)
     return jsonify({"ok": True, "funnel_id": funnel_id})
+
+
+@app.get("/api/crm/funnel-templates")
+def crm_funnel_templates():
+    from lk_calendar import funnel_rules
+    return jsonify({"templates": list(funnel_rules.templates())})
 
 
 @app.post("/api/crm/funnels/<int:funnel_id>/rename")
@@ -717,8 +729,10 @@ def crm_add_stage(funnel_id):
 def crm_rename_stage(stage_id):
     name = (request.get_json(silent=True) or {}).get("name", "")
     def run(conn):
+        standard = not (conn.execute("""SELECT f.pattern FROM funnel_stages s JOIN funnels f ON f.funnel_id = s.funnel_id
+                                           WHERE s.stage_id = ?""", (stage_id,)).fetchone() or {"pattern": ""})["pattern"]
         old = crm_db.rename_stage(conn, stage_id, name)
-        if old and old.lower() != name.strip().lower():
+        if old and old.lower() != name.strip().lower() and standard:     # a template funnel's stages keep their marks: nothing shared changes
             from lk_calendar import contacts as lk_contacts
             lk_contacts.rename_stage_mapping(old, name.strip()[:60])
     return _stage_edit(run)
