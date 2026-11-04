@@ -264,6 +264,29 @@ def register(app, app_dir):
         directory.log_activity(_me(), f"Deleted account {gone['owner_email']} (data moved to the deleted folder)")
         return jsonify({"ok": True})
 
+    @app.post("/api/superadmin/accounts/<int:account_id>/test")
+    def console_test_account(account_id):
+        if (denied := guard()):
+            return denied
+        on = bool((request.get_json(silent=True) or {}).get("on"))
+        try:
+            account = directory.set_test(account_id, on)
+        except directory.DirectoryError as exc:
+            return jsonify({"error": str(exc)}), 400
+        directory.log_activity(_me(), f"{'Marked' if on else 'Unmarked'} {account['owner_email']} as a test account", account_id)
+        return jsonify({"account": account})
+
+    @app.post("/api/superadmin/accounts/<int:account_id>/reset")
+    def console_reset(account_id):
+        if (denied := guard()):
+            return denied
+        try:
+            done = directory.reset_account(account_id, str((request.get_json(silent=True) or {}).get("confirm", "")))
+        except directory.DirectoryError as exc:
+            return jsonify({"error": str(exc)}), 400
+        directory.log_activity(_me(), f"Reset test account {done['owner_email']} (a copy is kept 30 days)", account_id)
+        return jsonify({"ok": True})
+
     @app.post("/api/superadmin/accounts/<int:account_id>/billing")
     def console_billing(account_id):
         if (denied := guard()):

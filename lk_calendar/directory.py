@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS errors (
 );
 """
 ACCOUNT_COLUMNS = {"notes": "TEXT NOT NULL DEFAULT ''", "charge": "INTEGER NOT NULL DEFAULT 0", "card_required": "INTEGER NOT NULL DEFAULT 0",
-                   "plan": "TEXT NOT NULL DEFAULT 'Team'", "monthly_price": "TEXT NOT NULL DEFAULT ''"}
+                   "plan": "TEXT NOT NULL DEFAULT 'Team'", "monthly_price": "TEXT NOT NULL DEFAULT ''",
+                   "is_test": "INTEGER NOT NULL DEFAULT 0"}   # the owner's own test account: it can be reset (reset_account)
 CONSOLE_DEFAULTS = {"waive_all": "1", "card_for_new": "0", "trial_days": "14", "alert_errors": "1"}
 STATUSES = ("waiting", "active", "suspended")
 MAX_SIGNUPS_PER_HOUR = 20                 # a brake against someone creating workspaces in bulk
@@ -229,6 +230,46 @@ def delete_account(account_id: int) -> dict:
             conn.execute("DELETE FROM members WHERE account_id = ?", (account_id,))
             conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
         return {**dict(row), "archived_to": str(archived) if archived else ""}
+
+
+def set_test(account_id: int, on: bool) -> dict:
+    """Mark one of the owner's accounts as a test account (only those can be reset). Never the owner's own workspace."""
+    with _lock, _conn() as conn:
+        row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        if not row:
+            raise DirectoryError("no such account")
+        if row["profile_id"] == profiles.home_profile_id():
+            raise DirectoryError("this is your own workspace; it can't be a test account")
+        conn.execute("UPDATE accounts SET is_test = ? WHERE id = ?", (1 if on else 0, account_id))
+        return dict(conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone())
+
+
+def reset_account(account_id: int, confirm_email: str) -> dict:
+    """Put a TEST account back to "just signed up", to run the setup again: everything in it is emptied (a safety copy is kept 30 days
+    in profiles/deleted/), Gmail and Google go with the folder, Claude and LinkedIn are disconnected; the account, its approval and its
+    owner stay. Refused for the owner's own workspace, any account not marked as test, and a wrong confirmation email."""
+    from . import contacts
+    with _lock:
+        with _conn() as conn:
+            row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        if not row:
+            raise DirectoryError("no such account")
+        if row["profile_id"] == profiles.home_profile_id():
+            raise DirectoryError("this is your own workspace; it can never be reset")
+        if not row["is_test"]:
+            raise DirectoryError("only an account marked as test can be reset")
+        if (confirm_email or "").strip().lower() != (row["owner_email"] or "").lower():
+            raise DirectoryError(f"type {row['owner_email']} to confirm")
+        copy = profiles.reset_profile(row["profile_id"])
+        contacts._ready.discard(row["profile_id"])
+        _set_up_workspace(row["profile_id"], row["owner_email"], "")
+        with _conn() as conn:
+            for table in ("oauth_tokens", "oauth_codes", "linkedin_pending"):
+                if conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (table,)).fetchone():
+                    conn.execute(f"DELETE FROM {table} WHERE profile_id = ?", (row["profile_id"],))
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'linkedin_links'").fetchone():
+                conn.execute("UPDATE linkedin_links SET ended_at = ? WHERE profile_id = ? AND ended_at = ''", (_now(), row["profile_id"]))
+        return {**dict(row), "safety_copy": str(copy) if copy else ""}
 
 
 # ------------------------------------------------------------------ background jobs

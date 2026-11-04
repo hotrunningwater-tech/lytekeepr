@@ -234,6 +234,49 @@ def fresh_workspace_check():
         problems.append("NEW WORKSPACE: these fail for a brand-new USER: " + ", ".join(failed))
 
 
+def reset_check(a_admin, b_admin, account_b, ws_b):
+    """Reset (the owner's test accounts only): refused for the owner's workspace, an account not marked as test, a wrong confirmation
+    and anyone but the owner; done, it empties only that workspace, keeps a copy, disconnects Claude, and the owner can start again."""
+    try:
+        directory.set_test(next(x for x in directory.list_accounts() if x["profile_id"] == _profiles.home_profile_id())["id"], True)
+        problems.append("RESET: the owner's own workspace could be marked as a test account")
+    except directory.DirectoryError:
+        pass
+    for why, run in (("not marked as test", lambda: directory.reset_account(account_b["id"], account_b["owner_email"])),):
+        try:
+            run()
+            problems.append(f"RESET: an account {why} was reset")
+        except directory.DirectoryError:
+            pass
+    directory.set_test(account_b["id"], True)
+    try:
+        directory.reset_account(account_b["id"], "wrong@example.com")
+        problems.append("RESET: a wrong confirmation email was accepted")
+    except directory.DirectoryError:
+        pass
+    if b_admin.post(f"/api/superadmin/accounts/{account_b['id']}/reset", json={"confirm": account_b["owner_email"]}).status_code != 403:
+        problems.append("RESET: someone other than the LyteKeepr owner could reset an account")
+    with directory._conn() as conn:
+        conn.execute("INSERT INTO oauth_tokens (token_hash, kind, client_id, user_id, profile_id, expires, created_at, last_used) VALUES ('zzreset', 'access', 'c', 1, ?, 9e12, 0, 0)", (ws_b,)) \
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'oauth_tokens'").fetchone() else None
+    done = directory.reset_account(account_b["id"], account_b["owner_email"].upper())
+    if not done.get("safety_copy") or not Path(done["safety_copy"]).exists() or b"zzleakb" not in b"".join(p.read_bytes() for p in Path(done["safety_copy"]).rglob("*.db")).lower():
+        problems.append("RESET: no safety copy of the workspace was kept")
+    fresh = client()
+    google_login(fresh, account_b["owner_email"])
+    if b"zzleakb" in fresh.get("/api/crm/overview").get_data().lower():
+        problems.append("RESET: the test workspace still has its data")
+    if fresh.get("/api/crm/brands").get_json()["brands"] or any(s["done"] for s in fresh.get("/api/calendar/getting-started").get_json()["steps"] if s["key"] in ("gmail", "claude")):
+        problems.append("RESET: the test workspace does not start again from step 1")
+    with directory._conn() as conn:
+        if conn.execute("SELECT 1 FROM oauth_tokens WHERE profile_id = ?", (ws_b,)).fetchone():
+            problems.append("RESET: Claude is still connected to the reset workspace")
+    if b"zzleaka" not in a_admin.get("/api/crm/overview").get_data().lower():
+        problems.append("RESET: resetting a test account touched another workspace")
+    if not any(x["id"] == account_b["id"] and x["status"] == "active" for x in directory.list_accounts()):
+        problems.append("RESET: the account or its approval was lost")
+
+
 def claude_switch_check():
     """Connecting Claude: the Allow page says whose LyteKeepr it is, and "Use another account" connects the one picked in Google instead,
     with that workspace's data only."""
@@ -322,6 +365,8 @@ def main():
         problems.append("CLOSE: a team member can't download everything or close the account")
     if b_admin.post("/api/account/close", json={"confirm": "wrong@example.com"}).status_code != 400 or a_admin.post("/api/account/close", json={"confirm": "owner-a@example.com"}).status_code != 400:
         problems.append("CLOSE: the email must match, and the first workspace can't be closed from here")
+    reset_check(a_admin, b_admin, accounts["owner-b@example.com"], ws_b)
+    google_login(b_admin, "owner-b@example.com")                    # signs in again after the reset, then closes the account
     if b_admin.post("/api/account/close", json={"confirm": "owner-b@example.com"}).status_code != 200:
         problems.append("CLOSE: the admin couldn't close their account")
     if b_member.get("/api/crm/overview").status_code == 200 and b"zzleakb" in b_member.get("/api/crm/overview").get_data().lower():

@@ -331,6 +331,25 @@ def archive_profile(profile_id: str) -> Path | None:
     return target
 
 
+def reset_profile(profile_id: str) -> Path | None:
+    """Empty a workspace (the owner's test accounts only, see directory.reset_account): its folder is moved to profiles/deleted/ as the
+    safety copy (erased after DELETED_KEEP_DAYS like any deleted workspace) and an empty folder takes its place; the registry is unchanged."""
+    from datetime import datetime
+    payload = ensure_profile_bootstrap()["profiles"].get(profile_id)
+    if not payload:
+        return None
+    folder = _profile_dir_from_payload(payload)
+    target = None
+    if folder.exists():
+        PROFILE_DELETED_ROOT.mkdir(parents=True, exist_ok=True)
+        n = 1
+        while (target := PROFILE_DELETED_ROOT / f"{_storage_dir_name(payload)}-{profile_id}-reset{n}-{datetime.now():%Y%m%d-%H%M%S}").exists():
+            n += 1                                          # two resets in the same second each keep their copy
+        folder.rename(target)
+    folder.mkdir(parents=True, exist_ok=True)
+    return target
+
+
 DELETED_KEEP_DAYS = 30
 
 

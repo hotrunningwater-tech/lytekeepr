@@ -259,6 +259,20 @@
           api('POST', 'accounts/' + id + '/delete', { confirm: typed }).then(function () { show('accounts'); loadAccounts(); loadOverview(); }).catch(function (e) { alert(e.message); });
         };
         ac.appendChild(del);
+        var tst = el('button', 'btn btn-soft', a.is_test ? 'Test account: on' : 'Mark as test account'); tst.type = 'button';
+        tst.onclick = function () { api('POST', 'accounts/' + id + '/test', { on: !a.is_test }).then(function () { openDetail(id); }).catch(function (e) { alert(e.message); }); };
+        ac.appendChild(tst);
+        if (a.is_test) {
+          var rst = el('button', 'btn btn-danger', 'Reset'); rst.type = 'button';
+          rst.onclick = function () {
+            var typed = prompt('Reset ' + a.owner_email + ' to "just signed up"? Everything in it is emptied and Gmail, Claude and LinkedIn are disconnected. A copy is kept 30 days.\n\nType ' + a.owner_email + ' to confirm:');
+            if (typed == null) return;
+            rst.disabled = true;
+            api('POST', 'accounts/' + id + '/reset', { confirm: typed }).then(function () { alert('Reset done. Sign in as ' + a.owner_email + ' to start the setup again.'); openDetail(id); })
+              .catch(function (e) { rst.disabled = false; alert(e.message); });
+          };
+          ac.appendChild(rst);
+        }
       }
       $('dNotes').value = a.notes || ''; $('notesMsg').textContent = ''; $('planMsg').textContent = '';
       var da = $('dActivity'); da.replaceChildren();
