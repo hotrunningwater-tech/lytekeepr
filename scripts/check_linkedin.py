@@ -348,6 +348,31 @@ def support_check():
     def shown():
         return [x["key"] for x in a_admin.get("/api/calendar/sync-problems").get_json()["problems"]]
     check("linkedin_send" in shown(), f"Home does not warn about LinkedIn messages that may not have gone: {shown()}")
+    named = next(x for x in a_admin.get("/api/calendar/sync-problems").get_json()["problems"] if x["key"] == "linkedin_send")
+    check("Two Months" in named["title"] and named["action"] == "linkedin_solved", f"the notice doesn't name the person or offer Solved: {named}")
+    from lk_calendar import linkedin_outbox
+    with use_profile(ws_a):
+        conn = linkedin_outbox._conn()
+        try:                                              # a later message to the same person went through: settled by itself
+            pid = conn.execute("SELECT person_id FROM linkedin_outbox WHERE person_name = 'Two Months' LIMIT 1").fetchone()[0]
+            conn.execute("INSERT INTO linkedin_outbox (person_id, person_name, message_text, status, created_at, finished_at) VALUES (?, 'Two Months', 'zz later', 'sent', ?, ?)",
+                         (pid, "2026-11-03T12:00:00", "2099-01-01T00:00:00"))
+            conn.commit()
+        finally:
+            conn.close()
+    def send_titles():
+        return " ".join(x["title"] for x in a_admin.get("/api/calendar/sync-problems").get_json()["problems"] if x["key"] == "linkedin_send")
+    check("Two Months" not in send_titles(), f"a message that later went through still shows as possibly not sent: {send_titles()}")
+    with use_profile(ws_a):
+        conn = linkedin_outbox._conn()
+        try:
+            conn.execute("DELETE FROM linkedin_outbox WHERE message_text = 'zz later'")
+            conn.commit()
+        finally:
+            conn.close()
+    check("Two Months" in send_titles(), "the notice did not come back once the later message was gone (the check itself is broken)")
+    a_admin.post("/api/calendar/sync-problems/linkedin-solved", json={})
+    check("linkedin_send" not in shown(), "Solved did not clear the notice")
     with linkedin_link._db() as conn:
         conn.execute("UPDATE linkedin_links SET last_seen = '2026-01-01T09:00:00', last_state = 'ok' WHERE profile_id = ? AND ended_at = ''", (ws_a,))
     check("linkedin_quiet" in shown(), f"Home does not warn when LinkedIn has been quiet for days: {shown()}")

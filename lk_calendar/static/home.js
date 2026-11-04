@@ -105,6 +105,7 @@
   function alertAction(p) {
     if (p.action === 'gmail') return h('button', { class: 'hm-mini', type: 'button', onclick: function () { location.href = (window.LK_PREFIX || '') + '/auth/google/start'; } }, 'Reconnect');
     if (p.action === 'linkedin') return h('button', { class: 'hm-mini', type: 'button', onclick: function () { var t = $('linkedinTab'); if (t) t.click(); } }, 'Open LinkedIn tab');
+    if (p.action === 'linkedin_solved') return h('button', { class: 'hm-mini', type: 'button', onclick: function () { api('POST', '/api/calendar/sync-problems/linkedin-solved', {}).then(renderAlerts).catch(fail); } }, 'Solved');
     return null;
   }
   function renderAlerts(d) {

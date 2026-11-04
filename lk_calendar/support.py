@@ -72,8 +72,9 @@ def problems() -> list[dict]:
             out.append({"key": "linkedin_quiet", "title": f"LinkedIn hasn't synced since {_day(seen)}",
                         "fix": f"Turn on {link['computer'] or 'the computer with LinkedIn'} and open the Claude app. It catches up by itself.", "action": "linkedin"})
         if state["outbox_problems"]:
-            out.append({"key": "linkedin_send", "title": "A LinkedIn message may not have been sent",
-                        "fix": "Open the LinkedIn tab to see which one, and check it on LinkedIn.", "action": "linkedin"})
+            names = sorted({x["person_name"] for x in state["outbox_problems"] if x.get("person_name")})
+            out.append({"key": "linkedin_send", "title": f"Your LinkedIn message to {', '.join(names) or 'someone'} may not have been sent",
+                        "fix": "Check it on LinkedIn. If you've sorted it out, click Solved.", "action": "linkedin_solved"})
     return out
 
 
@@ -117,6 +118,14 @@ def register(app):
         except Exception:
             log.exception("could not check what is syncing")
             return jsonify({"problems": []})
+
+    @app.post("/api/calendar/sync-problems/linkedin-solved")
+    def linkedin_solved():
+        if not users.is_admin():
+            return jsonify({"error": "Only the admin can do that."}), 403
+        from . import linkedin_outbox
+        linkedin_outbox.mark_solved()
+        return jsonify({"problems": problems()})
 
     @app.post("/api/calendar/help")
     def ask_for_help():

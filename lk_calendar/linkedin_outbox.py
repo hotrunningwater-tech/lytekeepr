@@ -104,13 +104,26 @@ def finish(outbox_id: int, outcome: str, detail: str = "") -> bool:
     return True
 
 
+def mark_solved() -> int:
+    """The user checked on LinkedIn ("Solved"): the messages that may not have gone out stop being shown. They are never resent."""
+    conn = _conn()
+    try:
+        n = conn.execute("UPDATE linkedin_outbox SET status = 'solved' WHERE status IN ('failed', 'uncertain')").rowcount
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def counts() -> dict:
     conn = _conn()
     try:
         waiting = conn.execute("SELECT COUNT(*) FROM linkedin_outbox WHERE status IN ('queued', 'sending')").fetchone()[0]
         week = (datetime.now() - timedelta(days=7)).isoformat(timespec="seconds")
-        problems = [dict(r) for r in conn.execute("SELECT person_name, status, detail, finished_at FROM linkedin_outbox WHERE status IN ('failed', 'uncertain') "
-                                                  "AND finished_at > ? ORDER BY outbox_id DESC LIMIT 5", (week,))]
+        problems = [dict(r) for r in conn.execute(        # a later message to the same person that went through settles it
+            """SELECT o.person_name, o.status, o.detail, o.finished_at FROM linkedin_outbox o WHERE o.status IN ('failed', 'uncertain') AND o.finished_at > ?
+               AND NOT EXISTS (SELECT 1 FROM linkedin_outbox l WHERE l.person_id = o.person_id AND l.status = 'sent' AND l.outbox_id > o.outbox_id)
+               ORDER BY o.outbox_id DESC LIMIT 5""", (week,))]
         return {"waiting": waiting, "problems": problems}
     finally:
         conn.close()
