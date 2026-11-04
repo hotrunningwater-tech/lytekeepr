@@ -266,7 +266,7 @@ def reset_check(a_admin, b_admin, account_b, ws_b):
     google_login(fresh, account_b["owner_email"])
     if b"zzleakb" in fresh.get("/api/crm/overview").get_data().lower():
         problems.append("RESET: the test workspace still has its data")
-    if fresh.get("/api/crm/brands").get_json()["brands"] or any(s["done"] for s in fresh.get("/api/calendar/getting-started").get_json()["steps"] if s["key"] in ("gmail", "claude")):
+    if fresh.get("/api/crm/brands").get_json()["brands"] or any(s["done"] for s in fresh.get("/api/calendar/getting-started").get_json()["steps"] if s["key"] in ("account", "claude", "business")):
         problems.append("RESET: the test workspace does not start again from step 1")
     with directory._conn() as conn:
         if conn.execute("SELECT 1 FROM oauth_tokens WHERE profile_id = ?", (ws_b,)).fetchone():

@@ -191,8 +191,10 @@ def main():
     gs = a.get("/api/calendar/getting-started").get_json()
     keys = [x["key"] for x in gs["steps"]]
     member_keys = [x["key"] for x in m.get("/api/calendar/getting-started").get_json()["steps"]]
-    check({"gmail", "claude", "linkedin", "contact", "fathom"} == set(keys) and not {"gmail", "linkedin"} & set(member_keys), "Get started lists the steps, Gmail only for the admin")
-    check(next(x for x in gs["steps"] if x["key"] == "contact")["done"], "adding a contact ticks its step by itself")
+    check(keys == ["account", "claude", "business", "email", "linkedin", "calendar", "import", "fathom"] and member_keys == ["claude", "fathom"],
+          f"Get started is not the 7 setup steps (team members: only their own Claude and Fathom): {keys} / {member_keys}")
+    check(next(x for x in gs["steps"] if x["key"] == "business")["done"], "a funnel ticks 'Tell Claude about your business' by itself")
+    check(not next(x for x in gs["steps"] if x["key"] == "email")["done"], "'Sort your email' is ticked before any email was read")
     check(a.post("/api/calendar/getting-started", json={"dismissed": True}).get_json()["show"] is False, "Hide hides it")
 
     # An unexpected failure: plain words, no raw error

@@ -89,8 +89,13 @@
       h('div', { class: 'gs-head' }, [h('span', { class: 'gs-title' }, 'Get started'), h('span', { class: 'gs-count' }, d.done + ' of ' + d.total + ' done'),
         h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ dismissed: true }); } }, 'Hide')]),
       h('div', { class: 'gs-list' }, d.steps.map(function (s) {
-        var doit = s.done ? null : s.manual ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ tick: s.key }); } }, 'I did this')
-                                            : h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.key === 'linkedin' ? 'Download' : 'Open');
+        var doit = s.done ? h('span', { class: 'gs-done' }, 'Done')
+          : s.say ? h('button', { class: 'hm-mini', type: 'button', onclick: function (ev) {          // the sentence to say to Claude
+              var b = ev.currentTarget;
+              try { navigator.clipboard.writeText(s.say).then(function () { b.textContent = 'Copied'; }, function () {}); } catch (e) { /* no clipboard */ }
+            } }, 'Copy')
+          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : 'Open')
+          : null;
         return h('div', { class: 'gs-step' + (s.done ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
           h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), s.done ? null : linkedinNext(s) || h('div', { class: 'gs-why' }, s.why)]), doit]);
       }))])]);

@@ -3012,3 +3012,6 @@ body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .a
 .lko-sub { align-items: center; gap: 8px; }
 .lko-sub input[type="text"] { flex: 1; min-width: 0; }
 .lko-sub.done input[type="text"]:first-of-type { text-decoration: line-through; opacity: 0.6; }
+
+/* Get started: a finished step says so (instead of an empty space) */
+.gs-done { color: #2e7d4f; background: rgba(46, 125, 79, 0.12); border-radius: 999px; padding: 4px 12px; font-size: 12.5px; font-weight: 600; flex: none; }
