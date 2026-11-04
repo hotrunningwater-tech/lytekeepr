@@ -277,6 +277,10 @@ def meeting_brand_check(a):
             conn.execute("UPDATE events SET title = 'From Google (moved)' WHERE id = ?", (gid,))
         with store._conn() as conn:
             check(conn.execute("SELECT project FROM events WHERE id = ?", (gid,)).fetchone()[0] == "aspan", "a sync lost a meeting's brand")
+        # Google is never a choice: the calendar's extra filter is Personal; a meeting made in Google gets a real brand
+        sources = [x["key"] for x in a.get("/api/crm/brands").get_json()["sources"]]
+        check(sources == ["personal"], f"the calendar offers something other than brands + Personal: {sources}")
+        check(not hasattr(google_sync, "google_brand"), "the code guesses a default brand for Google meetings (it must not)")
     finally:
         google_sync.create_meeting = real
 

@@ -240,7 +240,7 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
 (function () {
   'use strict';
   var PREFIX = window.LK_PREFIX || '';
-  var PROJECTS = { lytekeepr: 'LyteKeepr', aspan: 'Aspan', nexy: 'Nexy', google: 'Google' };       // brands (loaded from the server) + the Google source
+  var PROJECTS = { lytekeepr: 'LyteKeepr', aspan: 'Aspan', nexy: 'Nexy', personal: 'Personal', '': 'Needs a brand' };       // brands (loaded from the server) + Personal
   var COLORS = { lytekeepr: '#7fa8b8', aspan: '#e98b74', nexy: '#21493f', google: '#7b6fa8' };
   var CH = { linkedin: 'LinkedIn', instagram: 'Instagram', email: 'Email' };
   var $ = function (id) { return document.getElementById(id); };
@@ -731,6 +731,12 @@ textarea { width: 100%; min-height: 84px; border: none; border-radius: 14px; bac
         b.appendChild(el('span', 'joinlink', esc(join)));
       }
       var people = el('div', '', ''); people.style.cssText = 'display:flex;flex-direction:column;gap:6px'; b.appendChild(people);
+      var desc = (e.notes || '').replace(/^Join:\s*\S+\s*$/m, '').trim();      // the meeting's description (the join link is the button above)
+      if (desc) {
+        b.appendChild(el('div', 'lbl', 'Description'));
+        var d = el('div', 'facts', '<div class="fact" style="grid-template-columns:1fr"><span class="val" style="white-space:pre-wrap;overflow-wrap:anywhere">' + esc(desc) + '</span></div>');
+        b.appendChild(d);
+      }
       b.appendChild(el('div', 'lbl', 'Status'));
       var st = el('div', 'status');
       [['', 'Scheduled'], ['completed', 'Completed'], ['no_show', 'No-show']].forEach(function (s) {

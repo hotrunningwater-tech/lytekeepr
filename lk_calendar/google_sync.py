@@ -2,7 +2,8 @@
 
 - Only timed events are imported (all-day events are skipped). Repeating events arrive already
   expanded into single occurrences (singleEvents=true), so no repeat rules are translated.
-- Rows are keyed by external_id and marked source='google', project='google'. Title, time, length and the
+- Rows are keyed by external_id and marked source='google'. A new one gets its invited contact's brand, else none yet ("Needs a
+  brand": Claude or the user sets it; never 'google', never a guess by the code); a sync never changes a brand. Title, time, length and the
   Google description are overwritten on every sync; your own notes (my_notes) and meeting status are never touched.
 - An event that disappears from Google inside the synced window is deleted, unless you added notes/status/a follow-up
   to it: then it is kept and marked cancelled. Nothing outside the window is ever removed, and nothing is removed
@@ -272,10 +273,14 @@ def _sync_locked() -> dict:
     result = {"added": 0, "updated": 0, "unchanged": 0, "removed": 0, "kept_as_cancelled": 0, "skipped_all_day": skipped,
               "window": [local_start.date().isoformat(), local_end.date().isoformat()]}
 
+    contact_brands = _contact_brands()
     with store._conn() as conn:
         for ext, row in wanted.items():
             cur = conn.execute("SELECT * FROM events WHERE external_id = ?", (ext,)).fetchone()
+            invited = {a["email"] for a in json.loads(row["attendees"] or "[]")}
+            brand = next(iter({contact_brands[e] for e in invited if contact_brands.get(e)}), None) if len({contact_brands[e] for e in invited if contact_brands.get(e)}) == 1 else None
             fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google"})
+            fields["project"] = brand or ""                 # no known contact: no brand yet (Claude or the user picks it); never a guess here
             if cur is None:
                 conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
                                 notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, owner_id, ical_uid, google_calendar)
@@ -429,6 +434,18 @@ def set_description(event_id: int, text: str, mode: str = "append", notify: bool
     with store._conn() as conn:                       # show it here at once (the next sync would bring it too)
         conn.execute("UPDATE events SET notes = ? WHERE id = ?", (_clean_text(new)[:2000], event_id))
     return {"item_id": event_id, "title": ev["title"], "description": new, "guests_notified": bool(notify)}
+
+
+def _contact_brands() -> dict:
+    """email -> brand key of the contact with that email (contacts with a brand only)."""
+    try:
+        from . import contacts
+        with contacts._crm() as c:
+            return {(r["channel_identifier"] or "").lower(): r["brand"] for r in c.execute(
+                """SELECT ca.channel_identifier, p.brand FROM channel_accounts ca JOIN people p ON p.person_id = ca.person_id
+                   WHERE ca.channel = 'email' AND p.brand != ''""")}
+    except Exception:
+        return {}
 
 
 def create_meeting(title: str, start_date: str, start_time: str, duration_min: int, invitees: list, add_meet: bool = True,

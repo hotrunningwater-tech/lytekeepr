@@ -308,7 +308,7 @@ def register(app):
     def brands_list():
         from . import access
         return jsonify({"brands": [b for b in all_brands() if access.brand_allowed(b["key"])],      # a member sees only their brands
-                        "sources": [{"key": "google", "name": "Google", "color": "#7b6fa8"}]})
+                        "sources": [{"key": "personal", "name": "Personal", "color": "#9aa7ad"}]})      # every item is a brand or Personal; Google is never one
 
     @app.post("/api/crm/brands")
     def brands_create():

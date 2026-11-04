@@ -7,7 +7,7 @@
     lytekeepr: { label: 'LyteKeepr', color: '#7fa8b8' },
     aspan: { label: 'Aspan', color: '#e98b74' },
     nexy: { label: 'Nexy', color: '#21493f' },
-    google: { label: 'Google', color: '#7b6fa8' }
+    personal: { label: 'Personal', color: '#9aa7ad' }
   };
   function setBrands(r) {
     if (!r || !r.brands) return;
@@ -16,7 +16,7 @@
     Object.keys(PROJECTS).forEach(function (k) { delete PROJECTS[k]; });
     Object.keys(next).forEach(function (k) { PROJECTS[k] = next[k]; });
   }
-  function proj(key) { return PROJECTS[key] || { label: key || '—', color: '#9aa7ad' }; }
+  function proj(key) { return PROJECTS[key] || (key ? { label: key, color: '#9aa7ad' } : { label: 'Needs a brand', color: '#c5ced2' }); }
   var KINDS = { task: 'Task', meeting: 'Meeting', reminder: 'Reminder' };
   var REPEAT_LABELS = { none: 'Does not repeat', daily: 'Every day', weekdays: 'Every weekday', weekly: 'Weekly on selected days' };
   var DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -762,7 +762,7 @@
     var kindTabs = h('div', { class: 'demo-reset-tabs' }, Object.keys(KINDS).map(function (k) {
       return h('button', { type: 'button', class: 'demo-reset-tab' + (f.kind === k ? ' is-active' : ''), onclick: function () { sync(); f.kind = k; render(); } }, KINDS[k]);
     }));
-    var projPick = h('div', { class: 'lkc-projpick' }, Object.keys(PROJECTS).filter(function (p) { return p !== 'google' || f.project === 'google'; }).map(function (p) {
+    var projPick = h('div', { class: 'lkc-projpick' }, Object.keys(PROJECTS).filter(function (p) { return p !== 'personal' || f.kind !== 'meeting'; }).map(function (p) {
       return h('span', { class: 'lkc-chip' + (f.project === p ? ' on' : ''), onclick: function () { sync(); f.project = p; render(); } }, [dot(p), proj(p).label]);
     }));
     var repeatSel = h('select', { id: 'lkcRepeat', onchange: function () { sync(); render(); } }, Object.keys(REPEAT_LABELS).map(function (r) {
