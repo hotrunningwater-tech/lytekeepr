@@ -202,6 +202,8 @@ def main():
     check(len(listed) == 47 and listed[0]["stages"] and listed[0]["recognise"], "Claude does not get the template list")
     args = {"name": "Coaching clients", "brand": "lytekeepr", "template": 26}
     shown = claude_connector._run_tool(call, "create_funnel", dict(args))
+    check("Brand: LyteKeepr" in (shown.get("show_the_user") or "") and "Brand: lytekeepr" not in (shown.get("show_the_user") or ""),
+          f"the confirmation shows the brand's internal key instead of its name: {shown.get('show_the_user')}")
     check("Intro Booked" in (shown.get("show_the_user") or "") and not any(f["name"] == "Coaching clients" for f in a.get("/api/crm/funnels").get_json()["funnels"]),
           f"creating a funnel is not shown first with its stages: {shown}")
     made = claude_connector._run_tool(call, "create_funnel", dict(args, confirm_code=shown.get("confirm_code")))

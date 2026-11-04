@@ -152,6 +152,13 @@ def _asked_to_save(words) -> bool:
     return False
 
 
+def _brand_name(call, need, key) -> str:
+    """A brand's name as the user knows it, never its internal key ('' stays '')."""
+    if not key:
+        return ""
+    return next((b["name"] for b in need(*call("GET", "/api/crm/brands"))["brands"] if b["key"] == key), key)
+
+
 def _int_or(value, default=-1) -> int:
     try:
         return int(value)
@@ -805,7 +812,7 @@ def _run_tool(call, name: str, args: dict):
         fname, key = str(args["name"]).strip(), _brand_key(call, need, args.get("brand"))       # checked in _precheck
         body = {"name": fname, "brand": key, **({"template": int(args["template"])} if args.get("template") not in (None, "") else {})}
         made = need(*call("POST", "/api/crm/funnels", body))
-        return {"created": True, "funnel_id": made["funnel_id"], "name": fname, "brand": key}
+        return {"created": True, "funnel_id": made["funnel_id"], "name": fname, "brand": _brand_name(call, need, key)}
     if name == "set_funnel_brand":
         return need(*call("POST", f"/api/crm/funnels/{int(args['funnel_id'])}/brand", {"brand": args.get("brand", "")}))
     if name == "get_contact":
@@ -938,7 +945,7 @@ def _run_tool(call, name: str, args: dict):
         if not body:
             raise ValueError("Nothing to change.")
         c = need(*call("PUT", f"/api/calendar/contacts/{pid}", body))
-        return {"id": c.get("id"), "name": c.get("display"), "updated": sorted(body), "brand": c.get("brand") or ""}
+        return {"id": c.get("id"), "name": c.get("display"), "updated": sorted(body), "brand": _brand_name(call, need, c.get("brand") or "")}
     if name == "move_contact_stage":
         pid = int(args["contact_id"])
         person = need(*call("GET", f"/api/crm/people/{pid}"))
@@ -1520,6 +1527,13 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
     if name == "move_contact_stage" and current:
         lines.append(f"Now: {current.get('funnel') or 'no funnel'}" + (f", {current['stage']}" if current.get("stage") else ""))
 
+    if a.get("brand") and "brand" not in shown_ids:         # the brand by its name, as the user knows it (not its internal key)
+        st, bl = call("GET", "/api/crm/brands")
+        from .brands import best_match
+        b = best_match(str(a["brand"]), (bl or {}).get("brands") or []) if st < 400 and isinstance(bl, dict) else None
+        if b:
+            lines.append(f"Brand: {b['name']}")
+            shown_ids.add("brand")
     for k, v in a.items():                                  # what is set, with the old value where there is one
         if k in shown_ids or k.endswith("_id"):
             continue
