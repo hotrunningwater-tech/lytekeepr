@@ -295,7 +295,7 @@
           type: 'button',
           title: e.title + ' \u00b7 ' + label12(e.start_time),
           class: 'lkc-ev ' + e.kind + (e.done ? ' done' : '') + (sel ? ' sel' : '') + (e._h < 40 ? ' short' : ''),
-          style: 'top:' + e._top + 'px;height:' + e._h + 'px;left:2px;width:calc(100% - 4px);background:' + proj(e.project).color + ';--c:' + proj(e.project).color,
+          style: 'top:' + e._top + 'px;height:' + e._h + 'px;--h:' + e._h + 'px;left:2px;width:calc(100% - 4px);background:' + proj(e.project).color + ';--c:' + proj(e.project).color,
           onclick: function () { select(e.id, e.date); }
         }, [e.title, h('small', {}, label12(e.start_time) + (e.repeat !== 'none' ? ' \u00b7 repeats' : ''))]));
       });
@@ -989,7 +989,7 @@
     var invite = f.people.map(function (p) { return p.email; }).concat((f.invite || '').trim() ? [f.invite.trim()] : []).join(', ');
     if (!f.id && f.kind === 'meeting' && (f.meet || invite)) {
       // A real meeting: created in Google Calendar with the invites (and a Meet link), then shown here like any Google meeting.
-      api('POST', '/api/calendar/meetings', { title: body.title, start_date: body.start_date, start_time: body.start_time, duration_min: body.duration_min || 30,
+      api('POST', '/api/calendar/meetings', { title: body.title, project: body.project, start_date: body.start_date, start_time: body.start_time, duration_min: body.duration_min || 30,
         invite: invite, meet: f.meet, expect_recording: f.expect, notes: body.notes }).then(function (m) {
         state.weekStart = mondayOf(m.start_date); state.selected = { id: m.id, date: m.start_date }; state.mode = 'detail'; state.form = null;
         return load();
@@ -1120,7 +1120,13 @@
   }
 
   /* ---------- selection / navigation ---------- */
-  function select(id, date) { state.selected = { id: id, date: date }; state.mode = 'detail'; state.pane = 'info'; render(); }
+  function select(id, date) {
+    state.selected = { id: id, date: date }; state.mode = 'detail'; state.pane = 'info'; render();
+    if (window.innerWidth <= 760) {                   // a phone: the details are below the calendar, so go to them
+      var side = document.getElementById('lkcSide');
+      if (side) setTimeout(function () { side.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+    }
+  }
   function jumpTo(id, date) {
     var week = mondayOf(date);
     state.selected = { id: id, date: date }; state.mode = 'detail'; state.pane = 'info';

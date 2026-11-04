@@ -738,13 +738,17 @@ def register(app):
             store.check_not_past(str(body.get("start_date", "")), str(body.get("start_time", "")))
         except store.ValidationError as exc:
             raise CallsError(str(exc))
+        brand = str(body.get("project") or "").strip()
+        from . import brands as _brands
+        if not brand or brand in (store.PERSONAL, "google") or brand not in {b["key"] for b in _brands.all_brands()}:
+            raise CallsError("Choose the brand this meeting is for.")
         emails, unknown = parse_invitees(str(body.get("invite", "")))
         if unknown:
             raise CallsError("Not found as a contact with an email: " + ", ".join(unknown) + ". Type their email address instead.")
         try:
             meeting = google_sync.create_meeting(str(body.get("title", "")), str(body.get("start_date", "")), str(body.get("start_time", "")),
                                                  int(body.get("duration_min") or 30), emails, bool(body.get("meet", True)), str(body.get("notes", "")),
-                                                 bool(body.get("expect_recording", True)))
+                                                 bool(body.get("expect_recording", True)), project=brand)
         except google_sync.GoogleSyncError as exc:
             raise CallsError(str(exc))
         from . import funnel_rules

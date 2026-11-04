@@ -422,9 +422,12 @@ TOOLS = [
     {"name": "set_follow_up_date", "title": "Set follow-up date", "description": "Move the outreach follow-up for a contact to a date. The lead_id per channel is in get_contact under outreach (set_outreach_status creates one if missing).",
      "inputSchema": {"type": "object", "properties": {"lead_ids": {"type": "array", "items": {"type": "integer"}}, "date": {"type": "string", "description": "YYYY-MM-DD"}},
                      "required": ["lead_ids", "date"]}, "read": False},
-    {"name": "update_calendar_item", "title": "Reschedule or rename", "description": "Change a LyteKeepr task, reminder or meeting: new date, time, title or notes. Google Calendar meetings can't be changed here.",
+    {"name": "update_calendar_item", "title": "Reschedule or rename", "description": ("Change a LyteKeepr task, reminder or meeting: new date, time, title, notes "
+                     "or brand. A Google Calendar meeting can only get its brand changed here (the brand is LyteKeepr's own label; Google is untouched)."),
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
-                                                      "time": {"type": "string", "description": "HH:MM"}, "notes": {"type": "string"}}, "required": ["item_id"]}, "read": False},
+                                                      "time": {"type": "string", "description": "HH:MM"}, "notes": {"type": "string"},
+                                                      "brand": {"type": "string", "description": "The brand it belongs to (see list_brands); 'personal' only for tasks and reminders"}},
+                     "required": ["item_id"]}, "read": False},
     {"name": "move_overdue", "title": "Move overdue items", "description": "Move every overdue one-off task and follow-up to today or tomorrow.",
      "inputSchema": {"type": "object", "properties": {"to": {"type": "string", "enum": ["today", "tomorrow"]}}, "required": ["to"]}, "read": False},
     {"name": "set_meeting_status", "title": "Meeting status", "description": "Mark a meeting scheduled, completed, no_show or cancelled. Notes on it go through write_meeting_notes.",
@@ -446,12 +449,15 @@ TOOLS = [
                      "Adds a Google Meet link and marks it to be recorded by Fathom. Leave record_with_fathom out: it is always on unless the user explicitly says "
                      "not to record this meeting. Today or later only. "
                      "This SENDS invitations: always confirm title, date, time and who is invited with the user first. "
-                     "Invite people by contact name (as in LyteKeepr) or email address."),
+                     "Invite people by contact name (as in LyteKeepr) or email address. Every meeting belongs to one of the user's brands: use the "
+                     "brand of the people or funnel it's about (get_contact / list_funnels show it); if that isn't clear, ask which brand. Never leave it out."),
      "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
                                                       "time": {"type": "string", "description": "HH:MM, 24-hour, the user's local time"},
                                                       "duration_min": {"type": "integer", "default": 30}, "invite": {"type": "array", "items": {"type": "string"}, "description": "Contact names or email addresses"},
                                                       "google_meet": {"type": "boolean", "default": True}, "record_with_fathom": {"type": "boolean", "default": True, "description": "Leave out (on). false only when the user says not to record."},
-                                                      "notes": {"type": "string"}}, "required": ["title", "date", "time"]}, "read": False},
+                                                      "notes": {"type": "string"},
+                                                      "brand": {"type": "string", "description": "The brand this meeting is for (name or key, see list_brands)"}},
+                     "required": ["title", "date", "time", "brand"]}, "read": False},
     {"name": "get_meeting_notes", "title": "A meeting's private notes",
      "description": "The user's own private notes on a meeting (notes before, during or after the call), with Claude's prep separately in `prep` and when it was written in `prepared_on` (empty = not prepped yet). item_id from get_agenda or list_calendar. Only the user sees these.",
      "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}}, "required": ["item_id"]}, "read": True},
@@ -1061,15 +1067,21 @@ def _run_tool(call, name: str, args: dict):
         body = {k: v for k, v in (("title", args.get("title")), ("start_date", args.get("date")), ("start_time", args.get("time")), ("notes", args.get("notes"))) if v}
         if args.get("time"):
             body["untimed"] = False
-        if not body:
+        if not body and not args.get("brand"):
             raise ValueError("Nothing to change.")
-        return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}", body))
+        out = need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}", body)) if body else None
+        if args.get("brand"):
+            b = str(args["brand"]).strip()
+            key = "personal" if b.lower() == "personal" else _brand_key(call, need, b)
+            out = need(*call("POST", f"/api/calendar/events/{int(args['item_id'])}/brand", {"brand": key}))
+        return out
     if name == "move_overdue":
         return need(*call("POST", "/api/calendar/overdue/move", {"to": args.get("to", "today")}))
     if name == "set_meeting_status":
         return need(*call("PUT", f"/api/calendar/events/{int(args['item_id'])}/meeting", {"meeting_status": args["status"]}))
     if name == "book_meeting":
-        body = {"title": args["title"], "start_date": args["date"], "start_time": args["time"], "duration_min": int(args.get("duration_min") or 30),
+        body = {"title": args["title"], "project": _brand_key(call, need, args.get("brand")) or "",
+                "start_date": args["date"], "start_time": args["time"], "duration_min": int(args.get("duration_min") or 30),
                 "invite": ", ".join(str(x) for x in (args.get("invite") or [])), "meet": args.get("google_meet", True) is not False,
                 "expect_recording": args.get("record_with_fathom", True) is not False, "notes": str(args.get("notes") or "")}     # on unless told not to
         m = need(*call("POST", "/api/calendar/meetings", body))
@@ -1398,6 +1410,12 @@ def _precheck(call, need, name: str, args: dict):
             missing.append("the brand")
         if missing:
             return {"saved": False, "missing": missing, "ask_the_user": "To add this contact, LyteKeepr still needs " + " and ".join(missing) + ". Ask the user for it first."}
+    if name == "book_meeting":
+        b = str(args.get("brand") or "").strip()
+        if not b or b.lower() in ("personal", "google", "none"):
+            raise ValueError("Every meeting belongs to one of the user's brands: use the brand of the people or funnel it's about, "
+                             "or ask the user which brand (see list_brands). A meeting can't be personal.")
+        _brand_key(call, need, b)                          # an unknown brand is an error that lists the real ones
     if name == "create_funnel":
         fname = str(args.get("name") or "").strip()
         if not fname:

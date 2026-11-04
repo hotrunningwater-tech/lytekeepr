@@ -92,7 +92,8 @@
 .lkc-errs span { color: #b5503a; }
 /* Hover: any block that is cut off opens up to the full column so nothing is unreadable. */
 .lkc-ev:hover, .lkc-ev:focus-visible { z-index: 20; left: 2px !important; width: calc(100% - 4px) !important;
-  height: auto !important; min-height: 24px; white-space: normal; overflow: visible; box-shadow: 0 4px 14px rgba(41,67,78,.28); }
+  height: auto !important; min-height: max(24px, var(--h, 24px)); white-space: normal; overflow: visible; box-shadow: 0 4px 14px rgba(41,67,78,.28); }
+/* ^ grows a cut-off block, never shrinks a tall one (a click anywhere on it must still land on it) */
 .lkc-ev.reminder:hover { background: #fff !important; }
 .lkc-ev.reminder.short small { display: none; }
 .lkc-ev.reminder.short:hover small { display: inline; }
@@ -252,3 +253,11 @@
 .lkc-private-head .x { border: none; background: rgba(230,237,240,.9); border-radius: 999px; width: 34px; height: 34px; font-size: 20px; cursor: pointer; }
 .lkc-private-editor { flex: 1; width: 100%; box-sizing: border-box; resize: none; border: none; border-radius: 14px; background: #fff; padding: 16px; font: inherit; font-size: 15px; line-height: 1.55; color: var(--ink); }
 .lkc-brief { cursor: default; white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
+
+/* Phone: the details panel goes below the calendar (beside it there is no room to read anything) */
+@media (max-width: 760px) {
+  .lkc-body { flex-direction: column; }
+  .lkc-side, .lkc-side.collapsed { width: 100%; }
+  .lkc-side.collapsed .demo-reset-tabs, .lkc-side.collapsed .lkc-pane:not([hidden]) { display: flex; }
+  .lkc-collapse { display: none; }
+}

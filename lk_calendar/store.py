@@ -476,6 +476,23 @@ def update_event(event_id: int, data: dict) -> dict | None:
         return get_event(event_id, conn)
 
 
+def set_event_brand(event_id: int, brand: str) -> dict | None:
+    """Which brand an item belongs to: any item, Google meetings too (only this local label changes; Google is never touched and a sync
+    keeps it). A meeting always has a brand; Personal is for tasks and reminders only."""
+    from . import brands
+    brand = (brand or "").strip()
+    keys = {b["key"] for b in brands.all_brands()}             # read before this connection opens (one at a time)
+    with _conn() as conn:
+        current = _touchable(event_id, conn)
+        if not current:
+            return None
+        allowed = keys | ({PERSONAL} if current["kind"] != "meeting" else set())
+        if brand not in allowed:
+            raise ValidationError("Choose one of your brands." if current["kind"] == "meeting" else "Choose one of your brands, or Personal.")
+        conn.execute("UPDATE events SET project = ? WHERE id = ?", (brand, event_id))
+        return get_event(event_id, conn)
+
+
 def delete_event(event_id: int) -> bool:
     with _conn() as conn:
         current = _touchable(event_id, conn)

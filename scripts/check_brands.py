@@ -222,6 +222,64 @@ def main():
     check(a.get(f"/api/calendar/people/{gone}/outreach").get_json() and "email" in str(a.get(f"/api/calendar/people/{gone}/outreach").get_json()), "its statuses come back")
     check(any(d.get("person_id") == gone for d in a.get("/api/crm/overview").get_json()["people"]), "it shows in the CRM again")
 
+    meeting_brand_check(a)
+
+
+def meeting_brand_check(a):
+    """Every meeting belongs to a brand: never 'google', never personal, never none; Claude can't book without one; a Google meeting's
+    brand can be set in LyteKeepr and a calendar sync keeps it."""
+    from lk_calendar import claude_connector, google_sync, store
+    made = []
+    def fake_create(title, start_date, start_time, duration_min, invitees, add_meet=True, notes="", expect_recording=True, project="google"):
+        made.append(project)
+        with store._conn() as conn:
+            cur = conn.execute("""INSERT INTO events (title, project, kind, start_date, start_time, duration_min, notes, source, created_at, external_id)
+                                  VALUES (?, ?, 'meeting', ?, ?, ?, '', 'google', ?, ?)""", (title, project, start_date, start_time, duration_min,
+                                                                                        store.now_local().isoformat(), f"g-{len(made)}"))
+            return {"id": cur.lastrowid, "start_date": start_date, "title": title}
+    real = google_sync.create_meeting
+    google_sync.create_meeting = fake_create
+    try:
+        day = (date.today() + timedelta(days=3)).isoformat()
+        for bad in ("", "google", "personal"):
+            r = a.post("/api/calendar/meetings", json={"title": "Pilot", "project": bad, "start_date": day, "start_time": "10:00", "invite": "x@t.test"})
+            check(r.status_code == 400 and not made, f"a meeting was booked with brand '{bad}'")
+        r = a.post("/api/calendar/meetings", json={"title": "Pilot", "project": "nexy", "start_date": day, "start_time": "10:00", "invite": "x@t.test"})
+        check(r.status_code == 201 and made == ["nexy"], f"a meeting booked for Nexy is not filed under Nexy: {made}")
+
+        def call(method, path, body=None):
+            resp = a.open(path, method=method, json=body)
+            return resp.status_code, resp.get_json()
+        def need(st, data):
+            if st >= 400:
+                raise RuntimeError(f"{st} {data}")
+            return data
+        for bad in ({}, {"brand": "google"}, {"brand": "personal"}):
+            try:
+                out = claude_connector._run_tool(call, "book_meeting", {"title": "Call", "date": day, "time": "11:00", **bad})
+            except ValueError as exc:                    # refused, with the reason Claude passes on
+                out = {"refused": str(exc)}
+            check("show_the_user" not in out and len(made) == 1, f"Claude could show a meeting with no real brand for a yes: {bad} -> {out}")
+        shown = claude_connector._run_tool(call, "book_meeting", {"title": "Call", "date": day, "time": "11:00", "brand": "Nexy", "invite": ["x@t.test"]})
+        claude_connector._run_tool(call, "book_meeting", {"title": "Call", "date": day, "time": "11:00", "brand": "Nexy", "invite": ["x@t.test"],
+                                                           "confirm_code": shown.get("confirm_code")})
+        check(made[-1:] == ["nexy"], f"Claude's meeting is not filed under its brand: {made}")
+
+        # a meeting synced from Google: its brand can be set, and a sync keeps it
+        with store._conn() as conn:
+            gid = conn.execute("""INSERT INTO events (title, project, kind, start_date, start_time, duration_min, notes, source, created_at, external_id)
+                                  VALUES ('From Google', 'google', 'meeting', ?, '09:00', 30, '', 'google', ?, 'g-synced')""",
+                               (day, store.now_local().isoformat())).lastrowid
+        check(a.post(f"/api/calendar/events/{gid}/brand", json={"brand": "personal"}).status_code == 400, "a meeting was made personal")
+        r = a.post(f"/api/calendar/events/{gid}/brand", json={"brand": "aspan"})
+        check(r.status_code == 200 and r.get_json().get("project") == "aspan", f"a Google meeting's brand could not be set: {r.get_json()}")
+        with store._conn() as conn:                      # what a sync does to a changed Google meeting: the brand is not part of it
+            conn.execute("UPDATE events SET title = 'From Google (moved)' WHERE id = ?", (gid,))
+        with store._conn() as conn:
+            check(conn.execute("SELECT project FROM events WHERE id = ?", (gid,)).fetchone()[0] == "aspan", "a sync lost a meeting's brand")
+    finally:
+        google_sync.create_meeting = real
+
 
 try:
     main()

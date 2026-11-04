@@ -126,6 +126,15 @@ def update_event(event_id):
     return (jsonify(event), 200) if event else (jsonify({"error": "not found"}), 404)
 
 
+@bp.post("/api/calendar/events/<int:event_id>/brand")
+def set_event_brand(event_id):
+    try:
+        event = store.set_event_brand(event_id, str(_payload().get("brand") or ""))
+    except store.ValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return (jsonify(event), 200) if event else (jsonify({"error": "not found"}), 404)
+
+
 @bp.delete("/api/calendar/events/<int:event_id>")
 def delete_event(event_id):
     return (jsonify({"ok": True}), 200) if store.delete_event(event_id) else (jsonify({"error": "not found"}), 404)

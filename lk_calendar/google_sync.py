@@ -469,7 +469,7 @@ def create_meeting(title: str, start_date: str, start_time: str, duration_min: i
         raise GoogleSyncError("Google created the meeting but sent back something unreadable; it will appear after the next sync.")
     row["google_calendar"] = "" if target == "primary" else target
     with store._conn() as conn:
-        fields = store.clean({**row, "project": "google", "kind": "meeting", "source": "google", "notes": row["notes"]})
+        fields = store.clean({**row, "project": project or "google", "kind": "meeting", "source": "google", "notes": row["notes"]})
         conn.execute("""INSERT OR IGNORE INTO events (title, project, kind, start_date, start_time, duration_min, repeat, repeat_days,
                         notes, source, lead_ref, created_at, external_id, has_call, attendees, join_url, expect_recording, owner_id, ical_uid, google_calendar)
                         VALUES (:title, :project, :kind, :start_date, :start_time, :duration_min, :repeat, :repeat_days,
