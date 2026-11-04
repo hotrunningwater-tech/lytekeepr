@@ -135,7 +135,7 @@ def add(person_id: int, kind: str, text: str, channel: str = "", when=None, oppo
     if opportunity_id:
         from . import opportunities, access
         o = opportunities.get(int(opportunity_id))
-        if not o or not access.can_opportunity(o):
+        if not o or not access.can_opportunity(o) or o["work"]:      # a conversation with a contact never goes on a work item
             raise RecordError("No such opportunity.")
     who, uid = _who()
     with _crm() as conn:
@@ -229,7 +229,7 @@ def opportunity_history(opp_id: int) -> dict:
     An email or call shared by several of them appears once."""
     from . import opportunities
     o = opportunities.get(opp_id)
-    if not o:
+    if not o or o["work"]:
         raise RecordError("No such opportunity.")
     people = [{"contact_id": p["contact_id"], "name": p["name"], "active": p["active"]} for p in o["participants"]]
     merged: dict = {}
@@ -352,6 +352,6 @@ def register(app):
     def records_opportunity_history(opp_id):
         from . import opportunities
         o = opportunities.get(opp_id)
-        if not o or not access.can_opportunity(o):
+        if not o or not access.can_opportunity(o) or o["work"]:
             raise RecordError("No such opportunity.")
         return opportunity_history(opp_id)

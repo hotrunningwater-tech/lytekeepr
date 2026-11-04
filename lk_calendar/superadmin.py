@@ -276,6 +276,18 @@ def register(app, app_dir):
         directory.log_activity(_me(), f"{'Marked' if on else 'Unmarked'} {account['owner_email']} as a test account", account_id)
         return jsonify({"account": account})
 
+    @app.post("/api/superadmin/accounts/<int:account_id>/work-pipelines")
+    def console_work_pipelines(account_id):
+        if (denied := guard()):
+            return denied
+        on = bool((request.get_json(silent=True) or {}).get("on"))
+        try:
+            account = directory.set_work_pipelines(account_id, on)
+        except directory.DirectoryError as exc:
+            return jsonify({"error": str(exc)}), 400
+        directory.log_activity(_me(), f"Work pipelines {'on' if on else 'off'} for {account['owner_email']}", account_id)
+        return jsonify({"account": account})
+
     @app.post("/api/superadmin/accounts/<int:account_id>/reset")
     def console_reset(account_id):
         if (denied := guard()):

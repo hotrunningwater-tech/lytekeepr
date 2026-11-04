@@ -157,14 +157,20 @@ def _card(row, people: list) -> dict:
 
 
 def cards_for_funnel(funnel_id: int) -> dict:
-    """{stage_id: [opportunity card, ...]} for the funnel board."""
+    """{stage_id: [opportunity card, ...]} for the funnel board. A work funnel's cards are its items, with their sub-item counts."""
+    from . import work
     with _crm() as conn:
         rows = conn.execute("""SELECT o.*, c.company_name FROM opportunities o LEFT JOIN companies c ON c.company_id = o.company_id
                                WHERE o.funnel_id = ? ORDER BY o.name COLLATE NOCASE""", (funnel_id,)).fetchall()
         people = _participants(conn, [r["opportunity_id"] for r in rows])
+        kind = (conn.execute("SELECT kind FROM funnels WHERE funnel_id = ?", (funnel_id,)).fetchone() or {"kind": "sales"})["kind"]
+    counts = work.counts([r["opportunity_id"] for r in rows]) if kind == "work" else {}
     out: dict = {}
     for r in rows:
-        out.setdefault(r["stage_id"], []).append(_card(r, people.get(r["opportunity_id"], [])))
+        c = _card(r, people.get(r["opportunity_id"], []))
+        if kind == "work":
+            c.update({"kind": "work", "subitems": counts.get(r["opportunity_id"], {"done": 0, "total": 0})})
+        out.setdefault(r["stage_id"], []).append(c)
     return out
 
 
@@ -175,7 +181,8 @@ def counts_by_stage(conn, funnel_id: int) -> dict:
 
 def get(opp_id: int) -> dict | None:
     with _crm() as conn:
-        row = conn.execute("""SELECT o.*, c.company_name, f.name AS funnel_name, f.brand AS brand, s.name AS stage_name FROM opportunities o
+        row = conn.execute("""SELECT o.*, c.company_name, f.name AS funnel_name, f.brand AS brand, f.kind AS funnel_kind, f.item_name AS item_name,
+                              s.name AS stage_name FROM opportunities o
                               LEFT JOIN companies c ON c.company_id = o.company_id LEFT JOIN funnels f ON f.funnel_id = o.funnel_id
                               LEFT JOIN funnel_stages s ON s.stage_id = o.stage_id WHERE o.opportunity_id = ?""", (opp_id,)).fetchone()
         if not row:
@@ -192,7 +199,19 @@ def get(opp_id: int) -> dict | None:
             "brand": row["brand"] or "",                 # an opportunity's brand is its funnel's
             "stage_id": row["stage_id"], "stage": row["stage_name"] or "", "stages": stages, "company": row["company_name"] or "",
             "notes": row["notes"], "created_at": row["created_at"], "updated_at": row["updated_at"], "owner_id": row["owner_id"],
-            "participants": people, "summary": summary_line(people), "tasks": tasks, "history": log}
+            "participants": people, "summary": summary_line(people), "tasks": tasks, "history": log,
+            "work": row["funnel_kind"] == "work", "item_name": row["item_name"] or "",
+            **({"subitems": _subitems(opp_id)} if row["funnel_kind"] == "work" else {})}
+
+
+def _subitems(opp_id: int) -> list:
+    from . import work
+    return work.subitems(opp_id)
+
+
+def is_work(conn, opp_id) -> bool:
+    row = conn.execute("SELECT f.kind FROM opportunities o JOIN funnels f ON f.funnel_id = o.funnel_id WHERE o.opportunity_id = ?", (opp_id,)).fetchone()
+    return bool(row) and row["kind"] == "work"
 
 
 def for_person(person_id: int) -> list[dict]:
@@ -213,20 +232,28 @@ def search(q: str, funnel_ids: set | None = None, limit: int = 20) -> list[dict]
                                LEFT JOIN opportunity_people op ON op.opportunity_id = o.opportunity_id LEFT JOIN people p ON p.person_id = op.person_id
                                WHERE lower(o.name) LIKE ? OR lower(IFNULL(c.company_name,'')) LIKE ? OR lower(IFNULL(p.name,'')) LIKE ?
                                ORDER BY o.updated_at DESC LIMIT ?""", (like, like, like, int(limit) * 3)).fetchall()
-        rows = [r for r in rows if funnel_ids is None or r["funnel_id"] in funnel_ids][:limit]
+        work_funnels = {r["funnel_id"] for r in conn.execute("SELECT funnel_id FROM funnels WHERE kind = 'work'")}
+        rows = [r for r in rows if (funnel_ids is None or r["funnel_id"] in funnel_ids) and r["funnel_id"] not in work_funnels][:limit]   # work items never show here
         people = _participants(conn, [r["opportunity_id"] for r in rows])
     return [_card(r, people.get(r["opportunity_id"], [])) for r in rows]
 
 
 # ------------------------------------------------------------------ changes (each one logged)
 def create(name: str, funnel_id: int, stage_id: int | None = None, company: str | None = None, notes: str = "",
-           participants: list | None = None, owner_id: int | None = None) -> dict:
+           participants: list | None = None, owner_id: int | None = None, work: bool = False) -> dict:
+    """An opportunity in a sales funnel, or (work=True) an item in a work funnel: never one in the other, and an item has no contacts."""
     name = (name or "").strip()
     if not name:
-        raise OpportunityError("Give the opportunity a name.")
+        raise OpportunityError("Give it a name.")
     with _crm() as conn:
-        if not conn.execute("SELECT 1 FROM funnels WHERE funnel_id = ?", (funnel_id,)).fetchone():
+        f = conn.execute("SELECT kind FROM funnels WHERE funnel_id = ?", (funnel_id,)).fetchone()
+        if not f:
             raise OpportunityError("No such funnel.")
+        if (f["kind"] == "work") != bool(work):
+            raise OpportunityError("That's a work pipeline: add an item there, not an opportunity." if f["kind"] == "work"
+                                   else "That's a sales funnel: work items only go in a work pipeline.")
+        if work and (participants or company):
+            raise OpportunityError("A work item has no contacts or companies.")
         if stage_id:
             st = _stage(conn, stage_id)
             if not st or st["funnel_id"] != int(funnel_id):
@@ -277,6 +304,9 @@ def move(opp_id: int, stage_id: int) -> dict:
             raise OpportunityError("No such opportunity.")
         if not st:
             raise OpportunityError("No such stage.")
+        kinds = {r["kind"] for r in conn.execute("SELECT kind FROM funnels WHERE funnel_id IN (?, ?)", (row["funnel_id"], st["funnel_id"]))}
+        if len(kinds) > 1:
+            raise OpportunityError("Work items and sales opportunities can't move into each other's funnels.")
         if st["stage_id"] != row["stage_id"]:
             old = _stage(conn, row["stage_id"]) or {"name": "?"}
             conn.execute("UPDATE opportunities SET funnel_id = ?, stage_id = ?, updated_at = ? WHERE opportunity_id = ?", (st["funnel_id"], st["stage_id"], _now(), opp_id))
@@ -289,6 +319,8 @@ def delete(opp_id: int) -> None:
     with _crm() as conn:
         conn.execute("DELETE FROM opportunity_people WHERE opportunity_id = ?", (opp_id,))
         conn.execute("DELETE FROM opportunity_log WHERE opportunity_id = ?", (opp_id,))
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'work_subitems'").fetchone():
+            conn.execute("DELETE FROM work_subitems WHERE opportunity_id = ?", (opp_id,))
         n = conn.execute("DELETE FROM opportunities WHERE opportunity_id = ?", (opp_id,)).rowcount
     if not n:
         raise OpportunityError("No such opportunity.")
@@ -302,6 +334,9 @@ def _role(role) -> str:
 
 
 def add_participant(opp_id: int, person_id: int, role: str = "", primary: bool = False, introduced_by: int | None = None) -> dict:
+    with _crm() as conn:
+        if is_work(conn, opp_id):
+            raise OpportunityError("A work item has no contacts.")
     with _crm() as conn:
         if not conn.execute("SELECT 1 FROM opportunities WHERE opportunity_id = ?", (opp_id,)).fetchone():
             raise OpportunityError("No such opportunity.")
@@ -433,7 +468,7 @@ def register(app):
 
     def visible(opp_id):
         o = get(opp_id)
-        if not o or not access.can_opportunity(o):
+        if not o or not access.can_opportunity(o) or o["work"]:      # a work item is reached only through /api/crm/work (lk_calendar/work.py)
             raise OpportunityError("No such opportunity.")
         return o
 

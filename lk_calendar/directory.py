@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS errors (
 """
 ACCOUNT_COLUMNS = {"notes": "TEXT NOT NULL DEFAULT ''", "charge": "INTEGER NOT NULL DEFAULT 0", "card_required": "INTEGER NOT NULL DEFAULT 0",
                    "plan": "TEXT NOT NULL DEFAULT 'Team'", "monthly_price": "TEXT NOT NULL DEFAULT ''",
-                   "is_test": "INTEGER NOT NULL DEFAULT 0"}   # the owner's own test account: it can be reset (reset_account)
+                   "is_test": "INTEGER NOT NULL DEFAULT 0",   # the owner's own test account: it can be reset (reset_account)
+                   "work_pipelines": "INTEGER NOT NULL DEFAULT 0"}   # Work pipelines (a test feature): off unless the owner turns it on
 CONSOLE_DEFAULTS = {"waive_all": "1", "card_for_new": "0", "trial_days": "14", "alert_errors": "1"}
 STATUSES = ("waiting", "active", "suspended")
 MAX_SIGNUPS_PER_HOUR = 20                 # a brake against someone creating workspaces in bulk
@@ -241,6 +242,21 @@ def set_test(account_id: int, on: bool) -> dict:
         if row["profile_id"] == profiles.home_profile_id():
             raise DirectoryError("this is your own workspace; it can't be a test account")
         conn.execute("UPDATE accounts SET is_test = ? WHERE id = ?", (1 if on else 0, account_id))
+        return dict(conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone())
+
+
+def work_enabled(profile_id: str) -> bool:
+    """Work pipelines are switched on for this workspace (Owner console). Off everywhere by default."""
+    with _conn() as conn:
+        row = conn.execute("SELECT work_pipelines FROM accounts WHERE profile_id = ?", (profile_id,)).fetchone()
+    return bool(row and row["work_pipelines"])
+
+
+def set_work_pipelines(account_id: int, on: bool) -> dict:
+    with _lock, _conn() as conn:
+        if not conn.execute("SELECT 1 FROM accounts WHERE id = ?", (account_id,)).fetchone():
+            raise DirectoryError("no such account")
+        conn.execute("UPDATE accounts SET work_pipelines = ? WHERE id = ?", (1 if on else 0, account_id))
         return dict(conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone())
 
 

@@ -246,7 +246,8 @@ def suggest() -> int:
         def together(x, y):
             return pairs.get((min(x, y), max(x, y)), (0, ""))[0]
         # 1. someone who keeps showing up with an opportunity's people, but is not on it
-        for o in conn.execute("SELECT opportunity_id, name FROM opportunities").fetchall():
+        for o in conn.execute("""SELECT o.opportunity_id, o.name FROM opportunities o JOIN funnels f ON f.funnel_id = o.funnel_id
+                                 WHERE f.kind != 'work'""").fetchall():          # work items have no people: never suggested for
             members = conn.execute("SELECT person_id, active FROM opportunity_people WHERE opportunity_id = ?", (o["opportunity_id"],)).fetchall()
             member_ids = {m["person_id"] for m in members}
             active_emails = set()

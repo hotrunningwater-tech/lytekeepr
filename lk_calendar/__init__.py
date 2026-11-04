@@ -54,9 +54,10 @@ def register(app):
     quiet.register(app)
     from . import linkedin_link
     linkedin_link.register(app)
-    from . import account_data, getting_started, recycle, support
+    from . import account_data, getting_started, recycle, support, work
     getting_started.register(app)
     support.register(app)
+    work.register(app)
     recycle.register(app)
     account_data.register(app)
     from . import goals

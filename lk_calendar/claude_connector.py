@@ -152,6 +152,15 @@ def _asked_to_save(words) -> bool:
     return False
 
 
+def _work_stage(call, need, funnel_id, stage) -> int:
+    """A work pipeline's stage by its name (any capitals) → its id; an unknown name is an error listing the real ones."""
+    board = need(*call("GET", f"/api/crm/funnels/{int(funnel_id)}/board"))
+    hit = next((st["stage_id"] for st in board.get("stages") or [] if st["name"].strip().lower() == str(stage).strip().lower()), None)
+    if hit is None:
+        raise ValueError(f"No stage '{stage}'. Stages: {', '.join(st['name'] for st in board.get('stages') or [])}.")
+    return hit
+
+
 def _brand_name(call, need, key) -> str:
     """A brand's name as the user knows it, never its internal key ('' stays '')."""
     if not key:
@@ -220,6 +229,27 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "create_brand", "title": "Add a brand", "description": "Add a new brand (business). Only when the user asks for it.",
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}, "read": False},
+    {"name": "work_items", "title": "Work pipeline items", "work": True,
+     "description": ("A work pipeline (a funnel of kind 'work' from list_funnels; it holds items, never contacts): its stages and every item "
+                     "with its stage, notes and sub-items. Use only when the user asks about a work pipeline."),
+     "inputSchema": {"type": "object", "properties": {"funnel_id": {"type": "integer"}}, "required": ["funnel_id"]}, "read": True},
+    {"name": "create_work_item", "title": "Add an item to a work pipeline", "work": True,
+     "description": "Add an item (the pipeline's own word for it: an idea, an order...) to a work pipeline. Items never have contacts.",
+     "inputSchema": {"type": "object", "properties": {"funnel_id": {"type": "integer"}, "name": {"type": "string"},
+                                                      "stage": {"type": "string", "description": "Stage name; empty = the first stage"},
+                                                      "notes": {"type": "string"}}, "required": ["funnel_id", "name"]}, "read": False},
+    {"name": "update_work_item", "title": "Change a work item", "work": True,
+     "description": "Rename a work item, change its notes, move it to another stage of its pipeline, or delete it (item_id from work_items).",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "name": {"type": "string"}, "notes": {"type": "string"},
+                                                      "stage": {"type": "string"}, "delete": {"type": "boolean"}}, "required": ["item_id"]}, "read": False},
+    {"name": "add_sub_item", "title": "Add a sub-item", "work": True,
+     "description": "Add a sub-item inside a work item (it exists only there).",
+     "inputSchema": {"type": "object", "properties": {"item_id": {"type": "integer"}, "name": {"type": "string"}, "note": {"type": "string"}},
+                     "required": ["item_id", "name"]}, "read": False},
+    {"name": "update_sub_item", "title": "Change a sub-item", "work": True,
+     "description": "Mark a sub-item done or not done, rename it, change its note, or remove it (subitem_id from work_items).",
+     "inputSchema": {"type": "object", "properties": {"subitem_id": {"type": "integer"}, "done": {"type": "boolean"}, "name": {"type": "string"},
+                                                      "note": {"type": "string"}, "remove": {"type": "boolean"}}, "required": ["subitem_id"]}, "read": False},
     {"name": "funnel_templates", "title": "Funnel templates",
      "description": ("The standard funnels LyteKeepr can create, one per kind of sales process: number, name, examples, how to recognise "
                      "the business, and the stages. Use it to pick the template for create_funnel."),
@@ -233,7 +263,13 @@ TOOLS = [
                      "Onboarding, Completed, Lost). Stages can be renamed later in the app."),
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string"},
                                                       "brand": {"type": "string", "description": "The brand (name or key, see list_brands)"},
-                                                      "template": {"type": "integer", "description": "Template number from funnel_templates"}},
+                                                      "template": {"type": "integer", "description": "Template number from funnel_templates"},
+                                                      "kind": {"type": "string", "enum": ["sales", "work"], "work": True,
+                                                               "description": ("'work' ONLY when the user explicitly asks for a work pipeline "
+                                                                               "(items, not contacts). Never suggest it; never ask sales or work. Default: sales.")},
+                                                      "item_name": {"type": "string", "work": True, "description": "Work pipelines: the word for one item (Idea, Order...); default Item"},
+                                                      "stages": {"type": "array", "items": {"type": "string"}, "work": True,
+                                                                 "description": "Work pipelines: stage names if the user gave them; default To do, In progress, Done"}},
                      "required": ["name", "brand"]}, "read": False},
     {"name": "set_funnel_brand", "title": "Set a funnel's brand",
      "description": "Make a funnel belong to a brand. Everyone in the funnel takes that brand, and their follow-ups are filed under it. Empty brand clears the funnel's brand.",
@@ -715,11 +751,21 @@ for _t in TOOLS:                                       # a tool that changes som
     _t.setdefault("read", False)
 
 
-def tool_list() -> list:
-    """What Claude gets for tools/list (one bad tool here hides every tool, so tests build it too)."""
-    return [{"name": t["name"], "title": t["title"], "description": t["description"], "inputSchema": t["inputSchema"],
+def _schema(schema: dict, work: bool) -> dict:
+    """A tool's inputs as Claude sees them: Work pipeline options only where Work pipelines are switched on; the 'work' marks themselves never."""
+    props = {k: {x: y for x, y in v.items() if x != "work"} for k, v in (schema.get("properties") or {}).items() if work or not v.get("work")}
+    return {**schema, "properties": props}
+
+
+def tool_list(work: bool = False) -> list:
+    """What Claude gets for tools/list (one bad tool here hides every tool, so tests build it too). The Work pipeline tools and options
+    exist for Claude only in a workspace where they are switched on (Owner console); everywhere else Claude never sees them."""
+    return [{"name": t["name"], "title": t["title"], "description": t["description"], "inputSchema": _schema(t["inputSchema"], work),
              "annotations": {"title": t["title"], "readOnlyHint": bool(t.get("read")), "destructiveHint": bool(t.get("destructive")), "openWorldHint": False}}
-            for t in TOOLS]
+            for t in TOOLS if work or not t.get("work")]
+
+
+WORK_TOOLS = {t["name"] for t in TOOLS if t.get("work")}
 
 
 RUN_ONLY_TOOLS = {        # name -> what Claude is told when it reaches for one outside a scheduled run
@@ -808,9 +854,42 @@ def _run_tool(call, name: str, args: dict):
     if name == "funnel_templates":
         return [{"number": t["number"], "name": t["name"], "examples": t["examples"], "recognise": t["recognise"],
                  "stages": [st["name"] for st in t["stages"]]} for t in need(*call("GET", "/api/crm/funnel-templates"))["templates"]]
+    if name == "work_items":
+        return need(*call("GET", f"/api/crm/work/funnels/{int(args['funnel_id'])}/items"))
+    if name == "create_work_item":
+        fid = int(args["funnel_id"])
+        body = {"funnel_id": fid, "name": str(args.get("name") or ""), "notes": str(args.get("notes") or "")}
+        if args.get("stage"):
+            body["stage_id"] = _work_stage(call, need, fid, args["stage"])
+        o = need(*call("POST", "/api/crm/work/items", body))
+        return {"created": True, "item_id": o["opportunity_id"], "name": o["name"], "stage": o["stage"]}
+    if name == "update_work_item":
+        iid = int(args["item_id"])
+        if args.get("delete"):
+            need(*call("POST", f"/api/crm/work/items/{iid}/delete", {}))
+            return {"deleted": True, "item_id": iid}
+        o = need(*call("GET", f"/api/crm/work/items/{iid}"))
+        if args.get("name") or args.get("notes") is not None:
+            o = need(*call("PUT", f"/api/crm/work/items/{iid}", {k: args[k] for k in ("name", "notes") if args.get(k) is not None}))
+        if args.get("stage"):
+            o = need(*call("POST", f"/api/crm/work/items/{iid}/move", {"stage_id": _work_stage(call, need, o["funnel_id"], args["stage"])}))
+        return {"item_id": iid, "name": o["name"], "stage": o["stage"], "notes": o["notes"], "subitems": o.get("subitems", [])}
+    if name == "add_sub_item":
+        o = need(*call("POST", f"/api/crm/work/items/{int(args['item_id'])}/subitems", {"name": args.get("name", ""), "note": args.get("note", "")}))
+        return {"item": o["name"], "subitems": o.get("subitems", [])}
+    if name == "update_sub_item":
+        sid = int(args["subitem_id"])
+        if args.get("remove"):
+            o = need(*call("POST", f"/api/crm/work/subitems/{sid}/delete", {}))
+        else:
+            o = need(*call("PUT", f"/api/crm/work/subitems/{sid}", {k: args[k] for k in ("name", "note", "done") if args.get(k) is not None}))
+        return {"item": o["name"], "subitems": o.get("subitems", [])}
     if name == "create_funnel":
         fname, key = str(args["name"]).strip(), _brand_key(call, need, args.get("brand"))       # checked in _precheck
         body = {"name": fname, "brand": key, **({"template": int(args["template"])} if args.get("template") not in (None, "") else {})}
+        if args.get("kind") == "work":
+            body.update({"kind": "work", "item_name": str(args.get("item_name") or ""), **({"stages": list(args["stages"])} if args.get("stages") else {})})
+            body.pop("template", None)
         made = need(*call("POST", "/api/crm/funnels", body))
         return {"created": True, "funnel_id": made["funnel_id"], "name": fname, "brand": _brand_name(call, need, key)}
     if name == "set_funnel_brand":
@@ -1485,6 +1564,29 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
         lines.append(f"Draft {a['draft']}: to {to or '?'}, subject '{d.get('subject') or ''}'")
         current = d
         shown_ids.add("draft")
+    if name == "create_funnel" and a.get("kind") == "work":
+        lines.append(f"A work pipeline (items, no contacts). Each item is called: {str(a.get('item_name') or '').strip() or 'Item'}")
+        lines.append("Stages: " + " → ".join(a.get("stages") or ["To do", "In progress", "Done"]))
+        shown_ids |= {"kind", "item_name", "stages", "template"}
+    if name in ("create_work_item", "update_work_item", "add_sub_item"):
+        if a.get("funnel_id"):
+            st, w = call("GET", f"/api/crm/work/funnels/{int(a['funnel_id'])}/items")
+            if st < 400 and isinstance(w, dict) and w.get("pipeline"):
+                lines.append(f"Work pipeline: {w['pipeline']} (a new {w['item_word'].lower()})")
+            shown_ids.add("funnel_id")
+        if a.get("item_id"):
+            st, o = call("GET", f"/api/crm/work/items/{int(a['item_id'])}")
+            if st < 400 and isinstance(o, dict) and o.get("name"):
+                lines.append(f"{o.get('item_name') or 'Item'}: {o['name']} (now in {o.get('stage') or '?'})")
+                current = o
+            shown_ids.add("item_id")
+        if a.get("delete"):
+            lines.append("Deletes it, with its sub-items and history.")
+            shown_ids.add("delete")
+    if name == "update_sub_item" and a.get("subitem_id"):
+        if a.get("remove"):
+            lines.append("Removes the sub-item.")
+            shown_ids.add("remove")
     if name == "create_funnel" and a.get("template") not in (None, ""):
         t = next((x for x in need(*call("GET", "/api/crm/funnel-templates")).get("templates") or [] if x["number"] == _int_or(a["template"])), None)
         if t:
@@ -1883,10 +1985,12 @@ def register(app):
         if method == "ping":
             return ok({})
         if method == "tools/list":
-            return ok({"tools": tool_list()})
+            from . import directory
+            return ok({"tools": tool_list(work=directory.work_enabled(owner["profile_id"]))})
         if method == "tools/call":
             name, args = params.get("name", ""), params.get("arguments") or {}
-            if name not in {t["name"] for t in TOOLS}:
+            from . import directory
+            if name not in {t["name"] for t in TOOLS} or (name in WORK_TOOLS and not directory.work_enabled(owner["profile_id"])):
                 return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"Unknown tool: {name}"}}
             try:
                 result = _run_tool(_caller(owner), name, args)

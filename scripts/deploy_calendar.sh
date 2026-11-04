@@ -89,6 +89,14 @@ if ! python3 scripts/check_funnels.py > /tmp/lk-funnels.log 2>&1; then
   exit 1
 fi
 grep "PASSED" /tmp/lk-funnels.log
+# Never ship Work pipelines that leak into sales, hold contacts, or show up where they're switched off.
+echo "Checking work pipelines..."
+if ! python3 scripts/check_work.py > /tmp/lk-work.log 2>&1; then
+  grep -E "FAILED|REFUSED|Error" /tmp/lk-work.log | head -20
+  echo "Deploy stopped: the work pipeline check did not pass (full output in /tmp/lk-work.log)."
+  exit 1
+fi
+grep "PASSED" /tmp/lk-work.log
 rsync -az --delete --filter="merge $FILTER" ./ "$HOST:$DEST"
 ssh "$HOST" 'chown -R lkcal:lkcal /opt/lytekeepr-calendar/app &&
   install -o root -g root -m 700 /opt/lytekeepr-calendar/app/scripts/calendar_backup.py /opt/lytekeepr-calendar/backup.py &&

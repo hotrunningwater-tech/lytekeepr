@@ -16,8 +16,12 @@ ROOT = Path(__file__).resolve().parent.parent
 
 class ToolListTest(unittest.TestCase):
     def test_tool_list_builds_and_is_valid(self):
-        tools = claude_connector.tool_list()
-        self.assertEqual(len(tools), len(claude_connector.TOOLS))
+        self.assertEqual(len(claude_connector.tool_list(work=True)), len(claude_connector.TOOLS))
+        off = claude_connector.tool_list()
+        self.assertFalse({t["name"] for t in off} & claude_connector.WORK_TOOLS, "Claude sees Work tools where Work pipelines are off")
+        cf = next(t for t in off if t["name"] == "create_funnel")
+        self.assertFalse({"kind", "item_name", "stages"} & set(cf["inputSchema"]["properties"]), "Claude sees Work options where Work pipelines are off")
+        tools = claude_connector.tool_list(work=True)
         names = [t["name"] for t in tools]
         self.assertEqual(len(names), len(set(names)), "duplicate tool names")
         for t in tools:
@@ -46,7 +50,7 @@ class ToolListTest(unittest.TestCase):
         """The scheduled run and the tools themselves point Claude to other tools by name: each of those must exist."""
         import re
         from lk_calendar import autopilot, inbox_watch, onboarding
-        names = {t["name"] for t in claude_connector.tool_list()}
+        names = {t["name"] for t in claude_connector.tool_list(work=True)}
         text = json.dumps([autopilot.INSTRUCTIONS, autopilot.PROMPT, inbox_watch.INSTRUCTIONS, onboarding.INSTRUCTIONS,
                            [t["description"] for t in claude_connector.TOOLS], claude_connector.RUN_ONLY_TOOLS])
         mentioned = set(re.findall(r"\b(?:get|save|list|search|send|create|update|set|add|open|discard|email|last|find|move|mark|link|write|clear|book|cancel|reply|log|edit|delete|doc|docs|tab|folder|accept|dismiss|who|calls|snooze|contacts|autopilot)_[a-z_]+\b", text))

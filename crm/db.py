@@ -273,7 +273,9 @@ def init_db() -> None:
                         "brand": "TEXT NOT NULL DEFAULT ''"}),   # the brand (key) the contact belongs to; '' = none yet
             ("channel_accounts", {"url": "TEXT"}),
             ("funnels", {"brand": "TEXT NOT NULL DEFAULT ''",      # a funnel's people take its brand
-                         "pattern": "TEXT NOT NULL DEFAULT ''"}),   # '' = the standard funnel (moves by stage name); P1-P4 = from a template
+                         "pattern": "TEXT NOT NULL DEFAULT ''",     # '' = the standard funnel (moves by stage name); P1-P4 = from a template
+                         "kind": "TEXT NOT NULL DEFAULT 'sales'",   # 'work': items only, never contacts (lk_calendar/work.py)
+                         "item_name": "TEXT NOT NULL DEFAULT ''"}),  # a work funnel's word for its items ("Idea", "Order"; '' = "Item")
             ("funnel_stages", {"is_won": "INTEGER NOT NULL DEFAULT 0",   # reaching this stage = a won deal (onboarding starts)
                                "mark": "TEXT NOT NULL DEFAULT ''"}),     # template funnels: what moves a contact here (lk_calendar/funnel_rules.py)
         ):
@@ -316,12 +318,22 @@ def init_db() -> None:
 DEFAULT_FUNNEL_STAGES = ["New lead", "Contacted", "In conversation", "Confirmed", "Onboarding", "Completed", "Lost"]
 
 
-def create_funnel(conn: sqlite3.Connection, name: str, template: dict | None = None) -> int:
-    """The standard stages, or a template's (lk_calendar/funnel_templates.json): its stages with their marks, its won stage, its pattern."""
+WORK_STAGES = ["To do", "In progress", "Done"]
+
+
+def create_funnel(conn: sqlite3.Connection, name: str, template: dict | None = None, kind: str = "sales", item_name: str = "",
+                  stages: list | None = None) -> int:
+    """The standard stages, or a template's (lk_calendar/funnel_templates.json): its stages with their marks, its won stage, its pattern.
+    A work funnel (kind='work') gets the given stage names, else To do / In progress / Done, and its word for its items."""
     now = datetime.now().isoformat()
-    cur = conn.execute("INSERT INTO funnels (name, created_at, pattern) VALUES (?, ?, ?)", (name, now, template["pattern"] if template else ""))
+    work = kind == "work"
+    cur = conn.execute("INSERT INTO funnels (name, created_at, pattern, kind, item_name) VALUES (?, ?, ?, ?, ?)",
+                       (name, now, "" if work or not template else template["pattern"], "work" if work else "sales", (item_name or "").strip()[:40] if work else ""))
     funnel_id = cur.lastrowid
-    stages = template["stages"] if template else [{"name": n, "mark": ""} for n in DEFAULT_FUNNEL_STAGES]
+    if work:
+        stages = [{"name": str(n).strip()[:60], "mark": ""} for n in (stages or WORK_STAGES) if str(n).strip()] or [{"name": n, "mark": ""} for n in WORK_STAGES]
+    else:
+        stages = template["stages"] if template else [{"name": n, "mark": ""} for n in DEFAULT_FUNNEL_STAGES]
     conn.executemany(
         "INSERT INTO funnel_stages (funnel_id, name, position, created_at, mark, is_won) VALUES (?, ?, ?, ?, ?, ?)",
         [(funnel_id, st["name"], i, now, st["mark"], 1 if st["mark"] == "won" else 0) for i, st in enumerate(stages)],
@@ -332,7 +344,7 @@ def create_funnel(conn: sqlite3.Connection, name: str, template: dict | None = N
 def list_funnels(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT f.funnel_id, f.name, f.brand, f.created_at, COUNT(p.person_id) AS people_count
+        SELECT f.funnel_id, f.name, f.brand, f.kind, f.item_name, f.created_at, COUNT(p.person_id) AS people_count
         FROM funnels f
         LEFT JOIN people p ON p.funnel_id = f.funnel_id
         GROUP BY f.funnel_id
@@ -451,10 +463,17 @@ def delete_funnel(conn: sqlite3.Connection, funnel_id: int) -> None:
     conn.execute("DELETE FROM funnels WHERE funnel_id = ?", (funnel_id,))
 
 
+def is_work_funnel(conn: sqlite3.Connection, funnel_id) -> bool:
+    row = conn.execute("SELECT kind FROM funnels WHERE funnel_id = ?", (funnel_id,)).fetchone() if funnel_id is not None else None
+    return bool(row) and row["kind"] == "work"
+
+
 def move_people_to_funnel(conn: sqlite3.Connection, person_ids: list[int], funnel_id: int | None) -> None:
     """funnel_id=None takes people out of whatever funnel they're in.
-    Otherwise drops them into that funnel's first stage."""
+    Otherwise drops them into that funnel's first stage. Never into a work funnel (it holds items, not contacts)."""
     first_stage_id = None
+    if is_work_funnel(conn, funnel_id):
+        raise ValueError("A work pipeline holds items, not contacts.")
     if funnel_id is not None:
         row = conn.execute(
             "SELECT stage_id FROM funnel_stages WHERE funnel_id = ? ORDER BY position LIMIT 1",
@@ -472,6 +491,8 @@ def move_person_to_stage(conn: sqlite3.Connection, person_id: int, stage_id: int
     row = conn.execute("SELECT funnel_id FROM funnel_stages WHERE stage_id = ?", (stage_id,)).fetchone()
     if row is None:
         raise ValueError(f"No such stage: {stage_id}")
+    if is_work_funnel(conn, row["funnel_id"]):
+        raise ValueError("A work pipeline holds items, not contacts.")
     conn.execute(
         "UPDATE people SET funnel_id = ?, funnel_stage_id = ? WHERE person_id = ?",
         (row["funnel_id"], stage_id, person_id),

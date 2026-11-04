@@ -22,7 +22,7 @@ def overview(company_id: int) -> dict | None:
     opps = []
     for oid in sorted(opp_ids):
         o = opportunities.get(oid)
-        if o and access.can_opportunity(o):
+        if o and access.can_opportunity(o) and not o["work"]:       # a company page lists sales opportunities only
             opps.append({"opportunity_id": o["opportunity_id"], "name": o["name"], "funnel": o.get("funnel") or "", "stage": o.get("stage") or "",
                          "people": [p["name"] for p in o.get("participants") or [] if p.get("active", True)]})
     merged: dict = {}

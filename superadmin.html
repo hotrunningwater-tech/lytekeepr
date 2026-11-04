@@ -274,6 +274,10 @@
           ac.appendChild(rst);
         }
       }
+      var wp = el('button', 'btn btn-soft', a.work_pipelines ? 'Work pipelines (test): on' : 'Work pipelines (test): off'); wp.type = 'button';
+      wp.title = 'A test feature: pipelines of items instead of contacts. Claude only sees it where it is on.';
+      wp.onclick = function () { api('POST', 'accounts/' + id + '/work-pipelines', { on: !a.work_pipelines }).then(function () { openDetail(id); }).catch(function (e) { alert(e.message); }); };
+      ac.appendChild(wp);
       $('dNotes').value = a.notes || ''; $('notesMsg').textContent = ''; $('planMsg').textContent = '';
       var da = $('dActivity'); da.replaceChildren();
       if (!r.activity.length) da.textContent = 'No changes yet.';

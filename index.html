@@ -31,7 +31,7 @@
 </script>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
-<link rel="stylesheet" href="styles.css?v=61">
+<link rel="stylesheet" href="styles.css?v=62">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1c">
 <link rel="stylesheet" href="lk-calendar/settings.css?v=team11">
 </head>
@@ -655,6 +655,7 @@
 <script src="lk-calendar/calendar.js?v=home8"></script>
 <script src="lk-calendar/settings.js?v=data3"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
+<script src="lk-calendar/work.js?v=1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
 <script src="lk-calendar/home.js?v=26"></script>
 <script src="lk-calendar/docs.js?v=3"></script>
@@ -1419,6 +1420,8 @@
       crmDeleteFunnelBtn.hidden = !selectedFunnel;
       document.getElementById('crmEditStagesBtn').hidden = !selectedFunnel;
       document.getElementById('crmNewOpportunityBtn').hidden = !selectedFunnel;
+      document.getElementById('crmNewOpportunityBtn').textContent = selectedFunnel && selectedFunnel.kind === 'work'     // a work pipeline: its own word
+        ? 'New ' + ((selectedFunnel.item_name || '').trim() || 'Item').toLowerCase() : 'New opportunity';
       document.getElementById('crmFunnelDocsBtn').hidden = !selectedFunnel;
       document.getElementById('crmFunnelSearchPill').hidden = !selectedFunnel;
       showCrmFunnelBrandTag(selectedFunnel);
@@ -1508,7 +1511,7 @@
           updateCrmFunnelBoardTitle();
 
           crmMoveToFunnelSelect.innerHTML = '';
-          crmFunnelsData.forEach(function (f) {
+          crmFunnelsData.filter(function (f) { return f.kind !== 'work'; }).forEach(function (f) {      // contacts never go into a work pipeline
             var opt2 = document.createElement('option');
             opt2.value = f.funnel_id;
             opt2.textContent = f.name;
@@ -1683,6 +1686,10 @@
               e.preventDefault();
               col.classList.remove('crm-funnel-stage-dragover');
               var dropped = e.dataTransfer.getData('text/plain') || '';
+              if (dropped.indexOf('work:') === 0 && window.lkWork) {     // a work item: just move it
+                window.lkWork.move(parseInt(dropped.slice(5), 10), stage.stage_id).then(function () { renderCrmFunnelBoard(); }).catch(function (err) { alert(err.message); });
+                return;
+              }
               if (dropped.indexOf('opp:') === 0) {             // an opportunity: just move it (no statuses or tasks change)
                 window.lkOpps.move(parseInt(dropped.slice(4), 10), stage.stage_id).then(function () { renderCrmFunnelBoard(); }).catch(function (err) { alert(err.message); });
                 return;
@@ -1738,6 +1745,14 @@
               col.appendChild(card);
             });
             (stage.opportunities || []).forEach(function (opp) {
+              if (opp.kind === 'work') {                       // a work pipeline's item (work.js)
+                if (!window.lkWork) return;
+                var wf = crmFunnelsData.find(function (x) { return x.funnel_id === crmSelectedFunnelId; }) || {};
+                var wc = window.lkWork.card(opp, wf.item_name, function (id) { window.lkWork.open(id, renderCrmFunnelBoard); });
+                wc.dataset.search = (opp.name || '').toLowerCase();
+                col.appendChild(wc);
+                return;
+              }
               if (!window.lkOpps) return;
               var oc = window.lkOpps.card(opp, function (id) { window.lkOpps.open(id, renderCrmFunnelBoard); });
               oc.dataset.search = [opp.name, opp.people_text, (opp.companies || []).join(' ')].join(' ').toLowerCase();
@@ -1770,6 +1785,11 @@
       crmNewOpportunityBtn.addEventListener('click', function () {
         if (crmSelectedFunnelId == null || !window.lkOpps) return;
         fetch('/api/crm/funnels/' + crmSelectedFunnelId + '/board').then(function (r) { return r.json(); }).then(function (b) {
+          var wf = crmFunnelsData.find(function (x) { return x.funnel_id === crmSelectedFunnelId; }) || {};
+          if (wf.kind === 'work' && window.lkWork) {
+            window.lkWork.create(crmSelectedFunnelId, (b.stages || []).map(function (s) { return { stage_id: s.stage_id, name: s.name }; }), wf.item_name, renderCrmFunnelBoard);
+            return;
+          }
           window.lkOpps.create(crmSelectedFunnelId, (b.stages || []).map(function (s) { return { stage_id: s.stage_id, name: s.name }; }), renderCrmFunnelBoard);
         });
       });
@@ -1848,7 +1868,7 @@
       }
       function renderMoveChoices() {
         moveChoices.innerHTML = '';
-        var options = crmFunnelsData.map(function (f) { return { id: String(f.funnel_id), label: f.name }; });
+        var options = crmFunnelsData.filter(function (f) { return f.kind !== 'work'; }).map(function (f) { return { id: String(f.funnel_id), label: f.name }; });
         options.push({ id: 'new', label: '+ New funnel' });
         options.forEach(function (o) {
           var b = document.createElement('button');

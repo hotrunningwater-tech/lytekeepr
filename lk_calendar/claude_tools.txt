@@ -6,6 +6,11 @@ find | Find a person, company or opportunity
 list_brands | List brands
 create_brand | Add a brand
 funnel_templates | Funnel templates
+work_items | Work pipeline items (only where Work pipelines are switched on)
+create_work_item | Add an item to a work pipeline
+update_work_item | Change a work item
+add_sub_item | Add a sub-item
+update_sub_item | Change a sub-item
 create_funnel | Create a funnel
 set_funnel_brand | Set a funnel's brand
 get_contact | Contact details

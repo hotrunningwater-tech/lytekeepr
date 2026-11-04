@@ -3007,3 +3007,8 @@ body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .a
 .lk-help-card .gs-head .hm-mini { margin-left: auto; }
 .lk-help-text { width: 100%; box-sizing: border-box; border: 1px solid rgba(41, 67, 78, 0.25); border-radius: 10px; padding: 10px; font: inherit; resize: vertical; }
 .lk-help-row { display: flex; justify-content: flex-end; }
+
+/* Work pipelines: sub-item rows in an item window (lk_calendar/static/work.js) */
+.lko-sub { align-items: center; gap: 8px; }
+.lko-sub input[type="text"] { flex: 1; min-width: 0; }
+.lko-sub.done input[type="text"]:first-of-type { text-decoration: line-through; opacity: 0.6; }

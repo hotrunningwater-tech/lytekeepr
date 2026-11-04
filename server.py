@@ -575,7 +575,11 @@ def crm_list_funnels():
     allowed = access.funnel_ids()
     if allowed is not None:                           # only the funnels shared with this person
         funnels = [f for f in funnels if f["funnel_id"] in allowed]
-    return jsonify({"funnels": funnels})
+    from lk_calendar import work
+    on = work.enabled()
+    if not on:                                        # Work pipelines switched off: they don't exist for anyone here
+        funnels = [f for f in funnels if f.get("kind") != "work"]
+    return jsonify({"funnels": funnels, "work_enabled": on})
 
 
 @app.post("/api/crm/funnels")
@@ -584,15 +588,21 @@ def crm_create_funnel():
     name = (body.get("name") or "").strip()
     if not name:
         return jsonify({"error": "Funnel name is required."}), 400
+    kind = "work" if body.get("kind") == "work" else "sales"
+    if kind == "work":
+        from lk_calendar import work
+        if not work.enabled():
+            return jsonify({"error": "Work pipelines are not switched on for this workspace."}), 403
     template = None
-    if body.get("template") not in (None, ""):
+    if kind == "sales" and body.get("template") not in (None, ""):
         from lk_calendar import funnel_rules
         template = funnel_rules.template(body.get("template"))
         if not template:
             return jsonify({"error": "There is no funnel template with that number."}), 400
     conn = crm_db.get_connection()
     try:
-        funnel_id = crm_db.create_funnel(conn, name, template)
+        funnel_id = crm_db.create_funnel(conn, name, template, kind, str(body.get("item_name") or ""),
+                                         body.get("stages") if isinstance(body.get("stages"), list) else None)
         conn.commit()
     finally:
         conn.close()
@@ -661,6 +671,8 @@ def crm_move_to_funnel():
     try:
         crm_db.move_people_to_funnel(conn, person_ids, funnel_id)
         conn.commit()
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     finally:
         conn.close()
     if funnel_id is not None:
@@ -771,6 +783,8 @@ def crm_move_to_stage():
     try:
         crm_db.move_person_to_stage(conn, person_id, stage_id)      # the stage; the statuses follow (below)
         conn.commit()
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     finally:
         conn.close()
     after = lk_contacts._stage_place(int(person_id))
