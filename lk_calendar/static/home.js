@@ -180,6 +180,7 @@
           : s.say ? h('button', { class: 'hm-mini', type: 'button', onclick: function (ev) {          // the sentence to say to Claude
               var b = ev.currentTarget;
               try { navigator.clipboard.writeText(s.say).then(function () { b.textContent = 'Copied'; }, function () {}); } catch (e) { /* no clipboard */ }
+              if (s.chat) api('POST', '/api/calendar/getting-started/told', { say: s.say }).catch(function () {});   // for the Owner console's AI activity
               if (s.chat) window.open((d.ai === 'chatgpt' ? 'https://chatgpt.com/?q=' : 'https://claude.ai/new?q=') + encodeURIComponent(s.say), '_blank', 'noopener');   // a new chat with it filled in; if not, it's copied
             } }, s.chat ? (d.ai === 'chatgpt' ? 'Tell ChatGPT' : 'Tell Claude') : 'Copy')
           : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : s.action === 'chatgpt' ? 'Open ChatGPT' : s.action === 'import' ? (imp ? 'Cancel' : 'Start') : s.action === 'import_review' ? 'Review' : s.action === 'fathom' ? 'Log in to Fathom' : 'Open')

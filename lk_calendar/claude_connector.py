@@ -73,6 +73,13 @@ def _issue(conn, client_id: str, user_id: int, profile_id: str) -> dict:
     return {"access_token": access, "token_type": "Bearer", "expires_in": ACCESS_SECONDS, "refresh_token": refresh, "scope": SCOPE}
 
 
+def _app_name(client_id: str) -> str:
+    """Claude or ChatGPT, from where the connector asked to be sent back after sign-in."""
+    with _db() as conn:
+        row = conn.execute("SELECT redirect_uris FROM oauth_clients WHERE client_id = ?", (client_id,)).fetchone()
+    return "ChatGPT" if row and "https://chatgpt.com/" in row["redirect_uris"] else "Claude"
+
+
 def token_owner(access: str) -> dict | None:
     """(user_id, profile_id) for a valid access token, if that person may still come in."""
     if not access:
@@ -2150,16 +2157,25 @@ def register(app):
         if method == "tools/call":
             name, args = params.get("name", ""), params.get("arguments") or {}
             from . import directory
+            app_name = _app_name(owner.get("client_id", ""))
             if name not in {t["name"] for t in TOOLS} or (name in WORK_TOOLS and not directory.work_enabled(owner["profile_id"])):
+                _log_call(owner, app_name, name, args, "Unknown tool")
                 return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"Unknown tool: {name}"}}
+            started = time.time()
+            took = lambda: int((time.time() - started) * 1000)
             try:
                 result = _run_tool(_caller(owner), name, args)
                 text = json.dumps(result, ensure_ascii=False, default=str)
+                _log_call(owner, app_name, name, args, answer=text, ms=took())
                 if not next(t for t in TOOLS if t["name"] == name).get("read"):
-                    _log_change(owner, name, args)
+                    _log_change(owner, app_name, name, args)
                 return ok({"content": [{"type": "text", "text": text[:200000]}], "isError": False})
             except (ValueError, KeyError, TypeError) as exc:
+                _log_call(owner, app_name, name, args, str(exc) or type(exc).__name__, ms=took())
                 return ok({"content": [{"type": "text", "text": f"Could not do that: {exc}"}], "isError": True})
+            except Exception as exc:
+                _log_call(owner, app_name, name, args, f"Broke: {type(exc).__name__}", ms=took())
+                raise
         if method in ("resources/list", "prompts/list"):
             return ok({method.split("/")[0]: []})
         return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": f"Method not found: {method}"}}
@@ -2177,12 +2193,19 @@ def register(app):
                 res.close()
         return call
 
-    def _log_change(owner: dict, name: str, args: dict):
+    def _log_change(owner: dict, app_name: str, name: str, args: dict):
         try:
             from . import directory
             account = directory.account_for_profile(owner["profile_id"])
-            directory.log_activity(f"Claude (user {owner['user_id']})", f"{name}: {json.dumps(args, ensure_ascii=False)[:200]}", account["id"] if account else None)
+            directory.log_activity(f"{app_name} (user {owner['user_id']})", f"{name}: {json.dumps(args, ensure_ascii=False)[:200]}", account["id"] if account else None)
         except Exception:
+            pass
+
+    def _log_call(owner: dict, app_name: str, name: str, args: dict, error: str = "", answer: str = "", ms: int = 0):
+        try:
+            from . import directory
+            directory.log_ai_call(owner["profile_id"], app_name, name, args, error, answer, ms)
+        except Exception:                                # the record never stops the call
             pass
 
     HOME_TOOLS = ("check_reply", "search_crm_messages", "draft_email_message", "draft_linkedin_message")

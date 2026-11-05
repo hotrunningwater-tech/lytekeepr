@@ -328,6 +328,34 @@ def claude_switch_check():
                   headers={"Authorization": "Bearer " + tok}).get_data(as_text=True).lower()
     if "zzleaka" not in seen or "zzleakb" in seen:
         problems.append("CLAUDE: after 'Use another account', Claude does not see the picked workspace (and only it)")
+    # AI activity: every call is recorded for the account, which AI made it, how long it took; what it sent and what LyteKeepr answered
+    # only on a test account; calls close together make one request, headed by the Tell sentence USER sent from Home
+    acc_a = next(x for x in directory.list_accounts() if x["owner_email"] == "owner-a@example.com")
+    got = directory.ai_activity(acc_a["id"])["requests"]
+    one = got[0]["calls"][-1] if got and got[0]["calls"] else {}
+    if one.get("tool") != "find" or got[0]["app"] != "Claude" or one.get("error") or one.get("details") or one.get("answer"):
+        problems.append(f"AI ACTIVITY: the call wasn't recorded right on a real account (sent and answered must stay empty): {got[:1]}")
+    def mark_test(on):                                  # owner-a is the owner's own workspace, which the console never marks as test
+        with directory._conn() as conn:
+            conn.execute("UPDATE accounts SET is_test = ? WHERE id = ?", (1 if on else 0, acc_a["id"]))
+            conn.execute("UPDATE ai_calls SET at = '2000-01-01T00:00:00' WHERE account_id = ?", (acc_a["id"],))   # the next request starts fresh
+    mark_test(True)
+    say = next((s["say"] for s in c.get("/api/calendar/getting-started").get_json()["steps"] if s.get("say")), "")
+    c.post("/api/calendar/getting-started/told", json={"say": say})
+    c.post("/api/calendar/getting-started/told", json={"say": "anything else at all"})          # not one of Home's sentences: not kept
+    for n, (tool, args) in enumerate((("find", {"query": "zzleak"}), ("get_contact", {"contact_id": 999999}))):
+        c.post("/mcp", json={"jsonrpc": "2.0", "id": 10 + n, "method": "tools/call", "params": {"name": tool, "arguments": args}},
+               headers={"Authorization": "Bearer " + tok})
+    got = directory.ai_activity(acc_a["id"])
+    mark_test(False)
+    req = got["requests"][0] if got["requests"] else {}
+    calls = req.get("calls") or []
+    if not say or req.get("asked") != say or [x["tool"] for x in calls] != ["find", "get_contact"]:
+        problems.append(f"AI ACTIVITY: the Tell sentence and its two calls are not one request: {req}")
+    elif "zzleaka" not in calls[0]["answer"].lower() or "zzleak" not in calls[0]["details"] or not calls[1]["error"] or "999999" not in calls[1]["details"] or req["failed"] != 1:
+        problems.append(f"AI ACTIVITY: on a test account, what was sent/answered or the failure wasn't recorded: {calls}")
+    if any("anything else" in (q.get("asked") or "") for q in got["requests"]):
+        problems.append("AI ACTIVITY: a sentence that isn't one of Home's was kept")
     for bad in ("/oauth/authorize/switch?next=https://evil.test/", "/oauth/authorize/switch?next=/app/settings"):
         if c.get(bad).status_code != 400:
             problems.append(f"CLAUDE: 'Use another account' sends people to an address it should refuse: {bad}")
