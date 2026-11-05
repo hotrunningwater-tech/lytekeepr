@@ -61,12 +61,12 @@ def _loop() -> None:
 
 
 @server.tool(name="sync_linkedin", description="Bring the newest LinkedIn messages into LyteKeepr now. The first time it links this computer to "
-             "LyteKeepr (the user clicks Approve in their browser) and opens LinkedIn to log in. Afterwards, sort them with LyteKeepr's linkedin_inbox.")
+             "LyteKeepr (the user clicks Approve on LyteKeepr's Home) and opens LinkedIn to log in. Afterwards, sort them with LyteKeepr's linkedin_inbox.")
 def sync_linkedin() -> str:
     first = not (HOME_DIR / "config.json").exists()
     threading.Thread(target=run, args=(True,), daemon=True).start()
     if first:
-        return "A LyteKeepr page opens in the browser: click Approve there, then log in to LinkedIn in the window that opens. Messages follow in a few minutes."
+        return "Go to LyteKeepr's Home and click Approve under Connect LinkedIn, then log in to LinkedIn in the window that opens. Messages follow in a few minutes."
     return "Reading LinkedIn now. New messages are in LyteKeepr within a few minutes; then use linkedin_inbox to sort the people waiting for review."
 
 

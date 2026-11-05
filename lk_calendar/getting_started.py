@@ -42,6 +42,15 @@ def _linkedin_connected() -> bool:
     return bool(linkedin_link.current_link(get_active_profile_id()))
 
 
+def _linkedin_waiting_approve():
+    """The add-on on this USER's computer waiting for Approve: the Approve page for Home's button, in this same window."""
+    from flask import current_app
+    from . import linkedin_link
+    who = current_app.config.get("LK_LINKEDIN_WHO")
+    row = linkedin_link.waiting_here(who()) if who else None
+    return f"{os.getenv('LK_URL_PREFIX', '').rstrip('/')}/linkedin/approve?l={row['link_id']}" if row else ""
+
+
 def _email_waiting():
     """How many emails wait for review, or None when no mailbox has been read yet."""
     try:
@@ -80,6 +89,7 @@ def status() -> dict:
         waiting = _email_waiting()
         linked = _linkedin_connected()
         li_waiting = _linkedin_waiting() if linked else 0
+        approve = "" if linked else _linkedin_waiting_approve()
         cal = google_sync.status()
         steps = [
             {"key": "account", "title": "Create your account", "why": "Signed in with Google, with your Gmail connected.",
@@ -92,9 +102,11 @@ def status() -> dict:
              "why": "Your last 3 months of email are coming in." if waiting is None else 'In Claude, say: "sort my email".',
              "done": waiting == 0, "say": "sort my email" if waiting else ""},
             {"key": "linkedin", "title": "Connect LinkedIn" if not linked else "Sort your LinkedIn" + (f": {li_waiting} waiting" if li_waiting else ""),
-             "why": ("Brings your LinkedIn messages into LyteKeepr, through the Claude app on this computer. Click Download to start." if not linked
+             "why": ("The add-on is installed. Click Approve to connect it to this account." if approve
+                     else "Brings your LinkedIn messages into LyteKeepr, through the Claude app on this computer. Click Download to start." if not linked
                      else 'In Claude, say: "sort my LinkedIn".'),
-             "done": linked and li_waiting == 0, "action": "linkedin" if not linked else "", "say": "sort my LinkedIn" if linked and li_waiting else ""},
+             "done": linked and li_waiting == 0, "action": "linkedin_approve" if approve else "linkedin" if not linked else "", "link": approve,
+             "say": "sort my LinkedIn" if linked and li_waiting else ""},
             {"key": "calendar", "title": "Your calendar",
              "why": "Synced from your Google Calendar." if cal.get("last_sync") and not cal.get("needs_reconnect") else "Connect Google to bring in your calendar.",
              "done": bool(cal.get("last_sync")) and not cal.get("needs_reconnect"), "action": "" if cal.get("last_sync") and not cal.get("needs_reconnect") else "gmail"},

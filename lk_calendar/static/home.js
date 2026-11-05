@@ -64,6 +64,7 @@
   }
   function startAction(s) {
     if (s.action === 'gmail') location.href = (window.LK_PREFIX || '') + '/auth/google/start';
+    else if (s.action === 'linkedin_approve') location.href = s.link;     // here, in the window and account the USER is signed in to
     else if (s.action === 'claude') window.open(s.link, '_blank', 'noopener');   // Claude's add-connector form, already filled in
     else if (s.action === 'crm') { var crm = $('crmTab'); if (crm) crm.click(); }
     else if (s.action === 'linkedin') {                 // downloads the Claude add-on, then says exactly what to do with the file
@@ -76,9 +77,9 @@
   function linkedinNext(s) {           // after the download: the next steps, one per line
     var downloaded = false;
     try { downloaded = s.key === 'linkedin' && sessionStorage.getItem('lkLinkedinDownloaded') === '1'; } catch (e) { /* storage blocked */ }
-    if (!downloaded) return null;
+    if (!downloaded || s.action === 'linkedin_approve') return null;
     return h('ol', { class: 'gs-why gs-next' }, ['Open your Downloads folder.', 'Double-click "LyteKeepr LinkedIn.mcpb". The Claude app opens.',
-      'In Claude, click Install.', 'A LyteKeepr page opens in your browser: click Approve.', 'Log in to LinkedIn if a window asks.']
+      'In Claude, click Install.', 'Come back here and click Approve.', 'Log in to LinkedIn if a window asks.']
       .map(function (t) { return h('li', {}, t); }));
   }
   function renderStart(d) {
@@ -96,7 +97,7 @@
               try { navigator.clipboard.writeText(s.say).then(function () { b.textContent = 'Copied'; }, function () {}); } catch (e) { /* no clipboard */ }
               if (s.chat) window.open('https://claude.ai/new?q=' + encodeURIComponent(s.say), '_blank', 'noopener');   // a new chat with it filled in; if not, it's copied
             } }, s.chat ? 'Tell Claude' : 'Copy')
-          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'claude' ? 'Connect' : 'Open')
+          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : 'Open')
           : null;
         return h('div', { class: 'gs-step' + (s.done ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
           h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), s.done ? null : linkedinNext(s) || h('div', { class: 'gs-why' }, s.why)]), doit]);

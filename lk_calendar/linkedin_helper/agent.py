@@ -459,11 +459,7 @@ def link(address):
             return "LyteKeepr could not be reached. Check the internet connection; this tries again by itself."
         pending["at"] = time.time()
         save(LINK_FILE, pending)
-        if os.environ.get("LK_NO_BROWSER"):
-            print("approve at " + pending["url"], file=sys.stderr, flush=True)
-        else:
-            import webbrowser
-            webbrowser.open(pending["url"])
+        print("approve at " + pending["url"], file=sys.stderr, flush=True)     # the USER clicks Approve on LyteKeepr's Home, in their own window
     deadline = time.time() + LINK_MINUTES * 60
     while time.time() < deadline:
         status, out = _post(address, "link/poll", {"link_id": pending["link_id"], "secret": pending["secret"]})
@@ -475,9 +471,9 @@ def link(address):
             return "just linked"
         if status == 410:
             LINK_FILE.unlink(missing_ok=True)
-            return "The LyteKeepr page was not approved in time. Say 'sync my LinkedIn' to get a new one."
+            return "It was not approved in time. Say 'sync my LinkedIn', then click Approve on LyteKeepr's Home."
         time.sleep(3)
-    return "Waiting for you to click Approve on the LyteKeepr page in your browser."
+    return "Waiting for you to click Approve on LyteKeepr's Home."
 
 
 def log_in():

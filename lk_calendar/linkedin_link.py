@@ -58,7 +58,7 @@ def _db():
     if "launcher" not in {r["name"] for r in conn.execute("PRAGMA table_info(linkedin_links)")}:
         conn.execute("ALTER TABLE linkedin_links ADD COLUMN launcher INTEGER NOT NULL DEFAULT 0")
     have = {r["name"] for r in conn.execute("PRAGMA table_info(linkedin_pending)")}
-    for column, ddl in (("profile_id", "TEXT NOT NULL DEFAULT ''"), ("user_id", "INTEGER NOT NULL DEFAULT 0")):
+    for column, ddl in (("profile_id", "TEXT NOT NULL DEFAULT ''"), ("user_id", "INTEGER NOT NULL DEFAULT 0"), ("ip", "TEXT NOT NULL DEFAULT ''")):
         if column not in have:
             conn.execute(f"ALTER TABLE linkedin_pending ADD COLUMN {column} {ddl}")
     conn.execute("DROP TABLE IF EXISTS linkedin_codes")          # the old pasted-line pairing
@@ -74,13 +74,23 @@ def _now() -> str:
 
 
 # ---- the Claude add-on: it asks for a link, the admin clicks Approve on a LyteKeepr page, the add-on picks up its key
-def start_link(computer: str) -> dict:
+def start_link(computer: str, ip: str = "") -> dict:
     link_id, secret = secrets.token_urlsafe(16), secrets.token_urlsafe(32)
     with _db() as conn:
         conn.execute("DELETE FROM linkedin_pending WHERE expires < ?", (time.time(),))
-        conn.execute("INSERT INTO linkedin_pending (link_id, secret_hash, computer, expires) VALUES (?, ?, ?, ?)",
-                     (link_id, _hash(secret), computer[:80], time.time() + LINK_MINUTES * 60))
+        conn.execute("INSERT INTO linkedin_pending (link_id, secret_hash, computer, expires, ip) VALUES (?, ?, ?, ?, ?)",
+                     (link_id, _hash(secret), computer[:80], time.time() + LINK_MINUTES * 60, ip[:64]))
     return {"link_id": link_id, "secret": secret}
+
+
+def waiting_here(ip: str):
+    """The add-on waiting for Approve on the same internet connection as this browser (newest), so Home can offer the Approve button
+    in the window the USER is signed in to. None when there is none."""
+    if not ip:
+        return None
+    with _db() as conn:
+        return conn.execute("SELECT * FROM linkedin_pending WHERE ip = ? AND key = '' AND expires > ? ORDER BY expires DESC LIMIT 1",
+                            (ip, time.time())).fetchone()
 
 
 def pending_link(link_id: str):
@@ -277,6 +287,8 @@ def register(app):
             return request.headers["X-Real-IP"]
         return request.remote_addr or "?"
 
+    app.config["LK_LINKEDIN_WHO"] = who
+
     def with_key(job):
         """Run job(link) inside the key's own workspace. 410 tells the helper to stop for good; 403 only for now."""
         auth = request.headers.get("Authorization", "")
@@ -303,7 +315,7 @@ def register(app):
         if len(recent) >= MAX_LINK_STARTS:
             return jsonify({"error": "too many tries"}), 403
         _bad_codes["start:" + ip] = recent + [now]
-        out = start_link(str((request.get_json(silent=True) or {}).get("computer") or ""))
+        out = start_link(str((request.get_json(silent=True) or {}).get("computer") or ""), ip)
         return jsonify(dict(out, url=f"{address()}/linkedin/approve?l={out['link_id']}"))
 
     @app.post("/linkedin-helper/link/poll")
@@ -326,7 +338,7 @@ def register(app):
             return response
         row = pending_link(request.args.get("l", ""))
         if not row:
-            return _page("This link has expired", "<p>In Claude, say <b>sync my LinkedIn</b> to get a new one.</p>")
+            return _page("This link has expired", "<p>Go back to LyteKeepr: Home shows a new Approve button within a minute.</p>")
         if row["key"]:
             return _page("LinkedIn is connected", "<p>You can close this page and go back to Claude.</p>")
         if user.get("role") != "admin":
@@ -349,7 +361,7 @@ def register(app):
         if request.form.get("risk") != "yes":
             return _page("Please tick the box", "<p>Go back and tick that you understand the risk.</p>"), 400
         if not approve_link(request.form.get("l", ""), get_active_profile_id(), int(user.get("id") or 0)):
-            return _page("This link has expired", "<p>In Claude, say <b>sync my LinkedIn</b> to get a new one.</p>"), 410
+            return _page("This link has expired", "<p>Go back to LyteKeepr: Home shows a new Approve button within a minute.</p>"), 410
         home = prefix + "/"
         return _page("LinkedIn is connected", "<p>A LinkedIn window may open on your computer: log in there if it asks. "
                      "Your LinkedIn messages start coming into LyteKeepr within a few minutes.</p>"

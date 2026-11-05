@@ -456,7 +456,15 @@ def addon_check(address):
     check(real and faked <= real, f"the fake LinkedIn has tools the real one does not: {sorted(faked - real)}")
 
     stranger = app.test_client()
-    started = stranger.post("/linkedin-helper/link/start", json={"computer": "Test Mac"}).get_json()
+    def home_step(client, ip):
+        steps = client.get("/api/calendar/getting-started", headers={"X-Real-IP": ip}).get_json()["steps"]
+        return next(x for x in steps if x["key"] == "linkedin")
+    check(home_step(a_admin, "203.0.113.7")["action"] == "linkedin", "Home offered Approve with no add-on waiting")
+    started = stranger.post("/linkedin-helper/link/start", json={"computer": "Test Mac"}, headers={"X-Real-IP": "203.0.113.7"}).get_json()
+    here = home_step(a_admin, "203.0.113.7")
+    check(here["action"] == "linkedin_approve" and here.get("link", "").endswith("/linkedin/approve?l=" + started["link_id"]),
+          f"Home does not offer Approve, in the USER's own window, for the add-on waiting on their computer: {here}")
+    check(home_step(a_admin, "198.51.100.9")["action"] == "linkedin", "Home offered Approve for an add-on on someone else's internet connection")
     check(stranger.post("/linkedin-helper/link/poll", json={"link_id": started["link_id"], "secret": started["secret"]}).status_code == 202, "a link was ready before Approve")
     check(stranger.post("/linkedin-helper/link/poll", json={"link_id": started["link_id"], "secret": "wrong"}).status_code == 410, "a wrong secret was answered")
     page = started["url"].split("://", 1)[1].split("/", 1)[1]
