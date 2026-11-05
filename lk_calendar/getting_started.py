@@ -44,7 +44,8 @@ def _claude_step(ai: str = "claude") -> dict:
                         "Click +, then Add custom MCP server.",
                         "Name: LyteKeepr. Server URL: paste (" + address + "). Authentication: OAuth.",
                         "Tick I understand and want to continue, then click Create as a plugin.",
-                        "LyteKeepr opens: check it shows your account, then click Allow."]}
+                        "LyteKeepr opens: check it shows your account, then click Allow.",
+                        "In ChatGPT, click Thinking effort next to the send button and set it to Medium."]}
     link = "https://claude.ai/customize/connectors?" + urllib.parse.urlencode({"modal": "add-custom-connector", "connectorName": "LyteKeepr", "connectorUrl": address})
     return {"key": "claude", "title": "Connect Claude", "why": "Click Connect. In Claude, click Add, then Allow.", "done": _claude_connected(), "action": "claude", "link": link}
 
