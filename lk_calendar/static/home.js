@@ -83,6 +83,10 @@
       .map(function (t) { return h('li', {}, t); }));
   }
   var startTimer = null;
+  function howTo(s) {                  // a step done by talking to Claude: exactly what to click, send and expect
+    if (!s.how || !s.how.length) return null;
+    return h('ol', { class: 'gs-why gs-next' }, s.how.map(function (t) { return h('li', {}, t); }));
+  }
   function renderStart(d) {
     var box = $('homeStart');
     clearTimeout(startTimer);
@@ -113,7 +117,7 @@
           : null;
         var finished = s.done || s.skipped;
         return h('div', { class: 'gs-step' + (finished ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
-          h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), finished ? null : linkedinNext(s) || h('div', { class: 'gs-why' }, s.why)]), skip, doit]);
+          h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), finished ? null : howTo(s) || linkedinNext(s) || h('div', { class: 'gs-why' }, s.why)]), skip, doit]);
       }))])]);
   }
   loadStart();

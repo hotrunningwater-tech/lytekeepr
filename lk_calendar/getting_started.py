@@ -7,6 +7,12 @@ import urllib.parse
 from . import store
 
 
+def _tell_claude(sentence: str, finish: str, then: str) -> list:
+    """The numbered lines under a step that is done by talking to Claude, so nobody has to guess what "Tell Claude" means."""
+    return ["Click Tell Claude. Claude opens with \u201c" + sentence.strip() + "\u201d already typed (it's also copied, so you can paste it).",
+            finish, then]
+
+
 def _claude_step() -> dict:
     """Claude's own install link opens its "Add custom connector" form with LyteKeepr's address filled in: USER clicks Add, then Allow."""
     from flask import request
@@ -108,11 +114,16 @@ def status() -> dict:
             _claude_step(),
             {"key": "business", "title": "Tell Claude about your business",
              "why": "Click Tell Claude, then finish the sentence in your own words: what you sell, to whom, and how you find clients. Claude sets up your funnel.",
-             "done": funnels > 0, "say": "In LyteKeepr, set up my funnel. My business: ", "chat": True},
+             "done": funnels > 0, "say": "In LyteKeepr, set up my funnel. My business: ", "chat": True,
+             "how": _tell_claude("In LyteKeepr, set up my funnel. My business:",
+                                 "Finish the sentence in your own words: what you sell, to whom, and how you find clients. Then send it.",
+                                 "Claude shows you the funnel it will create. Say yes, or tell it what to change.")},
             {"key": "email", "title": "Sort your email" + (f": {waiting} waiting" if waiting else ""),
              "why": "Your last 3 months of email are coming in. This list updates by itself." if waiting is None
                     else "Click Tell Claude: Claude suggests who to keep as contacts and who to remove, and asks you first.",
-             "done": waiting == 0, "busy": waiting is None, "say": "In LyteKeepr, sort my email." if waiting else "", "chat": True},
+             "done": waiting == 0, "busy": waiting is None, "say": "In LyteKeepr, sort my email." if waiting else "", "chat": True,
+             "how": _tell_claude("In LyteKeepr, sort my email.", "Send it.",
+                                 "Claude shows who to keep as contacts and who to remove. Ask about anyone you're not sure of, then say yes.") if waiting else []},
             {"key": "linkedin", "title": "Connect LinkedIn" if not linked else "Reading your LinkedIn" if reading
                                          else "Sort your LinkedIn" + (f": {li_waiting} waiting" if li_waiting else ""),
              "why": ("The add-on is installed. Click Approve to connect it to this account." if approve
@@ -123,7 +134,10 @@ def status() -> dict:
                      else "Your LinkedIn messages are in and sorted."),
              "done": linked and not reading and li_waiting == 0, "busy": reading,
              "action": "linkedin_approve" if approve else "linkedin" if not linked else "", "link": approve,
-             "say": "In LyteKeepr, sort my LinkedIn." if linked and not reading and li_waiting else "", "chat": True},
+             "say": "In LyteKeepr, sort my LinkedIn." if linked and not reading and li_waiting else "", "chat": True,
+             "how": _tell_claude("In LyteKeepr, sort my LinkedIn.", "Send it.",
+                                 "Claude shows who to keep as contacts and who to remove. Ask about anyone you're not sure of, then say yes.")
+                    if linked and not reading and li_waiting else []},
             {"key": "calendar", "title": "Your calendar",
              "why": "Synced from your Google Calendar." if cal.get("last_sync") and not cal.get("needs_reconnect") else "Connect Google to bring in your calendar.",
              "done": bool(cal.get("last_sync")) and not cal.get("needs_reconnect"), "action": "" if cal.get("last_sync") and not cal.get("needs_reconnect") else "gmail"},
