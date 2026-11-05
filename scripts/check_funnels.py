@@ -215,6 +215,32 @@ def main():
     except Exception:
         pass
 
+    # Import a list, then Claude organizes it: sees what the file said, places everyone by stage in one go, and the step is done
+    import io
+    csv_text = "Name,Email,Company,Status\nAva Stone,ava@stone.test,Stone Co,quote sent\nBen Ruiz,ben@ruiz.test,Ruiz LLC,new lead\n"
+    scan = a.post("/api/calendar/import/scan", data={"file": (io.BytesIO(csv_text.encode()), "leads.csv")}, content_type="multipart/form-data").get_json()
+    mapping = {c["name"]: c["field"] for c in scan["columns"]}
+    ran = a.post("/api/calendar/import/run", json={"token": scan["token"], "mapping": mapping,
+                                                    "options": {"brand": "lytekeepr", "duplicates": "skip", "batch": scan["default_batch"]}}).get_json()
+    check(ran.get("added") == 2, f"the list was not imported: {ran}")
+    step = next(x for x in a.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "import")
+    check(not step["done"] and step.get("chat") and "organize the list" in step.get("say", ""), f"after importing, the step doesn't hand over to Claude: {step}")
+    listed = claude_connector._run_tool(call, "imported_list", {})
+    ids = {p["name"]: p["person_id"] for p in listed["people"]}
+    check(set(ids) == {"Ava Stone", "Ben Ruiz"} and any("quote sent" in json.dumps(p) for p in listed["people"]),
+          f"Claude doesn't see the imported list with what the file said: {listed}")
+    target = made.get("funnel_id")
+    names = [s["name"] for s in funnel_stages(target)]
+    args = {"funnel_id": target, "placements": [{"stage": names[0], "person_ids": [ids["Ben Ruiz"]]}, {"stage": names[2], "person_ids": [ids["Ava Stone"]]}]}
+    shown = claude_connector._run_tool(call, "organize_imported", dict(args))
+    text = shown.get("show_the_user") or ""
+    check("Ava Stone" in text and f"{names[2]} (1)" in text and "Coaching clients" in text, f"organizing is not shown first, by stage and by name: {text}")
+    check(not stage_of(ids["Ava Stone"]), "organizing changed something before the yes")
+    claude_connector._run_tool(call, "organize_imported", dict(args, confirm_code=shown.get("confirm_code")))
+    check(stage_of(ids["Ava Stone"]) == names[2] and stage_of(ids["Ben Ruiz"]) == names[0], "the imported people were not placed in their stages")
+    step = next(x for x in a.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "import")
+    check(step["done"], f"'Import a list' is not done after Claude organized it: {step}")
+
     # a new USER's workspace starts without the owner's brands
     b = app.test_client()
     server.login_identity = lambda code: {"email": "new-user@example.com", "email_verified": True, "name": "New"}

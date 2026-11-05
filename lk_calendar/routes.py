@@ -345,6 +345,20 @@ def import_run():
     return jsonify(contacts.import_rows(str(data.get("token", "")), data.get("mapping") or {}, data.get("options") or {}))
 
 
+@bp.get("/api/calendar/import/latest")
+def import_latest():
+    if not users.is_admin():
+        return jsonify({"error": "Only the admin can organize an imported list."}), 403
+    return jsonify(contacts.latest_import())
+
+
+@bp.post("/api/calendar/import/organized")
+def import_mark_organized():
+    if not users.is_admin():
+        return jsonify({"error": "Only the admin can organize an imported list."}), 403
+    return jsonify({"ok": contacts.import_organized(str(_payload().get("key") or "")[:400])})
+
+
 @bp.get("/api/calendar/import/mappings")
 def import_mappings():
     return jsonify({"mappings": contacts.list_mappings()})

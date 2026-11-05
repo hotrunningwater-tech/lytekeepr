@@ -436,6 +436,9 @@ def import_rows(token: str, mapping: dict, options: dict) -> dict:
                     extras[header] = v
                 elif field in FIELD_KEYS:
                     vals[field] = (vals[field] + "\n" + v) if field == "notes" and vals.get(field) and v not in vals[field] else vals.get(field) or v
+            for k, label in (("status", "Status"), ("status_date", "Status date"), ("follow_up_date", "Follow-up date")):
+                if vals.get(k):                        # also kept on the person, so it isn't lost when there's no outreach channel to put it on
+                    extras.setdefault(label, vals[k])
             channel = channel_opt or detect_channel(vals.get("url", ""))
             if not (vals.get("url") or vals.get("name") or vals.get("business_name")):
                 res["errors"].append(f"row {n}: nothing to identify the person (no link, name or business)")
@@ -1473,3 +1476,39 @@ def messages_with_saved_emails(person_id: int, crm_messages: list) -> list:
         import logging
         logging.getLogger(__name__).exception("could not add the saved emails to a contact")
         return crm_messages
+
+
+# ----------------------------------------------------------------- the list just imported, for Claude to organize
+LATEST_IMPORT_MAX = 500
+
+
+def latest_import() -> dict:
+    """The most recently imported list (one file, one batch): each person with what the file said and where they are now."""
+    with _crm() as conn:
+        last = conn.execute("""SELECT source_file, IFNULL(batch, '') AS batch FROM people WHERE IFNULL(source_file, '') != ''
+                               ORDER BY created_at DESC, person_id DESC LIMIT 1""").fetchone()
+        if not last:
+            return {"file": "", "batch": "", "key": "", "people": [], "total": 0}
+        rows = conn.execute("""
+            SELECT p.person_id, p.name, p.job_title, p.notes, p.extras, p.brand, co.company_name, fn.name AS funnel, fs.name AS stage,
+                   (SELECT channel_identifier FROM channel_accounts e WHERE e.person_id = p.person_id AND e.channel = 'email' ORDER BY e.account_id LIMIT 1) AS email
+            FROM people p LEFT JOIN companies co ON co.company_id = p.company_id
+                          LEFT JOIN funnels fn ON fn.funnel_id = p.funnel_id LEFT JOIN funnel_stages fs ON fs.stage_id = p.funnel_stage_id
+            WHERE p.source_file = ? AND IFNULL(p.batch, '') = ? ORDER BY p.person_id""", (last["source_file"], last["batch"])).fetchall()
+    people = []
+    for r in rows[:LATEST_IMPORT_MAX]:
+        d = {k: r[k] for k in ("person_id", "name", "job_title", "notes", "company_name", "email", "brand", "funnel", "stage") if r[k]}
+        extras = json.loads(r["extras"] or "{}")
+        if extras:
+            d["from_the_file"] = extras
+        people.append(d)
+    return {"file": last["source_file"], "batch": last["batch"], "key": f"{last['source_file']}|{last['batch']}", "people": people, "total": len(rows)}
+
+
+def import_organized(key: str = "") -> bool:
+    """With a key: mark that imported list as organized. Without: whether the latest one is."""
+    if key:
+        store.set_state("import_organized", key)
+        return True
+    latest = latest_import()
+    return bool(latest["key"]) and store.get_state("import_organized") == latest["key"]

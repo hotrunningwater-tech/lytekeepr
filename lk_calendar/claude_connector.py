@@ -726,6 +726,21 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"keep": {"type": "array", "items": {"type": "integer"}, "description": "person_ids to keep as contacts"},
                                                       "remove": {"type": "array", "items": {"type": "integer"}, "description": "person_ids to remove"}}},
      "read": False},
+    {"name": "imported_list", "title": "The list just imported",
+     "description": ("The contacts from the most recently imported spreadsheet: each with what the file said about them (company, status, notes, "
+                     "other columns) and their funnel and stage now. For 'organize the list I just imported': call this, then list_funnels, decide "
+                     "each person's stage from what the file says (unclear ones in the first stage), and place them all with organize_imported."),
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "organize_imported", "title": "Put the imported list into a funnel",
+     "description": ("Place people from the imported list into one funnel, each in a stage, in one go; then the import counts as organized. "
+                     "Group the people by stage in placements."),
+     "inputSchema": {"type": "object", "properties": {
+         "funnel_id": {"type": "integer"},
+         "placements": {"type": "array", "items": {"type": "object", "properties": {"stage": {"type": "string", "description": "the stage's name"},
+                                                                                     "person_ids": {"type": "array", "items": {"type": "integer"}}},
+                                                   "required": ["stage", "person_ids"]}}},
+         "required": ["funnel_id", "placements"]},
+     "read": False},
     {"name": "email_inbox", "title": "Email waiting for review",
      "description": ("Emails from people who aren't contacts yet wait for review. Here they are by sender, in groups (written: the user has written "
                      "to them; automatic: no-reply, lists, receipts; selling; never: the user never wrote to them), each sender with how many emails "
@@ -1296,6 +1311,27 @@ def _run_tool(call, name: str, args: dict):
         convs = need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review"))["conversations"]
         return [{"person_id": c["person_id"], "name": c["participant_name"], "company": c.get("company_name"),
                  "last_message": (c.get("last_message_text") or "")[:400], "when": c.get("last_message_at")} for c in convs]
+    if name == "imported_list":
+        return need(*call("GET", "/api/calendar/import/latest"))
+    if name == "organize_imported":
+        latest = need(*call("GET", "/api/calendar/import/latest"))
+        mine = {p["person_id"] for p in latest["people"]}
+        funnel_id = int(args["funnel_id"])
+        stages = {(st.get("name") or "").lower(): st for st in need(*call("GET", f"/api/crm/funnels/{funnel_id}/board")).get("stages") or []}
+        placed, skipped = {}, []
+        for group in args.get("placements") or []:
+            stage = stages.get(str(group.get("stage") or "").strip().lower())
+            if not stage:
+                raise ValueError("Stage not found. The stages are: " + ", ".join(st.get("name", "") for st in stages.values()))
+            ids = [int(i) for i in group.get("person_ids") or [] if int(i) in mine]
+            skipped += [int(i) for i in group.get("person_ids") or [] if int(i) not in mine]
+            if ids:
+                need(*call("POST", "/api/crm/funnels/move", {"person_ids": ids, "funnel_id": funnel_id}))
+            for pid in ids:
+                need(*call("POST", "/api/crm/funnels/stages/move", {"person_id": pid, "stage_id": stage["stage_id"], "confirm": True}))
+            placed[stage["name"]] = placed.get(stage["name"], 0) + len(ids)
+        need(*call("POST", "/api/calendar/import/organized", {"key": latest["key"]}))
+        return {"ok": True, "placed": placed, "not_from_the_import": skipped}
     if name == "sort_linkedin_inbox":
         waiting = {c["person_id"]: c for c in need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review"))["conversations"]}
         kept, removed = [], []
@@ -1636,6 +1672,20 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
         if a.get("bring_back"):
             lines.append("Bring back: " + ", ".join(a["bring_back"]))
         shown_ids |= {"keep", "remove", "bring_back", "names"}
+    if name == "organize_imported":
+        latest = need(*call("GET", "/api/calendar/import/latest"))
+        people = latest.get("people") or []
+        names = {p["person_id"]: p.get("name") or p.get("company_name") or p.get("email") or f"#{p['person_id']}" for p in people}
+        funnel = next((f for f in need(*call("GET", "/api/crm/funnels")).get("funnels") or [] if f.get("funnel_id") == int(a.get("funnel_id") or 0)), {})
+        lines.append(f"Put {sum(len(g.get('person_ids') or []) for g in a.get('placements') or [])} people from {latest.get('file') or 'the imported list'} "
+                     f"into the funnel {funnel.get('name') or '#' + str(a.get('funnel_id'))}:")
+        for g in a.get("placements") or []:
+            ids = [int(i) for i in g.get("person_ids") or []]
+            lines.append(f"- {g.get('stage')} ({len(ids)}): " + ", ".join(names.get(i, f"#{i} (not from the import: skipped)") for i in ids))
+        left = len(people) - sum(len(g.get("person_ids") or []) for g in a.get("placements") or [])
+        if left > 0:
+            lines.append(f"Not placed: {left} (they stay where they are)")
+        shown_ids |= {"placements"}
     if name == "sort_linkedin_inbox":
         waiting = {c["person_id"]: c for c in need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review")).get("conversations") or []}
         def who(ids):

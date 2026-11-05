@@ -98,6 +98,8 @@ dismiss_suggestion | Dismiss a suggestion
 send_email | Send an email
 email_inbox | Email waiting for review
 sort_email_inbox | Sort email waiting for review
+imported_list | The list just imported (new: what the file said about each person, so Claude can place them)
+organize_imported | Put the imported list into a funnel (new: everyone in one go, grouped by stage, instead of one move per person)
 linkedin_inbox | LinkedIn people waiting for review
 sort_linkedin_inbox | Sort LinkedIn people waiting for review
 send_linkedin_message | Send a LinkedIn message
