@@ -66,6 +66,12 @@
     if (s.action === 'gmail') location.href = (window.LK_PREFIX || '') + '/auth/google/start';
     else if (s.action === 'linkedin_approve') location.href = s.link;     // here, in the window and account the USER is signed in to
     else if (s.action === 'claude') window.open(s.link, '_blank', 'noopener');   // Claude's add-connector form, already filled in
+    else if (s.action === 'fathom') {                   // Fathom's key page in a new tab; the step here turns into the paste box
+      window.open(s.link, '_blank', 'noopener');
+      fathom = { error: '' };
+      try { sessionStorage.setItem('lkFathomOpened', '1'); } catch (e) { /* storage blocked */ }
+      loadStart();
+    }
     else if (s.action === 'import') { imp = imp ? null : { stage: 'drop' }; loadStart(); }
     else if (s.action === 'import_review') {             // Claude's plan, on CRM → Import (Match fields, filled in)
       var token = (s.link.split('import=')[1] || '');
@@ -88,6 +94,24 @@
       .map(function (t) { return h('li', {}, t); }));
   }
   var startTimer = null;
+  /* ---------- Connect Fathom: after Log in to Fathom, the key is pasted right here ---------- */
+  var fathom = null;                   // null: not opened yet; {error, busy}
+  try { if (sessionStorage.getItem('lkFathomOpened') === '1') fathom = { error: '' }; } catch (e) { /* storage blocked */ }
+  function fathomBox() {
+    if (!fathom) return null;
+    var input = h('input', { type: 'text', class: 'gs-key', placeholder: 'Paste your Fathom key', autocomplete: 'off' });
+    return h('div', { class: 'gs-drop' }, [
+      h('p', {}, ['In Fathom, click ', h('b', {}, 'Generate API key'), ' and copy it. Not on that page? ', h('b', {}, 'Settings \u2192 API Access'),
+        '. Then come back here and paste it:']),
+      fathom.error ? h('p', { class: 'lks-err' }, fathom.error) : null,
+      h('div', { class: 'lks-row' }, [input, h('button', { class: 'btn btn-primary btn-small', type: 'button', disabled: fathom.busy, onclick: function () {
+        if (!input.value.trim()) { fathom.error = 'Paste the key first.'; loadStart(); return; }
+        fathom = { busy: true, error: '' }; loadStart();
+        api('PUT', '/api/calls/settings', { api_key: input.value.trim() })
+          .then(function () { fathom = null; try { sessionStorage.removeItem('lkFathomOpened'); } catch (e) { /* storage blocked */ } loadStart(); })
+          .catch(function (e) { fathom = { error: e.message }; loadStart(); });
+      } }, fathom.busy ? 'Checking\u2026' : 'Save')])]);
+  }
   /* ---------- Import a list, right in the step: drop a file; LyteKeepr keeps it, then Claude plans the import and USER checks it ---------- */
   var imp = null;                      // null: closed; {stage: 'drop' | 'busy', error}
   function importBox() {
@@ -143,13 +167,14 @@
               try { navigator.clipboard.writeText(s.say).then(function () { b.textContent = 'Copied'; }, function () {}); } catch (e) { /* no clipboard */ }
               if (s.chat) window.open('https://claude.ai/new?q=' + encodeURIComponent(s.say), '_blank', 'noopener');   // a new chat with it filled in; if not, it's copied
             } }, s.chat ? 'Tell Claude' : 'Copy')
-          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : s.action === 'import' ? (imp ? 'Cancel' : 'Start') : s.action === 'import_review' ? 'Review' : 'Open')
+          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : s.action === 'import' ? (imp ? 'Cancel' : 'Start') : s.action === 'import_review' ? 'Review' : s.action === 'fathom' ? 'Log in to Fathom' : 'Open')
           : null;
         var finished = s.done || s.skipped;
         return h('div', { class: 'gs-step' + (finished ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
           h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title),
             finished ? null : howTo(s) || linkedinNext(s) || h('div', { class: 'gs-why' }, s.why),
-            s.key === 'import' && (!finished || (imp && imp.stage === 'done')) ? importBox() : null]), again, skip, doit]);
+            s.key === 'import' && (!finished || (imp && imp.stage === 'done')) ? importBox() : null,
+            s.key === 'fathom' && !finished ? fathomBox() : null]), again, skip, doit]);
       }))])]);
   }
   loadStart();

@@ -7,6 +7,9 @@ import urllib.parse
 from . import store
 
 
+FATHOM_KEY_PAGE = "https://fathom.video/api_settings/new"      # Fathom's "Generate API key" page (it asks to log in first)
+
+
 def _tell_claude(sentence: str, finish: str, then: str) -> list:
     """The numbered lines under a step that is done by talking to Claude, so nobody has to guess what "Tell Claude" means."""
     return ["Click Tell Claude. Claude opens with \u201c" + sentence.strip() + "\u201d already typed (it's also copied, so you can paste it).",
@@ -187,8 +190,8 @@ def status() -> dict:
         ]
     else:
         steps = [_claude_step()]
-    steps.append({"key": "fathom", "title": "Connect Fathom", "why": "Your call recordings land on the right contact. Don't use Fathom? Click Skip.",
-                  "done": bool(calls.get_key()), "skippable": True, "action": "settings:calls"})
+    steps.append({"key": "fathom", "title": "Connect Fathom", "why": "You'll need a key from your Fathom account.",   # Home: Log in to Fathom, then paste the key
+                  "done": bool(calls.get_key()), "skippable": True, "action": "fathom", "link": FATHOM_KEY_PAGE})
     skipped = set(state.get("skipped") or [])
     for st in steps:                                   # a step USER skipped counts as finished, and says so
         st["skipped"] = bool(st.get("skippable") and not st["done"] and st["key"] in skipped)

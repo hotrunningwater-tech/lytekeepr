@@ -202,6 +202,9 @@ def main():
     check(biz.get("chat") and biz.get("say", "").startswith("In LyteKeepr,"), f"'Tell Claude about your business' doesn't hand Claude a sentence naming LyteKeepr: {biz}")
     check(not next(x for x in gs["steps"] if x["key"] == "email")["done"], "'Sort your email' is ticked before any email was read")
     check(gs["show"] and not gs["complete"], "Get started went away by itself or says complete before every step is done or skipped")
+    fa = next(x for x in gs["steps"] if x["key"] == "fathom")
+    check(fa.get("action") == "fathom" and fa.get("link", "").startswith("https://fathom.video/") and "key" in fa.get("why", ""),
+          f"'Connect Fathom' doesn't open Fathom's key page from Home: {fa}")
     skipped = a.post("/api/calendar/getting-started", json={"skip": "fathom"}).get_json()
     imp = next(x for x in skipped["steps"] if x["key"] == "fathom")
     check(imp["skipped"] and skipped["done"] == gs["done"] + 1, f"Skip doesn't mark 'Connect Fathom' as skipped and finished: {imp}")
