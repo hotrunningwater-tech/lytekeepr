@@ -51,6 +51,15 @@ def _linkedin_waiting_approve():
     return f"{os.getenv('LK_URL_PREFIX', '').rstrip('/')}/linkedin/approve?l={row['link_id']}" if row else ""
 
 
+def _linkedin_status() -> dict:
+    from profiles.store import get_active_profile_id
+    from . import linkedin_link
+    try:
+        return linkedin_link.status(get_active_profile_id())
+    except Exception:                                  # never in the way of Home
+        return {}
+
+
 def _email_waiting():
     """How many emails wait for review, or None when no mailbox has been read yet."""
     try:
@@ -90,6 +99,8 @@ def status() -> dict:
         linked = _linkedin_connected()
         li_waiting = _linkedin_waiting() if linked else 0
         approve = "" if linked else _linkedin_waiting_approve()
+        li = _linkedin_status() if linked else {}
+        reading = linked and not li.get("first_done")             # linked, first read not finished yet: say so, never "done"
         cal = google_sync.status()
         steps = [
             {"key": "account", "title": "Create your account", "why": "Signed in with Google, with your Gmail connected.",
@@ -99,33 +110,45 @@ def status() -> dict:
              "why": "Click Tell Claude, then finish the sentence in your own words: what you sell, to whom, and how you find clients. Claude sets up your funnel.",
              "done": funnels > 0, "say": "In LyteKeepr, set up my funnel. My business: ", "chat": True},
             {"key": "email", "title": "Sort your email" + (f": {waiting} waiting" if waiting else ""),
-             "why": "Your last 3 months of email are coming in." if waiting is None else 'In Claude, say: "sort my email".',
-             "done": waiting == 0, "say": "sort my email" if waiting else ""},
-            {"key": "linkedin", "title": "Connect LinkedIn" if not linked else "Sort your LinkedIn" + (f": {li_waiting} waiting" if li_waiting else ""),
+             "why": "Your last 3 months of email are coming in. This list updates by itself." if waiting is None else 'In Claude, say: "sort my email".',
+             "done": waiting == 0, "busy": waiting is None, "say": "sort my email" if waiting else ""},
+            {"key": "linkedin", "title": "Connect LinkedIn" if not linked else "Reading your LinkedIn" if reading
+                                         else "Sort your LinkedIn" + (f": {li_waiting} waiting" if li_waiting else ""),
              "why": ("The add-on is installed. Click Approve to connect it to this account." if approve
                      else "Brings your LinkedIn messages into LyteKeepr, through the Claude app on this computer. Click Download to start." if not linked
-                     else 'In Claude, say: "sort my LinkedIn".'),
-             "done": linked and li_waiting == 0, "action": "linkedin_approve" if approve else "linkedin" if not linked else "", "link": approve,
-             "say": "sort my LinkedIn" if linked and li_waiting else ""},
+                     else "LinkedIn wants you to log in: use the LinkedIn window on your computer, then close it." if reading and li.get("state") == "needs_login"
+                     else "Bringing in your last 3 months of LinkedIn messages. This takes a few minutes; this list updates by itself." if reading
+                     else 'In Claude, say: "sort my LinkedIn".' if li_waiting else "Your LinkedIn messages are in and sorted."),
+             "done": linked and not reading and li_waiting == 0, "busy": reading,
+             "action": "linkedin_approve" if approve else "linkedin" if not linked else "", "link": approve,
+             "say": "sort my LinkedIn" if linked and not reading and li_waiting else ""},
             {"key": "calendar", "title": "Your calendar",
              "why": "Synced from your Google Calendar." if cal.get("last_sync") and not cal.get("needs_reconnect") else "Connect Google to bring in your calendar.",
              "done": bool(cal.get("last_sync")) and not cal.get("needs_reconnect"), "action": "" if cal.get("last_sync") and not cal.get("needs_reconnect") else "gmail"},
-            {"key": "import", "title": "Import a list", "why": "Optional: a spreadsheet of contacts you already have.", "done": imported, "optional": True, "action": "crm"},
+            {"key": "import", "title": "Import a list", "why": "A spreadsheet of contacts you already have. No list? Click Skip.", "done": imported, "skippable": True, "action": "crm"},
         ]
     else:
         steps = [_claude_step()]
-    steps.append({"key": "fathom", "title": "Connect Fathom", "why": "Optional: your call recordings land on the right contact.", "done": bool(calls.get_key()),
-                  "optional": True, "action": "settings:calls"})
-    required = [s for s in steps if not s.get("optional")]
-    finished = all(s["done"] for s in required)
-    return {"steps": steps, "done": sum(1 for s in required if s["done"]), "total": len(required),
-            "show": not finished and not state.get("dismissed")}
+    steps.append({"key": "fathom", "title": "Connect Fathom", "why": "Your call recordings land on the right contact. Don't use Fathom? Click Skip.",
+                  "done": bool(calls.get_key()), "skippable": True, "action": "settings:calls"})
+    skipped = set(state.get("skipped") or [])
+    for st in steps:                                   # a step USER skipped counts as finished, and says so
+        st["skipped"] = bool(st.get("skippable") and not st["done"] and st["key"] in skipped)
+    finished = all(st["done"] or st["skipped"] for st in steps)
+    return {"steps": steps, "done": sum(1 for st in steps if st["done"] or st["skipped"]), "total": len(steps),
+            "complete": finished, "show": not state.get("dismissed")}      # it never goes away by itself: "Setup complete" waits for USER's click
 
 
-def update(tick=None, untick=None, dismissed=None) -> dict:
+def update(tick=None, untick=None, dismissed=None, skip=None, unskip=None) -> dict:
     state = _state()
     if dismissed is not None:
         state["dismissed"] = bool(dismissed)
+    skipped = set(state.get("skipped") or [])
+    if skip:
+        skipped.add(str(skip))
+    if unskip:
+        skipped.discard(str(unskip))
+    state["skipped"] = sorted(skipped)
     store.set_state(_state_key(), json.dumps(state))
     return status()
 
@@ -140,4 +163,4 @@ def register(app):
     @app.post("/api/calendar/getting-started")
     def getting_started_update():
         x = request.get_json(silent=True) or {}
-        return jsonify(update(x.get("tick"), x.get("untick"), x.get("dismissed")))
+        return jsonify(update(x.get("tick"), x.get("untick"), x.get("dismissed"), x.get("skip"), x.get("unskip")))

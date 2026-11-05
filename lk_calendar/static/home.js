@@ -82,16 +82,28 @@
       'In Claude, click Install.', 'Come back here and click Approve.', 'Log in to LinkedIn if a window asks.']
       .map(function (t) { return h('li', {}, t); }));
   }
+  var startTimer = null;
   function renderStart(d) {
     var box = $('homeStart');
+    clearTimeout(startTimer);
     box.hidden = !d.show;
     if (!d.show) { box.replaceChildren(); return; }
     function send(body) { api('POST', '/api/calendar/getting-started', body).then(renderStart).catch(fail); }
+    if (d.steps.some(function (s) { return s.busy; })) startTimer = setTimeout(loadStart, 20000);   // something is coming in: check again by itself
+    if (d.complete) {                                  // every step done or skipped: it stays until USER closes it
+      fill(box, [h('div', { class: 'gs-card gs-complete' }, [h('div', { class: 'gs-head' }, [h('span', { class: 'gs-title' }, 'Setup complete'),
+        h('span', { class: 'gs-count' }, 'Everything is connected. LyteKeepr is ready.'),
+        h('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: function () { send({ dismissed: true }); } }, 'Close')])])]);
+      return;
+    }
     fill(box, [h('div', { class: 'gs-card' }, [
       h('div', { class: 'gs-head' }, [h('span', { class: 'gs-title' }, 'Get started'), h('span', { class: 'gs-count' }, d.done + ' of ' + d.total + ' done'),
         h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ dismissed: true }); } }, 'Hide')]),
       h('div', { class: 'gs-list' }, d.steps.map(function (s) {
+        var skip = s.skippable && !s.done && !s.skipped ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ skip: s.key }); } }, 'Skip') : null;
         var doit = s.done ? h('span', { class: 'gs-done' }, 'Done')
+          : s.skipped ? h('button', { class: 'hm-mini', type: 'button', title: 'Undo skip', onclick: function () { send({ unskip: s.key }); } }, 'Skipped · undo')
+          : s.busy ? h('span', { class: 'gs-busy' }, 'In progress…')
           : s.say ? h('button', { class: 'hm-mini', type: 'button', onclick: function (ev) {          // the sentence to say to Claude
               var b = ev.currentTarget;
               try { navigator.clipboard.writeText(s.say).then(function () { b.textContent = 'Copied'; }, function () {}); } catch (e) { /* no clipboard */ }
@@ -99,8 +111,9 @@
             } }, s.chat ? 'Tell Claude' : 'Copy')
           : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : 'Open')
           : null;
-        return h('div', { class: 'gs-step' + (s.done ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
-          h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), s.done ? null : linkedinNext(s) || h('div', { class: 'gs-why' }, s.why)]), doit]);
+        var finished = s.done || s.skipped;
+        return h('div', { class: 'gs-step' + (finished ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
+          h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), finished ? null : linkedinNext(s) || h('div', { class: 'gs-why' }, s.why)]), skip, doit]);
       }))])]);
   }
   loadStart();

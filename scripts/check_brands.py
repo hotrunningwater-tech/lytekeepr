@@ -201,6 +201,14 @@ def main():
     check(biz["done"], "a funnel ticks 'Tell Claude about your business' by itself")
     check(biz.get("chat") and biz.get("say", "").startswith("In LyteKeepr,"), f"'Tell Claude about your business' doesn't hand Claude a sentence naming LyteKeepr: {biz}")
     check(not next(x for x in gs["steps"] if x["key"] == "email")["done"], "'Sort your email' is ticked before any email was read")
+    check(gs["show"] and not gs["complete"], "Get started went away by itself or says complete before every step is done or skipped")
+    skipped = a.post("/api/calendar/getting-started", json={"skip": "fathom"}).get_json()
+    imp = next(x for x in skipped["steps"] if x["key"] == "fathom")
+    check(imp["skipped"] and skipped["done"] == gs["done"] + 1, f"Skip doesn't mark 'Connect Fathom' as skipped and finished: {imp}")
+    check(not next(x for x in a.post("/api/calendar/getting-started", json={"unskip": "fathom"}).get_json()["steps"] if x["key"] == "fathom")["skipped"],
+          "a skipped step can't be undone")
+    check(not next(x for x in a.post("/api/calendar/getting-started", json={"skip": "email"}).get_json()["steps"] if x["key"] == "email")["skipped"],
+          "a required step could be skipped")
     check(a.post("/api/calendar/getting-started", json={"dismissed": True}).get_json()["show"] is False, "Hide hides it")
 
     # An unexpected failure: plain words, no raw error
