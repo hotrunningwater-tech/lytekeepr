@@ -442,7 +442,7 @@
 
   function planSection(im) {
     var p = im.plan, f = p.funnel;
-    if (!f) return h('div', { class: 'lks-plan' }, [h('h3', {}, 'Claude\u2019s plan'), h('p', {}, 'Add them as contacts only, not to a funnel.')]);
+    if (!f) return h('div', { class: 'lks-plan' }, [h('h3', {}, 'The plan'), h('p', {}, 'Add them as contacts only, not to a funnel.')]);
     var per = {};
     Object.keys(p.counts.by_value).forEach(function (st) { per[st] = p.counts.by_value[st]; });
     if (p.counts.default) per[p.stage] = (per[p.stage] || 0) + p.counts.default;
@@ -450,7 +450,7 @@
     var kind = f.new === 'cold' ? 'A new cold outreach funnel, built from ' + (p.main || 'your main funnel') + '.'
       : f.new ? 'A new funnel, a copy of ' + (p.main || 'your main funnel') + '.' : 'Your funnel ' + f.name + '.';
     return h('div', { class: 'lks-plan' }, [
-      h('h3', {}, 'Claude\u2019s plan: where they go'),
+      h('h3', {}, 'The plan: where they go'),
       h('label', { class: 'lks-check' }, [h('input', { type: 'checkbox', checked: p.use, onchange: function () { p.use = this.checked; importRender(); } }), 'Put them in a funnel']),
       p.use ? h('div', {}, [
         h('p', {}, kind),
@@ -1039,16 +1039,16 @@
     main.appendChild(card);
     api('GET', '/api/me/claude').then(function (r) {
       var url = h('input', { type: 'text', readonly: true, value: r.connector_url });
-      var kids = [h('h2', {}, 'Claude'),
-        h('p', {}, 'Ask Claude about your contacts, funnels, tasks and calls, on your phone or the web. Claude sees only what you can see here, and asks before it adds anything.'),
+      var kids = [h('h2', {}, 'Claude and ChatGPT'),
+        h('p', {}, 'Ask Claude or ChatGPT about your contacts, funnels, tasks and calls, on your phone or the web. It sees only what you can see here, and asks before it adds anything.'),
         h('div', { class: 'lks-opt' }, [h('label', {}, 'Connector address'), h('div', { class: 'lks-row' }, [url, window.lkContacts.copyPill(function () { return r.connector_url; })])]),
-        h('div', { class: 'lks-hint' }, [h('b', {}, 'One-time setup: '), 'on claude.ai open Customize → Connectors → Add custom connector, paste this address, then sign in to LyteKeepr and press Allow. It then works in the Claude app on iPhone and Android too.']),
+        h('div', { class: 'lks-hint' }, [h('b', {}, 'One-time setup: '), 'Claude: on claude.ai open Customize → Connectors → Add custom connector, paste this address, then sign in to LyteKeepr and press Allow. ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode on, create a connector with this address (sign-in OAuth), then press Allow.']),
         h('h2', { style: 'margin-top:18px' }, 'Connected'),
         r.connections.length ? null : h('p', { class: 'lks-note' }, 'Not connected yet.')].concat(r.connections.map(function (c) {
           return h('div', { class: 'lks-row' }, [h('span', { class: 'lks-badge on' }, c.name),
             h('span', { class: 'lks-note' }, 'since ' + new Date(c.since).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + (c.last_used ? ' · last used ' + new Date(c.last_used).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '')),
             h('button', { class: 'btn lks-soft', type: 'button', onclick: function () {
-              askConfirm('Disconnect Claude? It loses access right away; you can connect again any time.', 'Disconnect').then(function (yes) { if (yes) api('DELETE', '/api/me/claude/' + encodeURIComponent(c.client_id)).then(claudeView); });
+              askConfirm('Disconnect it? It loses access right away; you can connect again any time.', 'Disconnect').then(function (yes) { if (yes) api('DELETE', '/api/me/claude/' + encodeURIComponent(c.client_id)).then(claudeView); });
             } }, 'Disconnect')]);
         }));
       card.replaceChildren.apply(card, kids.filter(Boolean));

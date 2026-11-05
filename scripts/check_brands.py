@@ -202,6 +202,17 @@ def main():
     check(biz.get("chat") and biz.get("say", "").startswith("In LyteKeepr,"), f"'Tell Claude about your business' doesn't hand Claude a sentence naming LyteKeepr: {biz}")
     check(not next(x for x in gs["steps"] if x["key"] == "email")["done"], "'Sort your email' is ticked before any email was read")
     check(gs["show"] and not gs["complete"], "Get started went away by itself or says complete before every step is done or skipped")
+    # Claude or ChatGPT: the steps follow the choice on top
+    check(gs.get("ai") == "claude", f"Get started doesn't start with Claude: {gs.get('ai')}")
+    g2 = a.post("/api/calendar/getting-started", json={"ai": "chatgpt"}).get_json()
+    st2 = {x["key"]: x for x in g2["steps"]}
+    check(g2["ai"] == "chatgpt" and st2["claude"]["title"] == "Connect ChatGPT" and st2["claude"].get("address", "").endswith("/mcp")
+          and st2["claude"]["action"] == "chatgpt" and st2["business"]["title"] == "Tell ChatGPT about your business"
+          and "Claude" not in json.dumps([st2[k] for k in ("claude", "business", "email", "import")]),
+          f"choosing ChatGPT doesn't change the steps: {[st2[k] for k in ('claude', 'business')]}")
+    check(st2["linkedin"].get("skippable") and "coming soon" in st2["linkedin"]["why"], f"LinkedIn doesn't say it's coming for ChatGPT: {st2['linkedin']}")
+    back = {x["key"]: x for x in a.post("/api/calendar/getting-started", json={"ai": "claude"}).get_json()["steps"]}
+    check(back["claude"]["title"] == "Connect Claude" and not back["linkedin"].get("skippable"), "switching back to Claude doesn't restore Claude's steps")
     fa = next(x for x in gs["steps"] if x["key"] == "fathom")
     check(fa.get("action") == "fathom" and fa.get("link", "").startswith("https://fathom.video/") and "key" in fa.get("why", ""),
           f"'Connect Fathom' doesn't open Fathom's key page from Home: {fa}")

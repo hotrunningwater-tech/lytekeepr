@@ -289,6 +289,21 @@ def claude_switch_check():
     q = urllib.parse.urlencode({"response_type": "code", "client_id": cid, "redirect_uri": "https://claude.ai/api/mcp/auth_callback",
                                 "code_challenge": ch, "code_challenge_method": "S256", "state": "s1"})
     page = c.get("/oauth/authorize?" + q).get_data(as_text=True)
+    if "Allow Claude to use" not in page:
+        problems.append("CLAUDE: the Allow page doesn't name Claude when Claude connects")
+    # ChatGPT may connect too (its two return addresses), and its Allow page names ChatGPT; anyone else is refused
+    for uri in ("https://chatgpt.com/connector_platform_oauth_redirect", "https://chatgpt.com/connector/oauth/abc123"):
+        got = c.post("/oauth/register", json={"redirect_uris": [uri]}).get_json() or {}
+        if not got.get("client_id"):
+            problems.append(f"CHATGPT: ChatGPT's return address was refused: {uri}")
+            continue
+        gq = urllib.parse.urlencode({"response_type": "code", "client_id": got["client_id"], "redirect_uri": uri, "code_challenge": ch,
+                                     "code_challenge_method": "S256", "state": "g1"})
+        if "Allow ChatGPT to use" not in c.get("/oauth/authorize?" + gq).get_data(as_text=True):
+            problems.append("CHATGPT: the Allow page doesn't name ChatGPT when ChatGPT connects")
+    for bad in ("https://evil.example/cb", "https://chatgpt.com.evil.example/connector/oauth/x"):
+        if (c.post("/oauth/register", json={"redirect_uris": [bad]}).get_json() or {}).get("client_id"):
+            problems.append(f"OAUTH: a stranger's return address was accepted: {bad}")
     found = re.search(r'class="switch" href="([^"]+)"', page)
     if "owner-b@example.com" not in page or not found:
         problems.append("CLAUDE: the Allow page does not say whose LyteKeepr it is, or has no 'Use another account'")

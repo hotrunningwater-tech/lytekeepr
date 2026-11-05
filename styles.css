@@ -2988,6 +2988,9 @@ body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .a
 .gs-title { font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: var(--ink); }
 .gs-count { color: var(--ink-soft); font-size: 13px; } .gs-head .hm-mini { margin-left: auto; }
 .gs-list { display: flex; flex-direction: column; gap: 4px; }
+.gs-ai { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; font-size: 13px; color: var(--ink-soft); }
+.gs-ai-btn { border: 1px solid rgba(41, 67, 78, 0.15); background: #fff; color: var(--ink); border-radius: 999px; padding: 5px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.gs-ai-btn.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 .gs-step { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; } .gs-step > .hm-check { margin-top: 1px; } .gs-step.done .hm-title { color: var(--ink-soft); font-weight: 500; }
 .gs-step .hm-main { flex: 1; min-width: 0; } .gs-why { font-size: 13px; color: var(--ink-soft); }
 

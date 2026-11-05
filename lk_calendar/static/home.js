@@ -66,6 +66,10 @@
     if (s.action === 'gmail') location.href = (window.LK_PREFIX || '') + '/auth/google/start';
     else if (s.action === 'linkedin_approve') location.href = s.link;     // here, in the window and account the USER is signed in to
     else if (s.action === 'claude') window.open(s.link, '_blank', 'noopener');   // Claude's add-connector form, already filled in
+    else if (s.action === 'chatgpt') {                  // no filled-in form in ChatGPT: LyteKeepr's address copied, ChatGPT opened
+      try { navigator.clipboard.writeText(s.address).catch(function () {}); } catch (e) { /* no clipboard */ }
+      window.open(s.link, '_blank', 'noopener');
+    }
     else if (s.action === 'fathom') {                   // Fathom's key page in a new tab; the step here turns into the paste box
       window.open(s.link, '_blank', 'noopener');
       fathom = { error: '' };
@@ -163,6 +167,9 @@
     fill(box, [h('div', { class: 'gs-card' }, [
       h('div', { class: 'gs-head' }, [h('span', { class: 'gs-title' }, 'Get started'), h('span', { class: 'gs-count' }, d.done + ' of ' + d.total + ' done'),
         h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ dismissed: true }); } }, 'Hide')]),
+      h('div', { class: 'gs-ai' }, [h('span', {}, 'What do you use?')].concat([['claude', 'Claude'], ['chatgpt', 'ChatGPT']].map(function (o) {   // the steps follow it
+        return h('button', { class: 'gs-ai-btn' + (d.ai === o[0] ? ' on' : ''), type: 'button', onclick: function () { if (d.ai !== o[0]) send({ ai: o[0] }); } }, o[1]);
+      }))),
       h('div', { class: 'gs-list' }, d.steps.map(function (s) {
         var skip = s.skippable && !s.done && !s.skipped ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ skip: s.key }); } }, 'Skip') : null;
         var again = s.start_over && !s.done && !s.skipped ? h('button', { class: 'hm-mini', type: 'button', title: 'Back to a new file',
@@ -173,9 +180,9 @@
           : s.say ? h('button', { class: 'hm-mini', type: 'button', onclick: function (ev) {          // the sentence to say to Claude
               var b = ev.currentTarget;
               try { navigator.clipboard.writeText(s.say).then(function () { b.textContent = 'Copied'; }, function () {}); } catch (e) { /* no clipboard */ }
-              if (s.chat) window.open('https://claude.ai/new?q=' + encodeURIComponent(s.say), '_blank', 'noopener');   // a new chat with it filled in; if not, it's copied
-            } }, s.chat ? 'Tell Claude' : 'Copy')
-          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : s.action === 'import' ? (imp ? 'Cancel' : 'Start') : s.action === 'import_review' ? 'Review' : s.action === 'fathom' ? 'Log in to Fathom' : 'Open')
+              if (s.chat) window.open((d.ai === 'chatgpt' ? 'https://chatgpt.com/?q=' : 'https://claude.ai/new?q=') + encodeURIComponent(s.say), '_blank', 'noopener');   // a new chat with it filled in; if not, it's copied
+            } }, s.chat ? (d.ai === 'chatgpt' ? 'Tell ChatGPT' : 'Tell Claude') : 'Copy')
+          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : s.action === 'chatgpt' ? 'Open ChatGPT' : s.action === 'import' ? (imp ? 'Cancel' : 'Start') : s.action === 'import_review' ? 'Review' : s.action === 'fathom' ? 'Log in to Fathom' : 'Open')
           : null;
         var finished = s.done || s.skipped;
         return h('div', { class: 'gs-step' + (finished ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),

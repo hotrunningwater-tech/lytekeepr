@@ -25,7 +25,9 @@ ACCESS_SECONDS = 3600
 REFRESH_SECONDS = 30 * 24 * 3600
 CODE_SECONDS = 300
 SCOPE = "lytekeepr"
-REDIRECT_OK = ("https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback")
+REDIRECT_OK = ("https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback",
+               "https://chatgpt.com/connector_platform_oauth_redirect")               # ChatGPT (its older single address)
+REDIRECT_PREFIX_OK = ("https://chatgpt.com/connector/oauth/",)                         # ChatGPT: one address per connector
 LOCAL_REDIRECT = ("http://localhost:", "http://127.0.0.1:")          # Claude Code / Claude Desktop testing on your own computer
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 CALLS_PER_MINUTE = 120
@@ -1952,8 +1954,8 @@ def register(app):
     def oauth_register():
         body = request.get_json(silent=True) or {}
         uris = body.get("redirect_uris") or []
-        if not uris or not all(isinstance(u, str) and (u in REDIRECT_OK or u.startswith(LOCAL_REDIRECT)) for u in uris):
-            return oauth_error("invalid_redirect_uri", "Only Claude may connect to LyteKeepr.")
+        if not uris or not all(isinstance(u, str) and (u in REDIRECT_OK or u.startswith(LOCAL_REDIRECT + REDIRECT_PREFIX_OK)) for u in uris):
+            return oauth_error("invalid_redirect_uri", "Only Claude or ChatGPT may connect to LyteKeepr.")
         with _db() as conn:
             hour_ago = (datetime.now() - timedelta(hours=1)).isoformat(timespec="seconds")
             if conn.execute("SELECT COUNT(*) FROM oauth_clients WHERE created_at > ?", (hour_ago,)).fetchone()[0] >= 200:
@@ -1987,10 +1989,10 @@ def register(app):
             try:
                 req = _signer().loads(request.form.get("grant", ""), max_age=600)
             except Exception:
-                return "This page expired. Start connecting again from Claude.", 400
+                return "This page expired. Start connecting again from Claude or ChatGPT.", 400
             user = auth_gate._session["current_user"]() if "current_user" in auth_gate._session else None
             if not user or int(user.get("id") or 0) != req["u"]:
-                return "You are no longer signed in. Start connecting again from Claude.", 400
+                return "You are no longer signed in. Start connecting again from Claude or ChatGPT.", 400
             if request.form.get("choice") != "allow":
                 return redirect(req["redirect_uri"] + ("&" if "?" in req["redirect_uri"] else "?") + urllib.parse.urlencode({"error": "access_denied", "state": req["state"]}))
             code = secrets.token_urlsafe(32)
@@ -2007,7 +2009,7 @@ def register(app):
         with _db() as conn:
             client = _client(conn, a.get("client_id", ""))
         if not client:
-            return "Unknown app. Add LyteKeepr again in Claude.", 400
+            return "Unknown app. Add LyteKeepr again in Claude or ChatGPT.", 400
         redirect_uri = a.get("redirect_uri") or json.loads(client["redirect_uris"])[0]
         if redirect_uri not in json.loads(client["redirect_uris"]):
             return "This return address was not registered.", 400
@@ -2026,7 +2028,8 @@ def register(app):
                                  "state": a.get("state", ""), "u": int(user.get("id") or 0), "w": get_active_profile_id()})
         who = user.get("name") or user.get("email") or "you"
         switch = prefix + "/oauth/authorize/switch?" + urllib.parse.urlencode({"next": prefix + request.full_path})
-        page = CONSENT_PAGE.replace("{{WHO}}", _esc(who)).replace("{{EMAIL}}", _esc(user.get("email") or "")).replace("{{GRANT}}", _esc(grant)) \
+        app_name = "ChatGPT" if redirect_uri.startswith("https://chatgpt.com/") else "Claude"
+        page = CONSENT_PAGE.replace("{{APP}}", app_name).replace("{{WHO}}", _esc(who)).replace("{{EMAIL}}", _esc(user.get("email") or "")).replace("{{GRANT}}", _esc(grant)) \
                            .replace("{{ACTION}}", _esc(prefix + "/oauth/authorize")).replace("{{SWITCH}}", _esc(switch))
         return Response(page, mimetype="text/html", headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY"})
 
@@ -2035,7 +2038,7 @@ def register(app):
         """"Use another account" on the Allow page: sign out of LyteKeepr, pick the account in Google's list, back to the Allow page."""
         nxt = request.args.get("next", "")
         if not nxt.startswith(prefix + "/oauth/authorize?") or "\n" in nxt or "\r" in nxt:
-            return "Start connecting again from Claude.", 400
+            return "Start connecting again from Claude or ChatGPT.", 400
         response = redirect(prefix + "/auth/google/login")
         response.delete_cookie(auth_gate.COOKIE, path=prefix or "/")
         response.set_cookie("lk_next", nxt, max_age=900, httponly=True, samesite="Lax", path="/",
@@ -2213,7 +2216,7 @@ def _esc(text: str) -> str:
 
 
 CONSENT_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Connect Claude to LyteKeepr</title>
+<title>Connect {{APP}} to LyteKeepr</title>
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#b5c9d1;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#29434E;padding:16px;box-sizing:border-box}
 .card{background:#f2f8fa;border-radius:18px;box-shadow:0 4px 16px rgba(41,67,78,.10);padding:28px;max-width:420px;width:100%}
@@ -2223,10 +2226,10 @@ ul{font-size:14px;line-height:1.6;margin:0 0 16px;padding-left:18px}b{color:#294
 .allow{background:#29434E;color:#f2f8fa}.no{background:rgba(230,237,240,.9);color:#29434E}
 .switch{color:#29434E;font-weight:600;white-space:nowrap}
 </style></head><body><div class="card">
-<h1>Allow Claude to use your LyteKeepr?</h1>
+<h1>Allow {{APP}} to use your LyteKeepr?</h1>
 <p>Signed in as <b>{{WHO}}</b> {{EMAIL}} · <a class="switch" href="{{SWITCH}}">Use another account</a></p>
 <ul><li>See your contacts, funnels, tasks, reminders, recorded calls, emails and LinkedIn messages</li><li>Add and update contacts, stages, outreach statuses, tasks and reminders</li><li>Book or cancel meetings in your Google Calendar (invites go out from Google)</li><li>Create opportunities and manage who is on them</li><li>Send emails and LinkedIn messages for you, each shown to you word for word first</li></ul>
-<p>Claude sees only what you can see in LyteKeepr, and shows you every change before it makes it. Disconnect any time in LyteKeepr Settings → Claude.</p>
+<p>{{APP}} sees only what you can see in LyteKeepr, and shows you every change before it makes it. Disconnect any time in LyteKeepr Settings → Claude.</p>
 <form method="post" action="{{ACTION}}"><input type="hidden" name="grant" value="{{GRANT}}">
 <div class="row"><button class="no" name="choice" value="deny" type="submit">Cancel</button><button class="allow" name="choice" value="allow" type="submit">Allow</button></div></form>
 </div></body></html>"""
