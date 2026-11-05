@@ -10,11 +10,11 @@ from . import store
 FATHOM_KEY_PAGE = "https://fathom.video/api_settings/new"      # Fathom's "Generate API key" page (it asks to log in first)
 
 
-FATHOM_HOME = "https://fathom.video/"
+FATHOM_SETTINGS = "https://fathom.video/customize"          # Fathom's Settings page
 RECORD_GUIDE = {                                     # from Fathom's help pages (Settings: Video Conferencing, auto-record per meeting type)
-    "zoom": ["Click Open Fathom, then open Settings.", "Under Video Conferencing, click Connect next to Zoom. Sign in to Zoom and allow it.",
+    "zoom": ["Click Open Fathom: its Settings page opens.", "Under Video Conferencing, click Connect next to Zoom. Sign in to Zoom and allow it.",
              "On the same Settings page, turn on auto-record for your meetings, including impromptu Zoom meetings."],
-    "meet": ["Click Open Fathom, then open Settings.", "Turn on auto-record for your meetings, including impromptu Google Meet meetings.",
+    "meet": ["Click Open Fathom: its Settings page opens.", "Turn on auto-record for your meetings, including impromptu Google Meet meetings.",
              "Put your calls on your main Google Calendar, the one you signed up to Fathom with. Fathom only sees that one."],
 }
 
@@ -22,7 +22,7 @@ RECORD_GUIDE = {                                     # from Fathom's help pages 
 def _record_step(state: dict, recorded: bool) -> dict:
     """After Connect Fathom: Fathom set up to record Zoom and/or Google Meet calls. Done by the first recorded call, or by USER."""
     return {"key": "fathom_record", "title": "Record your calls with Fathom", "why": "Which do you use for calls?",
-            "done": recorded or bool(state.get("fathom_record_done")), "action": "", "link": FATHOM_HOME, "guide": RECORD_GUIDE}
+            "done": recorded or bool(state.get("fathom_record_done")), "action": "", "link": FATHOM_SETTINGS, "guide": RECORD_GUIDE}
 
 
 def _tell_claude(sentence: str, finish: str, then: str) -> list:
