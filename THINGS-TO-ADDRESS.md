@@ -18,11 +18,11 @@ Started 2026-11-05. Things to fix or decide later, grouped by how much they matt
 ## Important
 
 - **[Claude] Allow asked twice.** Every change in Claude needs two Allows (show first, then do). Idea: each tool's description tells Claude to print the final input in the chat, wait for yes, then call once. Not decided. (added 2026-11-05)
+- **[LinkedIn] Login window stays open.** After Approve, the add-on opens LinkedIn to check the login; already logged in, it should close by itself but didn't, and the add-on waited until USER closed it. (added 2026-11-05)
 - **[LinkedIn] Uninstall keeps the old link.** After uninstalling and reinstalling the add-on, it silently reused its old saved link (to the old workspace) and never showed Approve. Same with Claude's connector login. (added 2026-11-05)
 - **[LinkedIn] Scary install warning.** Installing the add-on, Claude says it gets "access to everything on your computer" and the developer is not verified. It's Claude's standard warning for every add-on that isn't in Anthropic's directory; ours only does LinkedIn. It goes away only if Anthropic reviews and lists the add-on. (added 2026-11-05)
 - **[Funnels] Brand name made up.** Claude named the brand "Seattle SignShop" from the email address instead of asking the business name. (added 2026-11-05)
 - **[Funnels] Stages don't follow what USER described.** No site visit stage; the design proof came before the quote though USER said it goes with the quote. (added 2026-11-05)
-- **[Setup] Step 7: import a CSV through Claude.** Today the step opens the CRM import. (added before 2026-11-05)
 - **[Setup] Calendar on a brand-new account.** Check that it really syncs. (added before 2026-11-05)
 - **[Legal] Terms/privacy page:** mention the LinkedIn add-on and the backups. (added before 2026-11-05)
 
