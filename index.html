@@ -33,7 +33,7 @@
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
 <link rel="stylesheet" href="styles.css?v=65">
 <link rel="stylesheet" href="lk-calendar/calendar.css?v=task1d">
-<link rel="stylesheet" href="lk-calendar/settings.css?v=team11">
+<link rel="stylesheet" href="lk-calendar/settings.css?v=plan1">
 </head>
 <body>
 
@@ -653,11 +653,11 @@
 
 <script src="chat.js"></script>
 <script src="lk-calendar/calendar.js?v=home9"></script>
-<script src="lk-calendar/settings.js?v=data3"></script>
+<script src="lk-calendar/settings.js?v=plan1"></script>
 <script src="lk-calendar/opportunities.js?v=hist1"></script>
 <script src="lk-calendar/work.js?v=1"></script>
 <script src="lk-calendar/records.js?v=2"></script>
-<script src="lk-calendar/home.js?v=35"></script>
+<script src="lk-calendar/home.js?v=36"></script>
 <script src="lk-calendar/docs.js?v=3"></script>
 <script src="lk-calendar/goals.js?v=2"></script>
 <script src="lk-calendar/viewstate.js"></script>
@@ -2470,7 +2470,13 @@
       crmImportBody.hidden = true;
       document.getElementById('crmSearchPill').hidden = false; document.getElementById('crmBatchPill').hidden = false;
     }
-    function showCrmImportSubTab() {
+    window.lkOpenImportPlan = function (token) {     // Claude's plan for a dropped list: CRM → Import, Match fields filled in
+      stopLinkedinAutoRefresh();
+      openCrmLanding();
+      showCrmContactsTab();
+      showCrmImportSubTab(token);
+    };
+    function showCrmImportSubTab(token) {
       crmImportSubTabBtn.classList.add('is-active');
       crmImportSubTabBtn.setAttribute('aria-selected', 'true');
       crmPeopleSubTabBtn.classList.remove('is-active');
@@ -2483,8 +2489,16 @@
       document.getElementById('crmCompanyActions').hidden = true;
       crmImportBody.hidden = false;
       document.getElementById('crmSearchPill').hidden = true; document.getElementById('crmBatchPill').hidden = true; document.getElementById('crmBatchChips').hidden = true;
-      if (window.lkContacts) window.lkContacts.mountImport(crmImportBody, function () { showCrmPeopleSubTab(); loadCrmOverview(); });
+      if (window.lkContacts) window.lkContacts.mountImport(crmImportBody, function () { showCrmPeopleSubTab(); loadCrmOverview(); },
+                                                           typeof token === 'string' ? token : '');
     }
+    (function () {                                   // Claude's review link: /?import=<token>
+      var token = new URLSearchParams(location.search).get('import');
+      if (!token) return;
+      history.replaceState(null, '', location.pathname);
+      function go() { window.lkOpenImportPlan(token); }
+      if (document.readyState === 'complete') go(); else window.addEventListener('load', go);     // after settings.js (the import page)
+    })();
     crmImportSubTabBtn.addEventListener('click', showCrmImportSubTab);
     document.getElementById('crmScopeSelect').addEventListener('change', function () {
       crmScope = this.value;

@@ -23,6 +23,7 @@ Started 2026-11-05. Things to fix or decide later, grouped by how much they matt
 - **[LinkedIn] Scary install warning.** Installing the add-on, Claude says it gets "access to everything on your computer" and the developer is not verified. It's Claude's standard warning for every add-on that isn't in Anthropic's directory; ours only does LinkedIn. It goes away only if Anthropic reviews and lists the add-on. (added 2026-11-05)
 - **[Funnels] Brand name made up.** Claude named the brand "Seattle SignShop" from the email address instead of asking the business name. (added 2026-11-05)
 - **[Funnels] Stages don't follow what USER described.** No site visit stage; the design proof came before the quote though USER said it goes with the quote. (added 2026-11-05)
+- **[Funnels] Moving contacts in the cold outreach funnel.** Set up how contacts move through the cold outreach stages: automatically and by Claude, or only by Claude. Pick depending on how easy it is to make automatic moves reliable and cheap. (added 2026-11-05)
 - **[Setup] Calendar on a brand-new account.** Check that it really syncs. (added before 2026-11-05)
 - **[Legal] Terms/privacy page:** mention the LinkedIn add-on and the backups. (added before 2026-11-05)
 

@@ -21,6 +21,29 @@ def _claude_step() -> dict:
     return {"key": "claude", "title": "Connect Claude", "why": "Click Connect. In Claude, click Add, then Allow.", "done": _claude_connected(), "action": "claude", "link": link}
 
 
+def _import_step(dropped, done: bool, unorganized: bool) -> dict:
+    """Drop a file on Home → Claude plans it (asks a question or two) → USER checks the plan on the Import page and clicks Import.
+    A list imported by hand on CRM → Import is organized by Claude afterwards (the older way, kept)."""
+    step = {"key": "import", "title": "Import a list", "why": "A spreadsheet of contacts you already have. No list? Click Skip.",
+            "done": done, "skippable": True, "action": "" if done else "import"}
+    if done:
+        return step
+    if dropped and dropped["plan"]:
+        return {**step, "title": "Import a list: check and import", "action": "import_review",
+                "link": f"{os.getenv('LK_URL_PREFIX', '').rstrip('/')}/?import={dropped['token']}",
+                "why": "Claude's plan for " + dropped["name"] + " is ready. Click Review, check it, then click Import."}
+    if dropped:
+        say = "In LyteKeepr, organize the list I just dropped."
+        return {**step, "title": "Import a list: let Claude organize it", "action": "", "say": say, "chat": True,
+                "how": _tell_claude(say, "Send it. Claude asks a question or two (for example: leads or just contacts, which funnel). Answer them.",
+                                    "Claude gives you a link. Check its plan on LyteKeepr's Import page, then click Import.")}
+    if unorganized:
+        say = "In LyteKeepr, organize the list I just imported."
+        return {**step, "title": "Import a list: let Claude organize it", "action": "", "say": say, "chat": True,
+                "how": _tell_claude(say, "Send it.", "Claude shows how many people go in each stage. Say yes, or tell it what to change.")}
+    return step
+
+
 def _state_key() -> str:
     from . import users
     return f"getting_started:{'admin' if users.is_admin() else users.current_id()}"
@@ -102,6 +125,9 @@ def status() -> dict:
             funnels = conn.execute("SELECT COUNT(*) FROM funnels").fetchone()[0]
             imported = bool(conn.execute("SELECT 1 FROM people WHERE IFNULL(source_file, '') != '' LIMIT 1").fetchone())
         organized = imported and contacts.import_organized()
+        from . import import_plans
+        dropped = import_plans.waiting()
+        list_done = import_plans.any_planned_import() or (imported and organized)
         waiting = _email_waiting()
         linked = _linkedin_connected()
         li_waiting = _linkedin_waiting() if linked else 0
@@ -156,13 +182,7 @@ def status() -> dict:
             {"key": "calendar", "title": "Your calendar",
              "why": "Synced from your Google Calendar." if cal.get("last_sync") and not cal.get("needs_reconnect") else "Connect Google to bring in your calendar.",
              "done": bool(cal.get("last_sync")) and not cal.get("needs_reconnect"), "action": "" if cal.get("last_sync") and not cal.get("needs_reconnect") else "gmail"},
-            {"key": "import", "title": "Import a list" if not imported or organized else "Import a list: let Claude organize it",
-             "why": "A spreadsheet of contacts you already have. No list? Click Skip.", "done": imported and organized, "skippable": True,
-             "action": "" if imported else "import",
-             **({"say": "In LyteKeepr, organize the list I just imported.", "chat": True,
-                 "how": _tell_claude("In LyteKeepr, organize the list I just imported.", "Send it.",
-                                     "Claude shows which funnel stage each person goes to, grouped by stage. Say yes, or tell it what to change.")}
-                if imported and not organized else {})},
+            _import_step(dropped, list_done, imported and not organized),
         ]
     else:
         steps = [_claude_step()]

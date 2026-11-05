@@ -36,6 +36,9 @@
 .lks-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
 .lks-opt.wide { grid-column: 1 / -1; }
 .lks-opt label { display: block; font-family: var(--font-heading); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 5px; }
+.lks-plan { display: flex; flex-direction: column; gap: 10px; background: rgba(127,168,184,.12); border-radius: 14px; padding: 14px 16px; }
+.lks-plan h3 { margin: 0; font-family: var(--font-heading); font-size: 14px; } .lks-plan p { margin: 0; font-size: 12.5px; }
+.lks-plan .lks-stages { color: var(--ink-soft); }
 .lks-check { display: flex; gap: 8px; align-items: center; font-size: 12.5px; cursor: pointer; }
 .lks-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .lks-stat { background: #fff; border-radius: 14px; padding: 14px 16px; } .lks-stat b { display: block; font-family: var(--font-heading); font-size: 26px; } .lks-stat span { font-size: 12px; color: var(--ink-soft); }

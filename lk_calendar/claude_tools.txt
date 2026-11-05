@@ -98,6 +98,8 @@ dismiss_suggestion | Dismiss a suggestion
 send_email | Send an email
 email_inbox | Email waiting for review
 sort_email_inbox | Sort email waiting for review
+dropped_list | The list dropped for import (not imported yet): its columns, rows and the funnels
+plan_import | Plan the import of the dropped list: saved for the user to check and import in LyteKeepr; creates nothing
 imported_list | The list just imported (new: what the file said about each person, so Claude can place them)
 organize_imported | Put the imported list into a funnel (new: everyone in one go, grouped by stage, instead of one move per person)
 linkedin_inbox | LinkedIn people waiting for review

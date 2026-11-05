@@ -67,6 +67,10 @@
     else if (s.action === 'linkedin_approve') location.href = s.link;     // here, in the window and account the USER is signed in to
     else if (s.action === 'claude') window.open(s.link, '_blank', 'noopener');   // Claude's add-connector form, already filled in
     else if (s.action === 'import') { imp = imp ? null : { stage: 'drop' }; loadStart(); }
+    else if (s.action === 'import_review') {             // Claude's plan, on CRM → Import (Match fields, filled in)
+      var token = (s.link.split('import=')[1] || '');
+      if (window.lkOpenImportPlan) window.lkOpenImportPlan(decodeURIComponent(token)); else location.href = s.link;
+    }
     else if (s.action === 'crm') { var crm = $('crmTab'); if (crm) crm.click(); }
     else if (s.action === 'linkedin') {                 // downloads the Claude add-on, then says exactly what to do with the file
       location.href = (window.LK_PREFIX || '') + '/api/linkedin/addon';
@@ -84,51 +88,20 @@
       .map(function (t) { return h('li', {}, t); }));
   }
   var startTimer = null;
-  /* ---------- Import a list, right in the step: drop a file, LyteKeepr matches the columns, one click imports ---------- */
-  var imp = null;                      // null: closed; {stage: 'drop' | 'busy' | 'ready' | 'done', scan, brand, error, result}
+  /* ---------- Import a list, right in the step: drop a file; LyteKeepr keeps it, then Claude plans the import and USER checks it ---------- */
+  var imp = null;                      // null: closed; {stage: 'drop' | 'busy', error}
   function importBox() {
     if (!imp) return null;
-    function setErr(e) { imp.stage = 'drop'; imp.error = e.message; loadStart(); }
     function take(file) {
       if (!file) return;
       var fd = new FormData(); fd.append('file', file);
       imp = { stage: 'busy' }; loadStart();
       fetch('/api/calendar/import/scan', { method: 'POST', body: fd })
         .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.error || 'Something went wrong'); return d; }); })
-        .then(function (scan) { var keys = Object.keys(state.brands).filter(function (k) { return k !== 'personal'; });
-          imp = { stage: 'ready', scan: scan, brand: keys.length === 1 ? keys[0] : '' }; loadStart(); })
-        .catch(setErr);
+        .then(function () { imp = null; loadStart(); })          // the step now says: Tell Claude
+        .catch(function (e) { imp = { stage: 'drop', error: e.message }; loadStart(); });
     }
     if (imp.stage === 'busy') return h('div', { class: 'gs-drop' }, 'Reading your file…');
-    if (imp.stage === 'done') return h('div', { class: 'gs-drop ok' }, imp.result);
-    if (imp.stage === 'ready') {
-      var sc = imp.scan, labels = {};
-      sc.fields.forEach(function (f) { labels[f.key] = f.label; });
-      var found = sc.columns.filter(function (c) { return c.matched && c.field !== 'extra' && c.field !== 'ignore'; });
-      var who = found.some(function (c) { return ['name', 'email', 'url', 'business_name'].indexOf(c.field) >= 0; });
-      if (!who) return h('div', { class: 'gs-drop' }, [h('p', {}, 'LyteKeepr couldn\u2019t tell which column is the name, email or profile link.'),
-        h('button', { class: 'hm-mini', type: 'button', onclick: function () { imp = null; var crm = $('crmTab'); if (crm) crm.click(); } }, 'Match the columns myself')]);
-      var keys = Object.keys(state.brands).filter(function (k) { return k !== 'personal'; });
-      var pick = keys.length > 1 ? brandSelect(function (k) { imp.brand = k; }, 'Which brand are they for?') : null;
-      var extra = sc.columns.length - found.length;
-      return h('div', { class: 'gs-drop' }, [
-        h('p', {}, [h('b', {}, sc.rows + ' ' + (sc.rows === 1 ? 'person' : 'people') + ' found'), ': ' + found.map(function (c) { return (labels[c.field] || c.field).toLowerCase(); }).join(', ') +
-          (extra ? ' (' + extra + ' other column' + (extra === 1 ? '' : 's') + ' kept in their notes)' : '') +
-          (keys.length === 1 ? '. Brand: ' + state.brands[keys[0]].name + '.' : '.')]),
-        imp.error ? h('p', { class: 'lks-err' }, imp.error) : null,
-        h('div', { class: 'lks-row' }, [pick,
-          h('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: function () {
-            if (!imp.brand) { imp.error = 'Choose the brand these people are for.'; loadStart(); return; }
-            var mapping = {}; sc.columns.forEach(function (c) { mapping[c.name] = c.field; });
-            imp.stage = 'busy'; loadStart();
-            api('POST', '/api/calendar/import/run', { token: sc.token, mapping: mapping,
-                                                      options: { brand: imp.brand, duplicates: 'skip', batch: sc.default_batch, channel: sc.channel } })
-              .then(function (r) { imp = { stage: 'done', result: r.added + ' contact' + (r.added === 1 ? '' : 's') + ' imported' +
-                (r.skipped ? ', ' + r.skipped + ' already here' : '') + '.' }; loadStart(); })
-              .catch(function (e) { imp = { stage: 'ready', scan: sc, brand: imp.brand, error: e.message }; loadStart(); });
-          } }, 'Import'),
-          h('button', { class: 'hm-mini', type: 'button', onclick: function () { imp = { stage: 'drop' }; loadStart(); } }, 'Choose another file')])]);
-    }
     var input = h('input', { type: 'file', accept: '.csv,.xlsx,.tsv,.txt', hidden: true, onchange: function () { take(input.files[0]); } });
     var box = h('div', { class: 'gs-drop gs-dropzone', onclick: function () { input.click(); } }, [
       h('p', {}, [h('b', {}, 'Drop your CSV here'), ', or click to choose a file. Excel (.xlsx) works too.']),
@@ -168,7 +141,7 @@
               try { navigator.clipboard.writeText(s.say).then(function () { b.textContent = 'Copied'; }, function () {}); } catch (e) { /* no clipboard */ }
               if (s.chat) window.open('https://claude.ai/new?q=' + encodeURIComponent(s.say), '_blank', 'noopener');   // a new chat with it filled in; if not, it's copied
             } }, s.chat ? 'Tell Claude' : 'Copy')
-          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : s.action === 'import' ? (imp ? 'Cancel' : 'Start') : 'Open')
+          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : s.action === 'import' ? (imp ? 'Cancel' : 'Start') : s.action === 'import_review' ? 'Review' : 'Open')
           : null;
         var finished = s.done || s.skipped;
         return h('div', { class: 'gs-step' + (finished ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),

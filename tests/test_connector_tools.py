@@ -120,7 +120,7 @@ class ToolListTest(unittest.TestCase):
     def test_reads_never_ask(self):
         reads = {t["name"] for t in claude_connector.TOOLS if t["read"]}
         self.assertFalse(reads & claude_connector.SHOWN_FIRST)
-        self.assertEqual(claude_connector.SHOWN_FIRST | reads | claude_connector.SENDS | set(claude_connector.RUN_ONLY_TOOLS),
+        self.assertEqual(claude_connector.SHOWN_FIRST | reads | claude_connector.SENDS | set(claude_connector.RUN_ONLY_TOOLS) | claude_connector.PLANS_ONLY,
                          {t["name"] for t in claude_connector.TOOLS})
 
     def test_scheduled_run_saves_prep_with_its_key(self):

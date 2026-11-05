@@ -727,7 +727,8 @@ TOOLS = [
                                                       "remove": {"type": "array", "items": {"type": "integer"}, "description": "person_ids to remove"}}},
      "read": False},
     {"name": "imported_list", "title": "The list just imported",
-     "description": ("The contacts from the most recently imported spreadsheet: each with what the file said about them (company, status, notes, "
+     "description": ("The contacts from the most recently imported spreadsheet (already imported; a file dropped but not imported yet: "
+                     "dropped_list): each with what the file said about them (company, status, notes, "
                      "other columns) and their funnel and stage now. For 'organize the list I just imported': call this, then list_funnels, decide "
                      "each person's stage from what the file says (unclear ones in the first stage), and place them all with organize_imported."),
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
@@ -740,6 +741,32 @@ TOOLS = [
                                                                                      "person_ids": {"type": "array", "items": {"type": "integer"}}},
                                                    "required": ["stage", "person_ids"]}}},
          "required": ["funnel_id", "placements"]},
+     "read": False},
+    {"name": "dropped_list", "title": "The list dropped for import",
+     "description": ("The spreadsheet the user dropped on LyteKeepr (Home's Import a list, or CRM → Import), not imported yet: its columns with "
+                     "LyteKeepr's guess of each field, its rows, the sales funnels (the main one, set up for the business, and any cold outreach "
+                     "ones marked) and the stages a new cold outreach funnel would get. For 'organize the list I just dropped': call this, then "
+                     "ask the user, one question at a time, only what you can't tell yourself: 1) unless they already have funnels, in plain words: "
+                     "'Track them as leads you're selling to, or just keep them as contacts?'; 2) say in a few words what the list looks like and "
+                     "suggest: people they never talked to (no status, no past conversation) = a cold outreach funnel, people already in talks = "
+                     "the main funnel; the user confirms; 3) if a funnel of that kind already exists: 'Add them to your funnel <name>, or create a "
+                     "separate one?'. Then plan_import. Never list the people in the chat."),
+     "inputSchema": {"type": "object", "properties": {}}, "read": True},
+    {"name": "plan_import", "title": "Plan the import of the dropped list",
+     "description": ("Saves your plan for the dropped list; creates nothing. The user checks it in LyteKeepr (review_link: the Match fields page, "
+                     "filled in with your plan) and clicks Import there. Give the brand; mapping only for columns where LyteKeepr's guess is "
+                     "wrong (column -> field); funnel: leave it out for contacts only, else {funnel_id} for an existing funnel, or {new: 'cold' or "
+                     "'regular', name} for a new one (cold: '<main funnel name>: Cold outreach'; regular: a copy of the main funnel's stages). "
+                     "stage: where everyone goes (default the first stage); column + values: a stage by the value of one column (e.g. Status "
+                     "'quote sent' -> Quote), the rest in stage. Then tell the user only the totals (summary) and the review_link."),
+     "inputSchema": {"type": "object", "properties": {
+         "brand": {"type": "string"},
+         "mapping": {"type": "object", "description": "column name -> field (from dropped_list's fields)", "additionalProperties": {"type": "string"}},
+         "funnel": {"type": "object", "properties": {
+             "funnel_id": {"type": "integer"}, "new": {"type": "string", "enum": ["cold", "regular"]}, "name": {"type": "string"},
+             "stage": {"type": "string"}, "column": {"type": "string"},
+             "values": {"type": "object", "description": "the column's value -> stage name", "additionalProperties": {"type": "string"}}}}},
+         "required": ["brand"]},
      "read": False},
     {"name": "email_inbox", "title": "Email waiting for review",
      "description": ("Emails from people who aren't contacts yet wait for review. Here they are by sender, in groups (written: the user has written "
@@ -798,7 +825,8 @@ RUN_ONLY_TOOLS = {        # name -> what Claude is told when it reaches for one 
     "save_followup_draft": "Nothing was saved: this is for the scheduled run only. In a chat, save an email draft with save_email_draft when the user asks.",
 }
 SENDS = {"send_email", "reply_email", "send_draft", "send_linkedin_message"}          # these show the message itself (_send_preview, _linkedin_preview)
-SHOWN_FIRST = {t["name"] for t in TOOLS if not t["read"]} - SENDS - set(RUN_ONLY_TOOLS)
+PLANS_ONLY = {"plan_import"}          # saves a plan that USER checks and approves in LyteKeepr: nothing to show first in the chat
+SHOWN_FIRST = {t["name"] for t in TOOLS if not t["read"]} - SENDS - set(RUN_ONLY_TOOLS) - PLANS_ONLY
 RUN_MAY_SKIP = {"save_meeting_prep", "save_call_summary"}    # also the scheduled run's: nobody to ask there, so its run key is enough
 SHOW_RULE = ("SHOWN FIRST: call first WITHOUT confirm_code. Nothing is done: you get show_the_user, exactly what LyteKeepr will do (who, what, "
              "old → new, the full text). Show it to the user word for word, then ask 'Do it? yes / no'. Only after their yes, call again with the "
@@ -1311,6 +1339,24 @@ def _run_tool(call, name: str, args: dict):
         convs = need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review"))["conversations"]
         return [{"person_id": c["person_id"], "name": c["participant_name"], "company": c.get("company_name"),
                  "last_message": (c.get("last_message_text") or "")[:400], "when": c.get("last_message_at")} for c in convs]
+    if name == "dropped_list":
+        return need(*call("GET", "/api/calendar/import/dropped"))
+    if name == "plan_import":
+        dropped = need(*call("GET", "/api/calendar/import/dropped"))
+        if not dropped.get("token"):
+            raise ValueError(dropped.get("message") or "No file is waiting.")
+        mapping = {c["name"]: c["field"] for c in dropped["columns"]}
+        mapping.update({k: v for k, v in (args.get("mapping") or {}).items() if k in mapping})
+        saved = need(*call("POST", "/api/calendar/import/plan", {"token": dropped["token"], "mapping": mapping, "brand": args.get("brand"),
+                                                                 "funnel": args.get("funnel") or None}))
+        f = saved.get("funnel")
+        where = (f"into {'a new' if f['new'] else 'the'} funnel {f['name']}: " + ", ".join(f"{st} {n}" for st, n in saved["counts"].items())
+                 if f else "as contacts only, no funnel")
+        from flask import has_request_context, request
+        site = f"{request.headers.get('X-Forwarded-Proto') or request.scheme}://{request.host}" if has_request_context() else ""
+        link = f"{site}{os.getenv('LK_URL_PREFIX', '').rstrip('/')}/?import={saved['token']}"
+        return {"saved": True, "summary": f"{saved['people']} people from {saved['file']}, {where}. Nothing is imported yet.",
+                "review_link": link, "tell_the_user": "Review it in LyteKeepr: " + link + " Adjust anything there, then click Import."}
     if name == "imported_list":
         return need(*call("GET", "/api/calendar/import/latest"))
     if name == "organize_imported":
@@ -1679,9 +1725,10 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
         funnel = next((f for f in need(*call("GET", "/api/crm/funnels")).get("funnels") or [] if f.get("funnel_id") == int(a.get("funnel_id") or 0)), {})
         lines.append(f"Put {sum(len(g.get('person_ids') or []) for g in a.get('placements') or [])} people from {latest.get('file') or 'the imported list'} "
                      f"into the funnel {funnel.get('name') or '#' + str(a.get('funnel_id'))}:")
-        for g in a.get("placements") or []:
+        for g in a.get("placements") or []:          # totals only: the user checks the people on the funnel board, not in the chat
             ids = [int(i) for i in g.get("person_ids") or []]
-            lines.append(f"- {g.get('stage')} ({len(ids)}): " + ", ".join(names.get(i, f"#{i} (not from the import: skipped)") for i in ids))
+            other = [i for i in ids if i not in names]
+            lines.append(f"- {g.get('stage')}: {len(ids) - len(other)}" + (f" ({len(other)} not from the import: skipped)" if other else ""))
         left = len(people) - sum(len(g.get("person_ids") or []) for g in a.get("placements") or [])
         if left > 0:
             lines.append(f"Not placed: {left} (they stay where they are)")

@@ -215,16 +215,68 @@ def main():
     except Exception:
         pass
 
-    # Import a list, then Claude organizes it: sees what the file said, places everyone by stage in one go, and the step is done
+    # Drop a list on Home, Claude plans it, USER checks the plan on the Import page and imports: nothing exists before that click
     import io
+    def drop(text, name):
+        return a.post("/api/calendar/import/scan", data={"file": (io.BytesIO(text.encode()), name)}, content_type="multipart/form-data").get_json()
+    def import_step():
+        return next(x for x in a.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "import")
+    def people_count():
+        return len(a.get("/api/calendar/contacts").get_json().get("contacts") or [])
+    drop("Instagram,Bio\nhttps://instagram.com/coldone,Study abroad\nhttps://instagram.com/coldtwo,Tutors\n", "cold.csv")
+    step = import_step()
+    check(not step["done"] and step.get("chat") and step.get("say") == "In LyteKeepr, organize the list I just dropped.", f"after a drop, the step doesn't hand over to Claude: {step}")
+    dropped = claude_connector._run_tool(call, "dropped_list", {})
+    main_f = next((f for f in dropped.get("funnels") or [] if f["main"]), None)
+    cold_stages = dropped.get("new_cold_outreach_stages") or []
+    check(dropped.get("file") == "cold.csv" and dropped.get("people") == 2 and main_f, f"Claude doesn't see the dropped list and the main funnel: {dropped}")
+    check(cold_stages[:3] == ["Prospect found", "First message sent", "Follow-up sent"] and cold_stages[3:] == main_f["stages"],
+          f"a cold outreach funnel isn't three stages in front of the main funnel: {cold_stages} / {main_f}")
+    check("plan_import" not in claude_connector.SHOWN_FIRST, "planning an import asks twice")
+    before, funnels_before = people_count(), len(a.get("/api/crm/funnels").get_json()["funnels"])
+    saved = claude_connector._run_tool(call, "plan_import", {"brand": "lytekeepr", "funnel": {"new": "cold", "name": main_f["name"] + ": Cold outreach"}})
+    token = dropped["token"]
+    check(saved.get("review_link", "").endswith("/?import=" + token) and "Prospect found 2" in saved.get("summary", "") and "coldone" not in json.dumps(saved),
+          f"the plan doesn't come back as totals and a review link: {saved}")
+    check(people_count() == before and len(a.get("/api/crm/funnels").get_json()["funnels"]) == funnels_before, "planning created contacts or a funnel")
+    step = import_step()
+    check(step.get("action") == "import_review" and step.get("link", "").endswith("?import=" + token) and not step["done"], f"the step doesn't offer the review: {step}")
+    review = a.get("/api/calendar/import/plan?token=" + token).get_json()
+    check(review.get("counts") == {"by_value": {}, "default": 2} and review["plan"]["funnel"]["stages"] == cold_stages and review["scan"]["rows"] == 2,
+          f"the review page doesn't get the plan: {review}")
+    plan_f = dict(review["plan"]["funnel"], name="Signs: Cold outreach", stage="Prospect found")
+    ran = a.post("/api/calendar/import/run", json={"token": token, "mapping": review["plan"]["mapping"],
+                                                    "options": {"brand": "lytekeepr", "duplicates": "skip", "batch": "b", "plan": {"funnel": plan_f}}}).get_json()
+    check(ran.get("added") == 2 and (ran.get("funnel") or {}).get("placed") == {"Prospect found": 2}, f"importing the plan didn't place everyone: {ran}")
+    cold_id = (ran.get("funnel") or {}).get("funnel_id")
+    check([s["name"] for s in funnel_stages(cold_id)] == cold_stages, "the new cold outreach funnel doesn't have the planned stages")
+    check(import_step()["done"], f"'Import a list' is not done after importing Claude's plan: {import_step()}")
+    check(a.get("/api/calendar/import/plan?token=" + token).status_code == 409, "an imported plan can be imported again")
+    # the next list joins the existing cold outreach funnel, a stage by the file's Status column
+    drop("Instagram,Status\nhttps://instagram.com/coldthree,replied\nhttps://instagram.com/coldfour,\n", "cold2.csv")
+    again = claude_connector._run_tool(call, "dropped_list", {})
+    check(any(f["funnel_id"] == cold_id and f["cold_outreach"] for f in again["funnels"]), f"Claude doesn't see the cold outreach funnel as one: {again['funnels']}")
+    first_main = main_f["stages"][0]
+    saved = claude_connector._run_tool(call, "plan_import", {"brand": "lytekeepr", "funnel": {"funnel_id": cold_id, "column": "Status", "values": {"Replied": first_main}}})
+    check(f"{first_main} 1" in saved["summary"] and "Prospect found 1" in saved["summary"], f"placing by a column's value doesn't plan right: {saved}")
+    review = a.get("/api/calendar/import/plan?token=" + again["token"]).get_json()
+    ran = a.post("/api/calendar/import/run", json={"token": again["token"], "mapping": review["plan"]["mapping"],
+                                                    "options": {"brand": "lytekeepr", "duplicates": "skip", "plan": {"funnel": review["plan"]["funnel"]}}}).get_json()
+    check((ran.get("funnel") or {}).get("placed") == {first_main: 1, "Prospect found": 1} and len(a.get("/api/crm/funnels").get_json()["funnels"]) == funnels_before + 1,
+          f"joining the existing funnel didn't place by Status, or made another funnel: {ran}")
+    try:
+        claude_connector._run_tool(call, "plan_import", {"brand": "lytekeepr"})
+        problems.append("a plan was saved with no file waiting")
+    except Exception:
+        pass
+
+    # A list imported by hand on CRM → Import: Claude organizes it afterwards, everyone by stage in one go, shown as totals
     csv_text = "Name,Email,Company,Status\nAva Stone,ava@stone.test,Stone Co,quote sent\nBen Ruiz,ben@ruiz.test,Ruiz LLC,new lead\n"
     scan = a.post("/api/calendar/import/scan", data={"file": (io.BytesIO(csv_text.encode()), "leads.csv")}, content_type="multipart/form-data").get_json()
     mapping = {c["name"]: c["field"] for c in scan["columns"]}
     ran = a.post("/api/calendar/import/run", json={"token": scan["token"], "mapping": mapping,
                                                     "options": {"brand": "lytekeepr", "duplicates": "skip", "batch": scan["default_batch"]}}).get_json()
     check(ran.get("added") == 2, f"the list was not imported: {ran}")
-    step = next(x for x in a.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "import")
-    check(not step["done"] and step.get("chat") and "organize the list" in step.get("say", ""), f"after importing, the step doesn't hand over to Claude: {step}")
     listed = claude_connector._run_tool(call, "imported_list", {})
     ids = {p["name"]: p["person_id"] for p in listed["people"]}
     check(set(ids) == {"Ava Stone", "Ben Ruiz"} and any("quote sent" in json.dumps(p) for p in listed["people"]),
@@ -234,12 +286,10 @@ def main():
     args = {"funnel_id": target, "placements": [{"stage": names[0], "person_ids": [ids["Ben Ruiz"]]}, {"stage": names[2], "person_ids": [ids["Ava Stone"]]}]}
     shown = claude_connector._run_tool(call, "organize_imported", dict(args))
     text = shown.get("show_the_user") or ""
-    check("Ava Stone" in text and f"{names[2]} (1)" in text and "Coaching clients" in text, f"organizing is not shown first, by stage and by name: {text}")
+    check(f"{names[2]}: 1" in text and "Ava Stone" not in text and "Coaching clients" in text, f"organizing is not shown first as totals by stage: {text}")
     check(not stage_of(ids["Ava Stone"]), "organizing changed something before the yes")
     claude_connector._run_tool(call, "organize_imported", dict(args, confirm_code=shown.get("confirm_code")))
     check(stage_of(ids["Ava Stone"]) == names[2] and stage_of(ids["Ben Ruiz"]) == names[0], "the imported people were not placed in their stages")
-    step = next(x for x in a.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "import")
-    check(step["done"], f"'Import a list' is not done after Claude organized it: {step}")
 
     # a new USER's workspace starts without the owner's brands
     b = app.test_client()

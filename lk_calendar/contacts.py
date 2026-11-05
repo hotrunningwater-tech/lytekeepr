@@ -14,8 +14,6 @@ import io
 import json
 from pathlib import Path
 import re
-import secrets
-import time
 from datetime import date, datetime, timedelta
 
 from contextlib import contextmanager
@@ -61,8 +59,6 @@ _SYN = {syn: key for key, group in SYNONYMS.items() for syn in group.split("|")}
 
 MAX_ROWS = 10000
 MAX_BYTES = 8 * 1024 * 1024
-_UPLOADS: dict = {}          # token -> scanned file (kept in memory for a short while; one app process)
-UPLOAD_TTL = 30 * 60
 
 
 def _norm_header(text: str) -> str:
@@ -138,14 +134,20 @@ def _week() -> str:
 
 
 def scan(raw: bytes, filename: str) -> dict:
+    from . import import_plans
     headers, rows = read_table(raw, filename)
-    now = time.time()
-    for k in [k for k, v in _UPLOADS.items() if now - v["ts"] > UPLOAD_TTL]:
-        _UPLOADS.pop(k)
-    token = secrets.token_urlsafe(12)
-    _UPLOADS[token] = {"name": filename, "headers": headers, "rows": rows, "ts": now}
+    token = import_plans.put(filename, headers, rows)          # kept until imported (Claude may plan it first)
+    return scan_result({"token": token, "name": filename, "headers": headers, "rows": rows})
+
+
+def _saved_mapping(headers: list):
     with store._conn() as conn:
-        saved = conn.execute("SELECT * FROM import_mappings WHERE signature = ?", (signature(headers),)).fetchone()
+        return conn.execute("SELECT * FROM import_mappings WHERE signature = ?", (signature(headers),)).fetchone()
+
+
+def guess_columns(headers: list, rows: list) -> list:
+    """Each column with examples and the field it most likely is (a saved mapping first, then the known column names)."""
+    saved = _saved_mapping(headers)
     saved_map = json.loads(saved["mapping"]) if saved else {}
     cols = []
     for h in headers:
@@ -157,10 +159,18 @@ def scan(raw: bytes, filename: str) -> dict:
         else:
             guess, matched = "extra", False
         cols.append({"name": h, "sample": sample, "field": guess, "matched": matched})
+    return cols
+
+
+def scan_result(up: dict) -> dict:
+    """What the Match fields step shows for a kept file."""
+    headers, rows = up["headers"], up["rows"]
+    saved = _saved_mapping(headers)
+    cols = guess_columns(headers, rows)
     urls = [r.get(c["name"], "") for c in cols if c["field"] == "url" for r in rows[:50]]
     chans = [detect_channel(u) for u in urls if u]
     channel = max(set(chans), key=chans.count) if chans else ""
-    return {"token": token, "filename": filename, "rows": len(rows), "columns": cols, "channel": channel,
+    return {"token": up["token"], "filename": up["name"], "rows": len(rows), "columns": cols, "channel": channel,
             "saved_mapping": saved["name"] if saved else None,
             "fields": [{"key": k, "label": v} for k, v in FIELDS + SPECIAL],
             "default_batch": " · ".join(x for x in (channel.title(), _week()) if x)}
@@ -411,9 +421,13 @@ def contact_dict(conn, pid: int) -> dict | None:
 
 # ----------------------------------------------------------------- import
 def import_rows(token: str, mapping: dict, options: dict) -> dict:
-    up = _UPLOADS.get(token)
+    """The file's rows as contacts. With options['plan'] (Claude's plan, as USER checked it): also into its funnel, each in a stage."""
+    from . import import_plans
+    up = import_plans.get(token)
     if not up:
         raise store.ValidationError("That upload expired. Choose the file again.")
+    plan = import_plans.check(up, {**options["plan"], "mapping": mapping, "brand": options.get("brand")}) if options.get("plan") else None
+    person_rows = []                                   # (row index, person) for the funnel
     channel_opt = (options.get("channel") or "").strip().lower()
     if channel_opt and channel_opt not in ("linkedin", "instagram"):
         raise store.ValidationError("channel must be linkedin or instagram")
@@ -481,6 +495,7 @@ def import_rows(token: str, mapping: dict, options: dict) -> dict:
                     res["skipped"] += 1
             else:
                 res["skipped"] += 1
+            person_rows.append((n - 2, pid))
         res["companies_created"] = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] - companies_before
     if options.get("remember"):
         with store._conn() as conn:
@@ -488,6 +503,9 @@ def import_rows(token: str, mapping: dict, options: dict) -> dict:
             conn.execute("""INSERT INTO import_mappings (name, signature, mapping, channel, used, updated_at) VALUES (?, ?, ?, ?, 1, ?)
                             ON CONFLICT(signature) DO UPDATE SET mapping = excluded.mapping, used = used + 1, updated_at = excluded.updated_at""",
                          (name, signature(up["headers"]), json.dumps(mapping, ensure_ascii=False), channel_opt, _now()))
+    if plan and plan["funnel"]:
+        res["funnel"] = import_plans.apply(token, person_rows, plan["funnel"], import_brand)
+    import_plans.mark_imported(token)
     return res
 
 

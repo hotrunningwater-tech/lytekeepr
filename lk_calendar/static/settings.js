@@ -40,7 +40,10 @@
   function changed() { document.dispatchEvent(new Event('lk-contacts-changed')); }
   function importRender() { if (!imp.root) return; imp.root.replaceChildren(); importView(); }
   window.lkContacts = {
-    mountImport: function (root, onDone) { imp.root = root; imp.onDone = function () { changed(); if (onDone) onDone(); }; S.imp = null; importRender(); },
+    mountImport: function (root, onDone, planToken) {
+      imp.root = root; imp.onDone = function () { changed(); if (onDone) onDone(); }; S.imp = null; importRender();
+      if (planToken) loadPlan(planToken);
+    },
     addContact: function (preset, onSaved) { modal(contactForm(preset || {}, onSaved)); },
     anotherContact: function (companyId) {
       api('GET', '/api/calendar/companies/' + companyId).then(function (co) {
@@ -424,6 +427,44 @@
     ]);
   }
 
+  // Claude's plan for a dropped list: the same Match fields step, filled in, plus where the people go. Nothing exists until Import.
+  function loadPlan(token) {
+    var im = S.imp; im.busy = true; importRender();
+    api('GET', '/api/calendar/import/plan?token=' + encodeURIComponent(token)).then(function (r) {
+      im.scan = r.scan; im.mapping = {};
+      r.scan.columns.forEach(function (c) { im.mapping[c.name] = r.plan.mapping[c.name] || c.field; });
+      im.opts.batch = r.scan.default_batch; im.opts.brand = r.plan.brand;
+      im.plan = { funnel: r.plan.funnel, counts: r.counts, main: r.main_funnel, use: !!r.plan.funnel };
+      if (r.plan.funnel) { im.plan.name = r.plan.funnel.name; im.plan.stage = r.plan.funnel.stage; }
+      im.step = 2; im.busy = false; importRender();
+    }).catch(function (e) { im.busy = false; im.error = e.message; importRender(); });
+  }
+
+  function planSection(im) {
+    var p = im.plan, f = p.funnel;
+    if (!f) return h('div', { class: 'lks-plan' }, [h('h3', {}, 'Claude\u2019s plan'), h('p', {}, 'Add them as contacts only, not to a funnel.')]);
+    var per = {};
+    Object.keys(p.counts.by_value).forEach(function (st) { per[st] = p.counts.by_value[st]; });
+    if (p.counts.default) per[p.stage] = (per[p.stage] || 0) + p.counts.default;
+    var where = f.stages.filter(function (st) { return per[st]; }).map(function (st) { return st + ': ' + per[st]; }).join(' · ');
+    var kind = f.new === 'cold' ? 'A new cold outreach funnel, built from ' + (p.main || 'your main funnel') + '.'
+      : f.new ? 'A new funnel, a copy of ' + (p.main || 'your main funnel') + '.' : 'Your funnel ' + f.name + '.';
+    return h('div', { class: 'lks-plan' }, [
+      h('h3', {}, 'Claude\u2019s plan: where they go'),
+      h('label', { class: 'lks-check' }, [h('input', { type: 'checkbox', checked: p.use, onchange: function () { p.use = this.checked; importRender(); } }), 'Put them in a funnel']),
+      p.use ? h('div', {}, [
+        h('p', {}, kind),
+        h('p', { class: 'lks-stages' }, f.stages.join(' \u2192 ')),
+        h('div', { class: 'lks-opts' }, [
+          f.new ? h('div', { class: 'lks-opt' }, [h('label', {}, 'Funnel name'), h('input', { type: 'text', value: p.name, oninput: function () { p.name = this.value; } })]) : null,
+          h('div', { class: 'lks-opt' }, [h('label', {}, f.column ? 'Everyone else goes to' : 'They go to'),
+            sel(f.stages.map(function (st) { return [st, st]; }), p.stage, function (v) { p.stage = v; importRender(); })])
+        ]),
+        h('p', {}, [h('b', {}, 'People per stage: '), where || '(none)'])
+      ]) : h('p', {}, 'They are added as contacts only.')
+    ]);
+  }
+
   function sel(options, value, onchange) {
     return h('select', { onchange: function () { onchange(this.value); } }, options.map(function (o) { return h('option', { value: o[0], selected: o[0] === value }, o[1]); }));
   }
@@ -457,6 +498,7 @@
           return bs;
         })()])
       ]),
+      im.plan ? planSection(im) : null,
       h('label', { class: 'lks-check' }, [h('input', { type: 'checkbox', checked: o.remember, onchange: function () { o.remember = this.checked; } }), 'Remember this mapping for files with the same columns']),
       im.error ? h('p', { class: 'lks-err' }, im.error) : null,
       h('div', { class: 'lks-row' }, [
@@ -464,8 +506,13 @@
           var mapped = Object.keys(im.mapping).map(function (k) { return im.mapping[k]; });
           if (!['url', 'name', 'business_name'].some(function (k) { return mapped.indexOf(k) >= 0; })) { im.error = 'Match at least one column to URL, Name or Business name, so each person can be identified.'; importRender(); return; }
           if (!o.brand) { im.error = 'Choose the brand of the new contacts.'; importRender(); return; }
+          var p = im.plan, plan = null;
+          if (p) {
+            if (p.use && p.funnel.new && !(p.name || '').trim()) { im.error = 'Give the new funnel a name.'; importRender(); return; }
+            plan = { funnel: p.use ? Object.assign({}, p.funnel, { name: (p.name || '').trim(), stage: p.stage }) : null };
+          }
           im.busy = true; im.error = ''; importRender();
-          api('POST', '/api/calendar/import/run', { token: scan.token, mapping: im.mapping, options: { channel: o.channel, batch: o.batch, duplicates: o.dup, remember: o.remember, brand: o.brand } }).then(function (r) { im.result = r; im.step = 3; im.busy = false; changed(); importRender(); })
+          api('POST', '/api/calendar/import/run', { token: scan.token, mapping: im.mapping, options: { channel: o.channel, batch: o.batch, duplicates: o.dup, remember: o.remember, brand: o.brand, plan: plan } }).then(function (r) { im.result = r; im.step = 3; im.busy = false; changed(); importRender(); })
             .catch(function (e) { im.busy = false; im.error = e.message; importRender(); });
         } }, im.busy ? 'Importing…' : 'Import ' + scan.rows + ' rows'),
         h('button', { class: 'btn lks-soft', type: 'button', onclick: function () { im.step = 1; im.error = ''; importRender(); } }, 'Back')
@@ -484,10 +531,12 @@
     return h('div', { class: 'lks-card' }, [
       h('h2', {}, 'Import finished'), h('div', { class: 'lks-stats' }, stats),
       h('p', {}, 'Batch "' + (r.batch || '(none)') + '"' + (im.opts.remember ? ' · mapping saved' : '') + '.'),
+      r.funnel ? h('p', {}, 'In the funnel ' + r.funnel.funnel + ': ' + Object.keys(r.funnel.placed).map(function (st) { return st + ' ' + r.funnel.placed[st]; }).join(' · ') + '.') : null,
       r.errors.length ? h('div', { class: 'lks-errs' }, [h('b', {}, r.errors.length + ' row(s) skipped:')].concat(slice(r.errors, 8).map(function (m) { return h('span', {}, '• ' + m); }),
         r.errors.length > 8 ? [h('span', {}, '…and ' + (r.errors.length - 8) + ' more')] : [])) : null,
       h('div', { class: 'lks-row' }, [
-        h('button', { class: 'btn btn-primary', type: 'button', onclick: function () { S.imp = newImport(); importRender(); } }, 'Import another file'),
+        r.funnel && window.lkGoToFunnel ? h('button', { class: 'btn btn-primary', type: 'button', onclick: function () { window.lkGoToFunnel(r.funnel.funnel_id); } }, 'Open the funnel') : null,
+        h('button', { class: 'btn ' + (r.funnel ? 'lks-soft' : 'btn-primary'), type: 'button', onclick: function () { S.imp = newImport(); importRender(); } }, 'Import another file'),
         h('button', { class: 'btn lks-soft', type: 'button', onclick: function () { if (imp.onDone) imp.onDone(); } }, 'View contacts')
       ])
     ]);

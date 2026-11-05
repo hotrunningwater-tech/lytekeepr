@@ -359,6 +359,49 @@ def import_mark_organized():
     return jsonify({"ok": contacts.import_organized(str(_payload().get("key") or "")[:400])})
 
 
+@bp.get("/api/calendar/import/dropped")
+def import_dropped():
+    """The file waiting to be imported, for Claude to plan: its columns (with LyteKeepr's guess), its rows, the funnels."""
+    if not users.is_admin():
+        return jsonify({"error": "Only the admin can import a list."}), 403
+    from . import import_plans
+    up = import_plans.waiting()
+    if not up:
+        return jsonify({"file": None, "message": "No file is waiting. Ask the user to drop it on Home (Import a list)."})
+    scan = contacts.guess_columns(up["headers"], up["rows"])
+    main = import_plans.main_funnel()
+    return jsonify({"token": up["token"], "file": up["name"], "people": len(up["rows"]), "columns": scan,
+                    "fields": [k for k, _ in contacts.FIELDS + contacts.SPECIAL],
+                    "rows": [{h: v[:150] for h, v in r.items() if v} for r in up["rows"][:300]],
+                    "funnels": import_plans.funnels(),
+                    "new_cold_outreach_stages": [n for n, _ in import_plans.new_stages("cold")] if main else [],
+                    "plan": up["plan"]})
+
+
+@bp.post("/api/calendar/import/plan")
+def import_plan_save():
+    if not users.is_admin():
+        return jsonify({"error": "Only the admin can import a list."}), 403
+    from . import import_plans
+    data = _payload()
+    return jsonify(import_plans.save(str(data.get("token") or ""), data))
+
+
+@bp.get("/api/calendar/import/plan")
+def import_plan_get():
+    """Claude's plan for the review on CRM → Import: the scan (as a manual import has it) plus the plan and its counts."""
+    if not users.is_admin():
+        return jsonify({"error": "Only the admin can import a list."}), 403
+    from . import import_plans
+    up = import_plans.get(request.args.get("token", ""))
+    if not up or not up["plan"]:
+        return jsonify({"error": "That list isn't waiting any more. Drop the file again."}), 404
+    if up["imported"]:
+        return jsonify({"error": "That list is already imported."}), 409
+    return jsonify({"scan": contacts.scan_result(up), "plan": up["plan"], "counts": import_plans.split_counts(up, up["plan"]["funnel"]),
+                    "main_funnel": (import_plans.main_funnel() or {}).get("name", "")})
+
+
 @bp.get("/api/calendar/import/mappings")
 def import_mappings():
     return jsonify({"mappings": contacts.list_mappings()})

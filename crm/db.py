@@ -275,7 +275,8 @@ def init_db() -> None:
             ("funnels", {"brand": "TEXT NOT NULL DEFAULT ''",      # a funnel's people take its brand
                          "pattern": "TEXT NOT NULL DEFAULT ''",     # '' = the standard funnel (moves by stage name); P1-P4 = from a template
                          "kind": "TEXT NOT NULL DEFAULT 'sales'",   # 'work': items only, never contacts (lk_calendar/work.py)
-                         "item_name": "TEXT NOT NULL DEFAULT ''"}),  # a work funnel's word for its items ("Idea", "Order"; '' = "Item")
+                         "item_name": "TEXT NOT NULL DEFAULT ''",   # a work funnel's word for its items ("Idea", "Order"; '' = "Item")
+                         "variant": "TEXT NOT NULL DEFAULT ''"}),    # 'cold': a cold outreach funnel made from the main one (lk_calendar/import_plans.py)
             ("funnel_stages", {"is_won": "INTEGER NOT NULL DEFAULT 0",   # reaching this stage = a won deal (onboarding starts)
                                "mark": "TEXT NOT NULL DEFAULT ''"}),     # template funnels: what moves a contact here (lk_calendar/funnel_rules.py)
         ):
