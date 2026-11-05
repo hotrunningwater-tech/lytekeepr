@@ -1,6 +1,6 @@
 # Things to address
 
-Started 2026-11-05. Things to fix or decide later. Newest first. Remove an item when it's done.
+Started 2026-11-05. Things to fix or decide later. Each group shows the date its items were added, so we know how long they've waited. Newest first. Remove an item when it's done.
 
 ## From the setup test (2026-11-05)
 
@@ -12,7 +12,7 @@ Started 2026-11-05. Things to fix or decide later. Newest first. Remove an item 
 - **Connect Claude: Add and Connect are separate in Claude.** After Add, USER still has to click Connect and Allow; nothing prompts it. Home also doesn't refresh itself when USER comes back to the tab.
 - **Mailbox at sign-up.** The app connects the sign-in mailbox automatically. Fine for real users; for the test the mailbox had to be switched by hand.
 
-## Earlier
+## Added before 2026-11-05
 
 - Step 7: import a CSV through Claude (today the step opens the CRM import).
 - Check that the calendar really syncs on a brand-new account.
