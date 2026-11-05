@@ -2988,7 +2988,7 @@ body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .a
 .gs-title { font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: var(--ink); }
 .gs-count { color: var(--ink-soft); font-size: 13px; } .gs-head .hm-mini { margin-left: auto; }
 .gs-list { display: flex; flex-direction: column; gap: 4px; }
-.gs-step { display: flex; align-items: center; gap: 10px; padding: 6px 0; } .gs-step.done .hm-title { color: var(--ink-soft); font-weight: 500; }
+.gs-step { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; } .gs-step > .hm-check { margin-top: 1px; } .gs-step.done .hm-title { color: var(--ink-soft); font-weight: 500; }
 .gs-step .hm-main { flex: 1; min-width: 0; } .gs-why { font-size: 13px; color: var(--ink-soft); }
 
 /* Get started: the next steps after downloading the LinkedIn add-on */
@@ -3016,6 +3016,7 @@ body:has(#caseOverviewPanel:not([hidden]) #caseOverviewContent:not([hidden])) .a
 /* Get started: a finished step says so (instead of an empty space) */
 .gs-drop { margin-top: 8px; padding: 12px 14px; border-radius: 12px; background: var(--paper-2, #f3f6f7); font-size: 13.5px; color: var(--ink); }
 .gs-key { flex: 1; min-width: 0; border: none; background: rgba(230,237,240,.9); border-radius: 9px; padding: 8px 10px; font-family: var(--font-body); font-size: 12.5px; color: var(--ink); }
+.gs-drop ol { margin: 0 0 10px; padding-left: 20px; font-size: 13.5px; color: var(--ink); } .gs-drop li { margin: 3px 0; }
 .gs-drop p { margin: 0 0 8px; } .gs-drop p:last-child { margin-bottom: 0; } .gs-drop .lks-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .gs-dropzone { border: 2px dashed rgba(233, 139, 116, 0.6); text-align: center; cursor: pointer; padding: 22px 14px; }
 .gs-dropzone.over { background: rgba(233, 139, 116, 0.12); }
