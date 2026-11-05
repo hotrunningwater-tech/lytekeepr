@@ -98,9 +98,8 @@
   function recordBox(s, send) {
     return h('div', { class: 'gs-drop' }, [
       h('ol', { class: 'gs-why' }, s.guide.map(function (t) { return h('li', {}, t); })),
-      h('p', {}, 'Your next recorded call then shows up in LyteKeepr by itself.'),
       h('div', { class: 'lks-row' }, [
-        h('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: function () { window.open(s.link, '_blank', 'noopener'); } }, 'Open Fathom'),
+        h('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: function () { window.open(s.link, '_blank', 'noopener'); } }, 'Go to Fathom\u2019s video settings'),
         h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ tick: s.key }); } }, 'It\u2019s set up')])]);
   }
   /* ---------- Connect Fathom: after Log in to Fathom, the key is pasted right here ---------- */
