@@ -205,6 +205,17 @@ def main():
     fa = next(x for x in gs["steps"] if x["key"] == "fathom")
     check(fa.get("action") == "fathom" and fa.get("link", "").startswith("https://fathom.video/") and "key" in fa.get("why", ""),
           f"'Connect Fathom' doesn't open Fathom's key page from Home: {fa}")
+    check("fathom_record" not in [x["key"] for x in gs["steps"]], "'Record your calls with Fathom' shows before Fathom is connected")
+    from lk_calendar import calls as _calls
+    real_key, real_has = _calls.get_key, _calls.has_calls
+    _calls.get_key, _calls.has_calls = (lambda: "k"), (lambda: False)
+    try:
+        rec = next((x for x in a.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "fathom_record"), None)
+        check(rec and not rec["done"] and set(rec.get("guide") or {}) == {"zoom", "meet"}, f"'Record your calls with Fathom' doesn't follow Connect Fathom: {rec}")
+        rec = next(x for x in a.post("/api/calendar/getting-started", json={"tick": "fathom_record"}).get_json()["steps"] if x["key"] == "fathom_record")
+        check(rec["done"], "'It's set up' doesn't finish 'Record your calls with Fathom'")
+    finally:
+        _calls.get_key, _calls.has_calls = real_key, real_has
     skipped = a.post("/api/calendar/getting-started", json={"skip": "fathom"}).get_json()
     imp = next(x for x in skipped["steps"] if x["key"] == "fathom")
     check(imp["skipped"] and skipped["done"] == gs["done"] + 1, f"Skip doesn't mark 'Connect Fathom' as skipped and finished: {imp}")

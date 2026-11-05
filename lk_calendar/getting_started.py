@@ -10,6 +10,21 @@ from . import store
 FATHOM_KEY_PAGE = "https://fathom.video/api_settings/new"      # Fathom's "Generate API key" page (it asks to log in first)
 
 
+FATHOM_HOME = "https://fathom.video/"
+RECORD_GUIDE = {                                     # from Fathom's help pages (Settings: Video Conferencing, auto-record per meeting type)
+    "zoom": ["Click Open Fathom, then open Settings.", "Under Video Conferencing, click Connect next to Zoom. Sign in to Zoom and allow it.",
+             "On the same Settings page, turn on auto-record for your meetings, including impromptu Zoom meetings."],
+    "meet": ["Click Open Fathom, then open Settings.", "Turn on auto-record for your meetings, including impromptu Google Meet meetings.",
+             "Put your calls on your main Google Calendar, the one you signed up to Fathom with. Fathom only sees that one."],
+}
+
+
+def _record_step(state: dict, recorded: bool) -> dict:
+    """After Connect Fathom: Fathom set up to record Zoom and/or Google Meet calls. Done by the first recorded call, or by USER."""
+    return {"key": "fathom_record", "title": "Record your calls with Fathom", "why": "Which do you use for calls?",
+            "done": recorded or bool(state.get("fathom_record_done")), "action": "", "link": FATHOM_HOME, "guide": RECORD_GUIDE}
+
+
 def _tell_claude(sentence: str, finish: str, then: str) -> list:
     """The numbered lines under a step that is done by talking to Claude, so nobody has to guess what "Tell Claude" means."""
     return ["Click Tell Claude. Claude opens with \u201c" + sentence.strip() + "\u201d already typed (it's also copied, so you can paste it).",
@@ -192,6 +207,8 @@ def status() -> dict:
         steps = [_claude_step()]
     steps.append({"key": "fathom", "title": "Connect Fathom", "why": "You'll need a key from your Fathom account.",   # Home: Log in to Fathom, then paste the key
                   "done": bool(calls.get_key()), "skippable": True, "action": "fathom", "link": FATHOM_KEY_PAGE})
+    if calls.get_key():                                # Fathom connected: it must also be recording the calls
+        steps.append(_record_step(state, calls.has_calls()))
     skipped = set(state.get("skipped") or [])
     for st in steps:                                   # a step USER skipped counts as finished, and says so
         st["skipped"] = bool(st.get("skippable") and not st["done"] and st["key"] in skipped)
@@ -202,6 +219,8 @@ def status() -> dict:
 
 def update(tick=None, untick=None, dismissed=None, skip=None, unskip=None, start_over=None) -> dict:
     state = _state()
+    if tick == "fathom_record":                        # "It's set up": the next call may be days away
+        state["fathom_record_done"] = True
     if start_over == "import":                         # the dropped file goes; an imported list stops asking to be organized
         from . import contacts, import_plans, users
         if users.is_admin():

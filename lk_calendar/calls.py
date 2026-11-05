@@ -132,6 +132,12 @@ def remove_key() -> None:
         pass
 
 
+def has_calls() -> bool:
+    """Whether Fathom has sent any recorded call yet."""
+    with _crm() as conn:
+        return bool(conn.execute("SELECT 1 FROM calls LIMIT 1").fetchone())
+
+
 def settings() -> dict:
     key = get_key()
     return {"connected": bool(key), "key_end": key[-4:] if key else "", "last_sync": store.get_state(_state("fathom_last_sync")) or "",
