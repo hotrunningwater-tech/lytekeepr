@@ -193,6 +193,10 @@ def main():
     member_keys = [x["key"] for x in m.get("/api/calendar/getting-started").get_json()["steps"]]
     check(keys == ["account", "claude", "business", "email", "linkedin", "calendar", "import", "fathom"] and member_keys == ["claude", "fathom"],
           f"Get started is not the 7 setup steps (team members: only their own Claude and Fathom): {keys} / {member_keys}")
+    link = next(x for x in gs["steps"] if x["key"] == "claude").get("link") or ""
+    check(link.startswith("https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=LyteKeepr&connectorUrl=http")
+          and link.endswith("%2Fmcp") and "/" not in link.split("connectorUrl=")[1],
+          f"'Connect Claude' doesn't open Claude's add-connector form with LyteKeepr's address filled in: {link}")
     check(next(x for x in gs["steps"] if x["key"] == "business")["done"], "a funnel ticks 'Tell Claude about your business' by itself")
     check(not next(x for x in gs["steps"] if x["key"] == "email")["done"], "'Sort your email' is ticked before any email was read")
     check(a.post("/api/calendar/getting-started", json={"dismissed": True}).get_json()["show"] is False, "Hide hides it")

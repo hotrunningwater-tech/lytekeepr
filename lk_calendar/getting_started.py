@@ -1,8 +1,18 @@
 """The short "Get started" list on Home for someone new. Steps tick themselves when done. It goes away when every required step is done, or when dismissed. Kept per person."""
 
 import json
+import os
+import urllib.parse
 
 from . import store
+
+
+def _claude_step() -> dict:
+    """Claude's own install link opens its "Add custom connector" form with LyteKeepr's address filled in: USER clicks Add, then Allow."""
+    from flask import request
+    address = f"{request.headers.get('X-Forwarded-Proto') or request.scheme}://{request.host}{os.getenv('LK_URL_PREFIX', '').rstrip('/')}/mcp"
+    link = "https://claude.ai/customize/connectors?" + urllib.parse.urlencode({"modal": "add-custom-connector", "connectorName": "LyteKeepr", "connectorUrl": address})
+    return {"key": "claude", "title": "Connect Claude", "why": "Click Connect. In Claude, click Add, then Allow.", "done": _claude_connected(), "action": "claude", "link": link}
 
 
 def _state_key() -> str:
@@ -74,7 +84,7 @@ def status() -> dict:
         steps = [
             {"key": "account", "title": "Create your account", "why": "Signed in with Google, with your Gmail connected.",
              "done": gmail, "action": "gmail"},
-            {"key": "claude", "title": "Connect Claude", "why": "So you can ask Claude to work in LyteKeepr.", "done": _claude_connected(), "action": "settings:claude"},
+            _claude_step(),
             {"key": "business", "title": "Tell Claude about your business",
              "why": "In Claude, describe it in your own words: what you sell, to whom, and how you find clients. Claude sets up your funnel.",
              "done": funnels > 0, "say": ""},
@@ -91,7 +101,7 @@ def status() -> dict:
             {"key": "import", "title": "Import a list", "why": "Optional: a spreadsheet of contacts you already have.", "done": imported, "optional": True, "action": "crm"},
         ]
     else:
-        steps = [{"key": "claude", "title": "Connect Claude", "why": "So you can ask Claude to work in LyteKeepr.", "done": _claude_connected(), "action": "settings:claude"}]
+        steps = [_claude_step()]
     steps.append({"key": "fathom", "title": "Connect Fathom", "why": "Optional: your call recordings land on the right contact.", "done": bool(calls.get_key()),
                   "optional": True, "action": "settings:calls"})
     required = [s for s in steps if not s.get("optional")]

@@ -64,6 +64,7 @@
   }
   function startAction(s) {
     if (s.action === 'gmail') location.href = (window.LK_PREFIX || '') + '/auth/google/start';
+    else if (s.action === 'claude') window.open(s.link, '_blank', 'noopener');   // Claude's add-connector form, already filled in
     else if (s.action === 'crm') { var crm = $('crmTab'); if (crm) crm.click(); }
     else if (s.action === 'linkedin') {                 // downloads the Claude add-on, then says exactly what to do with the file
       location.href = (window.LK_PREFIX || '') + '/api/linkedin/addon';
@@ -94,7 +95,7 @@
               var b = ev.currentTarget;
               try { navigator.clipboard.writeText(s.say).then(function () { b.textContent = 'Copied'; }, function () {}); } catch (e) { /* no clipboard */ }
             } }, 'Copy')
-          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : 'Open')
+          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'claude' ? 'Connect' : 'Open')
           : null;
         return h('div', { class: 'gs-step' + (s.done ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
           h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title), s.done ? null : linkedinNext(s) || h('div', { class: 'gs-why' }, s.why)]), doit]);
