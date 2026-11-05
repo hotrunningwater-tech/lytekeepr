@@ -1,6 +1,6 @@
 # Things to address
 
-Things to fix or decide later. Newest first. Remove an item when it's done.
+Started 2026-11-05. Things to fix or decide later. Newest first. Remove an item when it's done.
 
 ## From the setup test (2026-11-05)
 
