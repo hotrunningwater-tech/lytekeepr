@@ -107,6 +107,12 @@ def main():
     check(len(inbox["groups"]) == 4, f"Claude does not get the sender groups: {inbox}")
     args = {"keep": ["old.friend@client.test", "Stranger@Unknown.test"], "remove": ["noreply@shop.test", "news@brand.test", "rep@saas.test"],
             "names": {"Stranger@Unknown.test": "Dana Whitfield"}}
+    try:                                               # leaving a sender out is refused, naming who was left out
+        part = claude_connector._run_tool(call, "sort_email_inbox", {"keep": args["keep"], "remove": args["remove"][:2]})
+        check(False, f"a sort that leaves a sender out was accepted: {part}")
+    except ValueError as exc:
+        check("rep@saas.test" in str(exc) and "1 sender" in str(exc), f"the refusal does not name the sender left out: {exc}")
+    check(len(storage.get_pending_review_ids(ME)) == 6, "a refused sort changed something")
     shown = claude_connector._run_tool(call, "sort_email_inbox", dict(args))
     text = shown.get("show_the_user") or ""
     check("Old Friend (old.friend@client.test), 2 emails" in text and "Dana Whitfield (Stranger@Unknown.test)" in text and "rep@saas.test" in text

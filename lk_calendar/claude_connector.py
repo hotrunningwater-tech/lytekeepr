@@ -793,7 +793,8 @@ TOOLS = [
     {"name": "sort_email_inbox", "title": "Sort email waiting for review",
      "description": ("Keep senders as contacts (with all their waiting emails; later emails go straight onto them) and remove others (their later "
                      "emails skip review; can be brought back for 30 days with bring_back). The user thinks in people, not addresses: give each "
-                     "kept sender's real name in names, from what the emails show (signature, greeting, the conversation)."),
+                     "kept sender's real name in names, from what the emails show (signature, greeting, the conversation). Every sender "
+                     "waiting must be in keep or remove: ask the user about any you can't judge first. A list that leaves anyone out is refused."),
      "inputSchema": {"type": "object", "properties": {"keep": {"type": "array", "items": {"type": "string"}, "description": "sender email addresses to keep"},
                                                       "names": {"type": "object", "additionalProperties": {"type": "string"},
                                                                 "description": "sender email address -> the person's name, for the kept senders"},
@@ -858,6 +859,22 @@ for _t in TOOLS:
             props["run_key"] = {"type": "string", "description": "Scheduled run only: the run_key from autopilot_queue (then nothing is shown first)"}
         _t["description"] = _t["description"] + " " + SHOW_RULE
 
+
+
+def _all_decided(call, args: dict) -> None:
+    """A sort covers everyone waiting: a sender left out of keep and remove would stay waiting while the AI says it's done.
+    Bringing removed senders back alone is fine."""
+    if not (args.get("keep") or args.get("remove")):
+        return
+    named = {str(x).strip().lower() for x in (args.get("keep") or []) + (args.get("remove") or [])}
+    status, data = call("GET", "/api/email/senders")
+    if status >= 400:
+        raise ValueError((data or {}).get("error") or f"LyteKeepr answered with an error ({status})")
+    left = [x for g in data.get("groups") or [] for x in g.get("senders") or [] if x["sender"].lower() not in named]
+    if left:
+        raise ValueError(f"Not done: {len(left)} sender{'s' if len(left) != 1 else ''} waiting {'are' if len(left) != 1 else 'is'} in neither keep nor remove: "
+                         + "; ".join(f"{(x.get('name') or '').strip() or x['sender']} ({x['sender']}), {x['emails']} email{'s' if x['emails'] != 1 else ''}" for x in left)
+                         + ". Decide each one (ask the user about any you can't judge), then call again with every sender in keep or remove.")
 
 def _run_tool(call, name: str, args: dict):
     """call(method, path, body) -> (status, json). Returns what Claude gets back."""
@@ -1351,6 +1368,7 @@ def _run_tool(call, name: str, args: dict):
         out = need(*call("GET", "/api/email/senders"))
         return {"groups": out["groups"], "removed_in_last_30_days": out["removed"]}
     if name == "sort_email_inbox":
+        _all_decided(call, args)
         return need(*call("POST", "/api/email/senders/sort", {**{k: args.get(k) or [] for k in ("keep", "remove", "bring_back")},
                                                               "names": args.get("names") if isinstance(args.get("names"), dict) else {}}))
     if name == "linkedin_inbox":
@@ -1722,6 +1740,7 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
             lines.append("Stages: " + " → ".join(st["name"] for st in t["stages"][:-1]) + f" (or {t['stages'][-1]['name']})")
         shown_ids.add("template")
     if name == "sort_email_inbox":
+        _all_decided(call, a)
         waiting = {x["sender"].lower(): x for g in need(*call("GET", "/api/email/senders")).get("groups") or [] for x in g.get("senders") or []}
         given = {str(k).lower(): str(v).strip() for k, v in (a.get("names") or {}).items() if str(v or "").strip()} if isinstance(a.get("names"), dict) else {}
         def senders(addrs):                            # people first: "Name (address), N emails"
