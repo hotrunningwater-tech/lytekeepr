@@ -141,7 +141,7 @@ def status() -> dict:
             {"key": "calendar", "title": "Your calendar",
              "why": "Synced from your Google Calendar." if cal.get("last_sync") and not cal.get("needs_reconnect") else "Connect Google to bring in your calendar.",
              "done": bool(cal.get("last_sync")) and not cal.get("needs_reconnect"), "action": "" if cal.get("last_sync") and not cal.get("needs_reconnect") else "gmail"},
-            {"key": "import", "title": "Import a list", "why": "A spreadsheet of contacts you already have. No list? Click Skip.", "done": imported, "skippable": True, "action": "crm"},
+            {"key": "import", "title": "Import a list", "why": "A spreadsheet of contacts you already have. No list? Click Skip.", "done": imported, "skippable": True, "action": "import"},
         ]
     else:
         steps = [_claude_step()]
