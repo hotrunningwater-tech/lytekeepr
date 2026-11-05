@@ -197,7 +197,9 @@ def main():
     check(link.startswith("https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=LyteKeepr&connectorUrl=http")
           and link.endswith("%2Fmcp") and "/" not in link.split("connectorUrl=")[1],
           f"'Connect Claude' doesn't open Claude's add-connector form with LyteKeepr's address filled in: {link}")
-    check(next(x for x in gs["steps"] if x["key"] == "business")["done"], "a funnel ticks 'Tell Claude about your business' by itself")
+    biz = next(x for x in gs["steps"] if x["key"] == "business")
+    check(biz["done"], "a funnel ticks 'Tell Claude about your business' by itself")
+    check(biz.get("chat") and biz.get("say", "").startswith("In LyteKeepr,"), f"'Tell Claude about your business' doesn't hand Claude a sentence naming LyteKeepr: {biz}")
     check(not next(x for x in gs["steps"] if x["key"] == "email")["done"], "'Sort your email' is ticked before any email was read")
     check(a.post("/api/calendar/getting-started", json={"dismissed": True}).get_json()["show"] is False, "Hide hides it")
 
