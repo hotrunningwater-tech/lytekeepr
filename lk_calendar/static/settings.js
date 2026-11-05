@@ -1042,7 +1042,7 @@
       var kids = [h('h2', {}, 'Claude and ChatGPT'),
         h('p', {}, 'Ask Claude or ChatGPT about your contacts, funnels, tasks and calls, on your phone or the web. It sees only what you can see here, and asks before it adds anything.'),
         h('div', { class: 'lks-opt' }, [h('label', {}, 'Connector address'), h('div', { class: 'lks-row' }, [url, window.lkContacts.copyPill(function () { return r.connector_url; })])]),
-        h('div', { class: 'lks-hint' }, [h('b', {}, 'One-time setup: '), 'Claude: on claude.ai open Customize → Connectors → Add custom connector, paste this address, then sign in to LyteKeepr and press Allow. ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode on, create a connector with this address (sign-in OAuth), then press Allow.']),
+        h('div', { class: 'lks-hint' }, [h('b', {}, 'One-time setup: '), 'Claude: on claude.ai open Customize → Connectors → Add custom connector, paste this address, then sign in to LyteKeepr and press Allow. ChatGPT: on chatgpt.com/plugins click + → Add custom MCP server, paste this address (Authentication: OAuth), click Create as a plugin, then press Allow.']),
         h('h2', { style: 'margin-top:18px' }, 'Connected'),
         r.connections.length ? null : h('p', { class: 'lks-note' }, 'Not connected yet.')].concat(r.connections.map(function (c) {
           return h('div', { class: 'lks-row' }, [h('span', { class: 'lks-badge on' }, c.name),

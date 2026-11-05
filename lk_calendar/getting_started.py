@@ -39,10 +39,11 @@ def _claude_step(ai: str = "claude") -> dict:
     address = f"{request.headers.get('X-Forwarded-Proto') or request.scheme}://{request.host}{os.getenv('LK_URL_PREFIX', '').rstrip('/')}/mcp"
     if ai == "chatgpt":
         return {"key": "claude", "title": "Connect ChatGPT", "why": "Add LyteKeepr to ChatGPT, then Allow.", "done": _claude_connected(),
-                "action": "chatgpt", "link": "https://chatgpt.com/", "address": address,
-                "how": ["Click Open ChatGPT: LyteKeepr's address is copied for you.",
-                        "In ChatGPT: Settings \u2192 Apps & Connectors \u2192 Advanced settings \u2192 turn on Developer mode.",
-                        "Create a connector: name LyteKeepr, paste the address (" + address + "), sign-in OAuth.",
+                "action": "chatgpt", "link": "https://chatgpt.com/plugins", "address": address,
+                "how": ["Click Open ChatGPT: ChatGPT's Plugins page opens and LyteKeepr's address is copied for you.",
+                        "Click +, then Add custom MCP server.",
+                        "Name: LyteKeepr. Server URL: paste (" + address + "). Authentication: OAuth.",
+                        "Tick I understand and want to continue, then click Create as a plugin.",
                         "LyteKeepr opens: check it shows your account, then click Allow."]}
     link = "https://claude.ai/customize/connectors?" + urllib.parse.urlencode({"modal": "add-custom-connector", "connectorName": "LyteKeepr", "connectorUrl": address})
     return {"key": "claude", "title": "Connect Claude", "why": "Click Connect. In Claude, click Add, then Allow.", "done": _claude_connected(), "action": "claude", "link": link}
