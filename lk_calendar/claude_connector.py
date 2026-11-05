@@ -213,6 +213,13 @@ CONFIRM_RULE = ("DICTATED TEXT: the user dictates by voice, with typos, repeated
                 "(typos fixed, repeats removed, their corrections applied, their meaning and wording kept, nothing invented).")
 
 
+ORGANIZE_QUESTIONS = ("ask the user, one question at a time, only what you can't tell yourself: 1) unless they already have funnels, in plain words: "
+                      "'Track them as leads you're selling to, or just keep them as contacts?'; 2) say in a few words what the list looks like and "
+                      "suggest: people they never talked to (no status, no past conversation) = a cold outreach funnel, people already in talks = "
+                      "the main funnel; the user confirms; 3) if a funnel of that kind already exists: 'Add them to your funnel <name>, or create a "
+                      "separate one?'. Never list the people in the chat.")
+
+
 TOOLS = [
     {"name": "find", "title": "Find a person, company or opportunity",
      "description": ("START HERE when the user names someone or something. Searches contacts AND opportunities at once and says what each match is: "
@@ -727,30 +734,29 @@ TOOLS = [
                                                       "remove": {"type": "array", "items": {"type": "integer"}, "description": "person_ids to remove"}}},
      "read": False},
     {"name": "imported_list", "title": "The list just imported",
-     "description": ("The contacts from the most recently imported spreadsheet (already imported; a file dropped but not imported yet: "
-                     "dropped_list): each with what the file said about them (company, status, notes, "
-                     "other columns) and their funnel and stage now. For 'organize the list I just imported': call this, then list_funnels, decide "
-                     "each person's stage from what the file says (unclear ones in the first stage), and place them all with organize_imported."),
+     "description": ("The contacts from the most recently imported spreadsheet, already imported (a file dropped but not imported yet: "
+                     "dropped_list; while one waits, this answers use_instead): each with what the file said about them (company, status, notes, "
+                     "other columns) and their funnel and stage now, plus the sales funnels and the stages a new cold outreach funnel would get. "
+                     "For 'organize the list I just imported': call this, then " + ORGANIZE_QUESTIONS + " Decide each person's stage from what "
+                     "the file says (unclear ones in the first stage) and place them all with organize_imported."),
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "organize_imported", "title": "Put the imported list into a funnel",
      "description": ("Place people from the imported list into one funnel, each in a stage, in one go; then the import counts as organized. "
-                     "Group the people by stage in placements."),
+                     "Group the people by stage in placements. The funnel: funnel_id for an existing one, or new_funnel {new: 'cold' or "
+                     "'regular', name} to make it now (cold: '<main funnel name>: Cold outreach'; regular: a copy of the main funnel)."),
      "inputSchema": {"type": "object", "properties": {
          "funnel_id": {"type": "integer"},
+         "new_funnel": {"type": "object", "properties": {"new": {"type": "string", "enum": ["cold", "regular"]}, "name": {"type": "string"}}},
          "placements": {"type": "array", "items": {"type": "object", "properties": {"stage": {"type": "string", "description": "the stage's name"},
                                                                                      "person_ids": {"type": "array", "items": {"type": "integer"}}},
                                                    "required": ["stage", "person_ids"]}}},
-         "required": ["funnel_id", "placements"]},
+         "required": ["placements"]},
      "read": False},
     {"name": "dropped_list", "title": "The list dropped for import",
      "description": ("The spreadsheet the user dropped on LyteKeepr (Home's Import a list, or CRM → Import), not imported yet: its columns with "
                      "LyteKeepr's guess of each field, its rows, the sales funnels (the main one, set up for the business, and any cold outreach "
-                     "ones marked) and the stages a new cold outreach funnel would get. For 'organize the list I just dropped': call this, then "
-                     "ask the user, one question at a time, only what you can't tell yourself: 1) unless they already have funnels, in plain words: "
-                     "'Track them as leads you're selling to, or just keep them as contacts?'; 2) say in a few words what the list looks like and "
-                     "suggest: people they never talked to (no status, no past conversation) = a cold outreach funnel, people already in talks = "
-                     "the main funnel; the user confirms; 3) if a funnel of that kind already exists: 'Add them to your funnel <name>, or create a "
-                     "separate one?'. Then plan_import. Never list the people in the chat."),
+                     "ones marked) and the stages a new cold outreach funnel would get. When a file is waiting, 'organize my list' always means "
+                     "this one (never imported_list). Call this, then " + ORGANIZE_QUESTIONS + " Then plan_import."),
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "plan_import", "title": "Plan the import of the dropped list",
      "description": ("Saves your plan for the dropped list; creates nothing. The user checks it in LyteKeepr (review_link: the Match fields page, "
@@ -857,6 +863,9 @@ def _run_tool(call, name: str, args: dict):
     if name in RUN_ONLY_TOOLS and not run_key_ok():  # the scheduled run's own saves: only with the key autopilot_queue handed out
         return {"saved": False, "message": RUN_ONLY_TOOLS[name]}
 
+    if name in ("imported_list", "organize_imported") and need(*call("GET", "/api/calendar/import/dropped")).get("token"):   # a dropped file goes first
+        return {"use_instead": "dropped_list", "message": "A file is dropped and waiting to be imported: organize that one with dropped_list "
+                "and plan_import (the user checks the plan in LyteKeepr). Nothing was done."}
     if name in SHOWN_FIRST and not (name in RUN_MAY_SKIP and run_key_ok()):      # every change: shown exactly, done only with that code
         stop = _precheck(call, need, name, args)
         if stop:
@@ -1362,6 +1371,12 @@ def _run_tool(call, name: str, args: dict):
     if name == "organize_imported":
         latest = need(*call("GET", "/api/calendar/import/latest"))
         mine = {p["person_id"] for p in latest["people"]}
+        new = args.get("new_funnel") or {}
+        if new and not args.get("funnel_id"):
+            brand = next((p.get("brand") for p in latest["people"] if p.get("brand")), "")
+            args = dict(args, funnel_id=need(*call("POST", "/api/calendar/import/new-funnel", {**new, "brand": brand}))["funnel_id"])
+        if not args.get("funnel_id"):
+            raise ValueError("Give funnel_id, or new_funnel to make one.")
         funnel_id = int(args["funnel_id"])
         stages = {(st.get("name") or "").lower(): st for st in need(*call("GET", f"/api/crm/funnels/{funnel_id}/board")).get("stages") or []}
         placed, skipped = {}, []
@@ -1722,9 +1737,20 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
         latest = need(*call("GET", "/api/calendar/import/latest"))
         people = latest.get("people") or []
         names = {p["person_id"]: p.get("name") or p.get("company_name") or p.get("email") or f"#{p['person_id']}" for p in people}
-        funnel = next((f for f in need(*call("GET", "/api/crm/funnels")).get("funnels") or [] if f.get("funnel_id") == int(a.get("funnel_id") or 0)), {})
+        new = a.get("new_funnel") or {}
+        if new and not a.get("funnel_id"):
+            cold = new.get("new") == "cold"
+            stages = latest.get("new_cold_outreach_stages") if cold else next((f["stages"] for f in latest.get("funnels") or [] if f.get("main")), [])
+            unknown = [g.get("stage") for g in a.get("placements") or [] if str(g.get("stage") or "").lower() not in {x.lower() for x in stages or []}]
+            if not stages or unknown:
+                raise ValueError("Stage not found. The new funnel's stages are: " + ", ".join(stages or []))
+            lines.append(f"Make a new {'cold outreach ' if cold else ''}funnel {new.get('name')}: " + " → ".join(stages))
+            fname = new.get("name")
+        else:
+            funnel = next((f for f in need(*call("GET", "/api/crm/funnels")).get("funnels") or [] if f.get("funnel_id") == int(a.get("funnel_id") or 0)), {})
+            fname = funnel.get("name") or "#" + str(a.get("funnel_id"))
         lines.append(f"Put {sum(len(g.get('person_ids') or []) for g in a.get('placements') or [])} people from {latest.get('file') or 'the imported list'} "
-                     f"into the funnel {funnel.get('name') or '#' + str(a.get('funnel_id'))}:")
+                     f"into the funnel {fname}:")
         for g in a.get("placements") or []:          # totals only: the user checks the people on the funnel board, not in the chat
             ids = [int(i) for i in g.get("person_ids") or []]
             other = [i for i in ids if i not in names]
@@ -1732,7 +1758,7 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
         left = len(people) - sum(len(g.get("person_ids") or []) for g in a.get("placements") or [])
         if left > 0:
             lines.append(f"Not placed: {left} (they stay where they are)")
-        shown_ids |= {"placements"}
+        shown_ids |= {"placements", "new_funnel"}
     if name == "sort_linkedin_inbox":
         waiting = {c["person_id"]: c for c in need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review")).get("conversations") or []}
         def who(ids):

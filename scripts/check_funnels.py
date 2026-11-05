@@ -223,6 +223,27 @@ def main():
         return next(x for x in a.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "import")
     def people_count():
         return len(a.get("/api/calendar/contacts").get_json().get("contacts") or [])
+    # the test account's case: a list imported earlier and the same file dropped again: Claude must take the dropped one, nothing else
+    same = "Name,Email\nDee Park,dee@park.test\n"
+    first = drop(same, "same.csv")
+    a.post("/api/calendar/import/run", json={"token": first["token"], "mapping": {"Name": "name", "Email": "email"},
+                                             "options": {"brand": "lytekeepr", "duplicates": "skip", "batch": "same"}})
+    drop(same, "same.csv")
+    for tool, args in (("imported_list", {}), ("organize_imported", {"funnel_id": 1, "placements": [{"stage": "New lead", "person_ids": [1]}]})):
+        got = claude_connector._run_tool(call, tool, args)
+        check(got.get("use_instead") == "dropped_list" and "show_the_user" not in got, f"{tool} ran while a dropped file was waiting: {got}")
+    a.post("/api/calendar/getting-started", json={"start_over": "import"})
+    # an imported list organized into a NEW cold outreach funnel: asked first, made only after the yes
+    listed = claude_connector._run_tool(call, "imported_list", {})
+    dee = next(p["person_id"] for p in listed["people"] if p["name"] == "Dee Park")
+    args = {"new_funnel": {"new": "cold", "name": "Hand list: Cold outreach"}, "placements": [{"stage": "Prospect found", "person_ids": [dee]}]}
+    count = len(a.get("/api/crm/funnels").get_json()["funnels"])
+    shown = claude_connector._run_tool(call, "organize_imported", dict(args))
+    check("cold outreach funnel Hand list: Cold outreach" in (shown.get("show_the_user") or "") and "Prospect found: 1" in shown.get("show_the_user", "")
+          and len(a.get("/api/crm/funnels").get_json()["funnels"]) == count, f"a new cold funnel for an imported list isn't shown first: {shown}")
+    claude_connector._run_tool(call, "organize_imported", dict(args, confirm_code=shown.get("confirm_code")))
+    check(stage_of(dee) == "Prospect found" and len(a.get("/api/crm/funnels").get_json()["funnels"]) == count + 1, "the imported list wasn't put in a new cold funnel")
+
     # a list imported by hand that nobody organized (the test account today): Start over stops it asking, the contacts stay
     ran = a.post("/api/calendar/import/run", json={"token": drop("Name,Email\nCy Noor,cy@noor.test\n", "byhand.csv")["token"], "mapping": {"Name": "name", "Email": "email"},
                                                     "options": {"brand": "lytekeepr", "duplicates": "skip", "batch": "by hand"}}).get_json()

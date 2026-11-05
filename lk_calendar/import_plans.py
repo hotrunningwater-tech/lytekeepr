@@ -212,15 +212,9 @@ def apply(token: str, person_rows: list, funnel: dict | None, brand: str) -> dic
     from crm import db as crm_db
     from . import brands, contacts
     up = get(token)
+    fid = funnel.get("funnel_id") or create_funnel(funnel["new"], funnel["name"], brand)
     conn = _crm()
     try:
-        fid = funnel.get("funnel_id")
-        if not fid:
-            main = main_funnel() or {}
-            template = {"pattern": _pattern(conn, main.get("funnel_id")), "stages": [{"name": n, "mark": m} for n, m in new_stages(funnel["new"])]}
-            fid = crm_db.create_funnel(conn, funnel["name"], template)
-            if funnel["new"] == "cold":
-                conn.execute("UPDATE funnels SET variant = 'cold' WHERE funnel_id = ?", (fid,))
         stage_ids = {r["name"]: r["stage_id"] for r in conn.execute("SELECT stage_id, name FROM funnel_stages WHERE funnel_id = ?", (fid,))}
         busy = {r["person_id"] for r in conn.execute("SELECT person_id FROM people WHERE funnel_id IS NOT NULL")}
         place = {}
@@ -236,8 +230,6 @@ def apply(token: str, person_rows: list, funnel: dict | None, brand: str) -> dic
         conn.commit()
     finally:
         conn.close()
-    if brand and not funnel.get("funnel_id"):          # a new funnel takes the import's brand
-        brands.set_funnel_brand(fid, brand)
     ids = list(place)
     if ids:
         contacts.ensure_leads(ids)
@@ -248,6 +240,25 @@ def apply(token: str, person_rows: list, funnel: dict | None, brand: str) -> dic
     for st in place.values():
         n[st] = n.get(st, 0) + 1
     return {"funnel_id": fid, "funnel": funnel["name"], "placed": n}
+
+
+def create_funnel(kind: str, name: str, brand: str = "") -> int:
+    """A new funnel made from the main one: 'cold' (cold outreach in front of it) or 'regular' (a copy). It takes the brand given."""
+    from crm import db as crm_db
+    from . import brands
+    stages = new_stages(kind)
+    conn = _crm()
+    try:
+        main = main_funnel() or {}
+        fid = crm_db.create_funnel(conn, name.strip()[:80], {"pattern": _pattern(conn, main.get("funnel_id")), "stages": [{"name": n, "mark": m} for n, m in stages]})
+        if kind == "cold":
+            conn.execute("UPDATE funnels SET variant = 'cold' WHERE funnel_id = ?", (fid,))
+        conn.commit()
+    finally:
+        conn.close()
+    if brand:
+        brands.set_funnel_brand(fid, brand)
+    return fid
 
 
 def _pattern(conn, funnel_id) -> str:

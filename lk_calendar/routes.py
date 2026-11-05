@@ -349,7 +349,23 @@ def import_run():
 def import_latest():
     if not users.is_admin():
         return jsonify({"error": "Only the admin can organize an imported list."}), 403
-    return jsonify(contacts.latest_import())
+    from . import import_plans
+    main = import_plans.main_funnel()
+    return jsonify({**contacts.latest_import(), "funnels": import_plans.funnels(),
+                    "new_cold_outreach_stages": [n for n, _ in import_plans.new_stages("cold")] if main else []})
+
+
+@bp.post("/api/calendar/import/new-funnel")
+def import_new_funnel():
+    """For an imported list Claude organizes: a new cold outreach funnel or copy of the main one, after the user's yes."""
+    if not users.is_admin():
+        return jsonify({"error": "Only the admin can organize an imported list."}), 403
+    from . import import_plans
+    data = _payload()
+    name = str(data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Give the new funnel a name."}), 400
+    return jsonify({"funnel_id": import_plans.create_funnel("cold" if data.get("new") == "cold" else "regular", name, str(data.get("brand") or ""))})
 
 
 @bp.post("/api/calendar/import/organized")
