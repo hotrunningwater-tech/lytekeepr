@@ -735,8 +735,11 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}, "read": True},
     {"name": "sort_email_inbox", "title": "Sort email waiting for review",
      "description": ("Keep senders as contacts (with all their waiting emails; later emails go straight onto them) and remove others (their later "
-                     "emails skip review; can be brought back for 30 days with bring_back)."),
+                     "emails skip review; can be brought back for 30 days with bring_back). The user thinks in people, not addresses: give each "
+                     "kept sender's real name in names, from what the emails show (signature, greeting, the conversation)."),
      "inputSchema": {"type": "object", "properties": {"keep": {"type": "array", "items": {"type": "string"}, "description": "sender email addresses to keep"},
+                                                      "names": {"type": "object", "additionalProperties": {"type": "string"},
+                                                                "description": "sender email address -> the person's name, for the kept senders"},
                                                       "remove": {"type": "array", "items": {"type": "string"}, "description": "sender email addresses to remove"},
                                                       "bring_back": {"type": "array", "items": {"type": "string"}, "description": "removed senders to bring back"}}},
      "read": False},
@@ -1287,7 +1290,8 @@ def _run_tool(call, name: str, args: dict):
         out = need(*call("GET", "/api/email/senders"))
         return {"groups": out["groups"], "removed_in_last_30_days": out["removed"]}
     if name == "sort_email_inbox":
-        return need(*call("POST", "/api/email/senders/sort", {k: args.get(k) or [] for k in ("keep", "remove", "bring_back")}))
+        return need(*call("POST", "/api/email/senders/sort", {**{k: args.get(k) or [] for k in ("keep", "remove", "bring_back")},
+                                                              "names": args.get("names") if isinstance(args.get("names"), dict) else {}}))
     if name == "linkedin_inbox":
         convs = need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review"))["conversations"]
         return [{"person_id": c["person_id"], "name": c["participant_name"], "company": c.get("company_name"),
@@ -1612,17 +1616,26 @@ def _change_preview(call, need, name: str, args: dict) -> dict:
             lines.append("Stages: " + " → ".join(st["name"] for st in t["stages"][:-1]) + f" (or {t['stages'][-1]['name']})")
         shown_ids.add("template")
     if name == "sort_email_inbox":
-        counts = {x["sender"].lower(): x["emails"] for g in need(*call("GET", "/api/email/senders")).get("groups") or [] for x in g.get("senders") or []}
-        def senders(addrs):
-            return ", ".join(f"{x} ({counts[x.lower()]} email{'s' if counts[x.lower()] != 1 else ''})" if x.lower() in counts
-                             else f"{x} (not waiting for review: skipped)" for x in addrs or [])
+        waiting = {x["sender"].lower(): x for g in need(*call("GET", "/api/email/senders")).get("groups") or [] for x in g.get("senders") or []}
+        given = {str(k).lower(): str(v).strip() for k, v in (a.get("names") or {}).items() if str(v or "").strip()} if isinstance(a.get("names"), dict) else {}
+        def senders(addrs):                            # people first: "Name (address), N emails"
+            out = []
+            for x in addrs or []:
+                w = waiting.get(x.lower())
+                if not w:
+                    out.append(f"{x} (not waiting for review: skipped)")
+                    continue
+                who = given.get(x.lower()) or (w.get("name") or "").strip()
+                n = w["emails"]
+                out.append(f"{who} ({x}), {n} email{'s' if n != 1 else ''}" if who and who.lower() != x.lower() else f"{x}, {n} email{'s' if n != 1 else ''}")
+            return "; ".join(out)
         if a.get("keep"):
             lines.append(f"Keep as contacts, with their emails ({len(a['keep'])}): " + senders(a["keep"]))
         if a.get("remove"):
             lines.append(f"Remove ({len(a['remove'])}; later emails skip review; can be brought back for 30 days): " + senders(a["remove"]))
         if a.get("bring_back"):
             lines.append("Bring back: " + ", ".join(a["bring_back"]))
-        shown_ids |= {"keep", "remove", "bring_back"}
+        shown_ids |= {"keep", "remove", "bring_back", "names"}
     if name == "sort_linkedin_inbox":
         waiting = {c["person_id"]: c for c in need(*call("GET", "/api/linkedin/crm/conversations?status=pending_review")).get("conversations") or []}
         def who(ids):

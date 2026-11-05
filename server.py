@@ -1281,7 +1281,8 @@ def email_senders():
 
 @app.post("/api/email/senders/sort")
 def email_senders_sort():
-    """keep / remove / bring_back: lists of sender addresses. Kept: they become contacts with all their waiting emails."""
+    """keep / remove / bring_back: lists of sender addresses. Kept: they become contacts with all their waiting emails.
+    names: {address: the person's name} - a kept sender's contact gets that name (found in signatures, greetings, the conversation)."""
     from gmail import senders
     account_id = get_active_account_id()
     if not account_id:
@@ -1314,7 +1315,13 @@ def email_senders_sort():
             message = gmail_storage.load_message(account_id, i)
             if message:
                 _crm_write_email(conn, message)
-        out["kept"] = [{"sender": a, "emails": len(v)} for a, v in keep.items()]
+        names = {str(k).strip().lower(): str(v).strip() for k, v in (body.get("names") or {}).items() if str(v or "").strip()} \
+            if isinstance(body.get("names"), dict) else {}
+        for address in keep:
+            if names.get(address.lower()):
+                conn.execute("""UPDATE people SET name = ? WHERE person_id IN (SELECT person_id FROM channel_accounts
+                                WHERE channel = 'email' AND lower(channel_identifier) = ?)""", (names[address.lower()][:120], address.lower()))
+        out["kept"] = [{"sender": a, "name": names.get(a.lower(), ""), "emails": len(v)} for a, v in keep.items()]
         for address, sender_ids in remove.items():
             senders.remove(account_id, address, sender_ids, conn)
             out["removed"].append({"sender": address, "emails": len(sender_ids)})

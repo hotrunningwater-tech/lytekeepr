@@ -105,10 +105,12 @@ def main():
         return data
     inbox = claude_connector._run_tool(call, "email_inbox", {})
     check(len(inbox["groups"]) == 4, f"Claude does not get the sender groups: {inbox}")
-    args = {"keep": ["old.friend@client.test", "Stranger@Unknown.test"], "remove": ["noreply@shop.test", "news@brand.test", "rep@saas.test"]}
+    args = {"keep": ["old.friend@client.test", "Stranger@Unknown.test"], "remove": ["noreply@shop.test", "news@brand.test", "rep@saas.test"],
+            "names": {"Stranger@Unknown.test": "Dana Whitfield"}}
     shown = claude_connector._run_tool(call, "sort_email_inbox", dict(args))
     text = shown.get("show_the_user") or ""
-    check("old.friend@client.test (2 emails)" in text and "rep@saas.test" in text and "30 days" in text, f"the sort is not shown first with its counts: {text}")
+    check("Old Friend (old.friend@client.test), 2 emails" in text and "Dana Whitfield (Stranger@Unknown.test)" in text and "rep@saas.test" in text
+          and "30 days" in text, f"the sort is not shown first as people (name, address, count): {text}")
     check(len(storage.get_pending_review_ids(ME)) == 6, "sorting changed something before the yes")
     done = claude_connector._run_tool(call, "sort_email_inbox", dict(args, confirm_code=shown.get("confirm_code")))
     check(len(done.get("kept", [])) == 2 and len(done.get("removed", [])) == 3, f"the sort did not do what was shown: {done}")
@@ -121,6 +123,9 @@ def main():
         n = conn.execute("SELECT COUNT(*) FROM messages WHERE account_id = ?", (friend_acct["account_id"],)).fetchone()[0] if friend_acct else 0
         check(n == 2, f"a kept sender's emails are not on their timeline ({n})")
         check(crm_db.find_channel_account(conn, "email", "rep@saas.test") is None, "a removed sender became a contact")
+        named = conn.execute("""SELECT p.name FROM people p JOIN channel_accounts ca ON ca.person_id = p.person_id
+                                WHERE lower(ca.channel_identifier) = 'stranger@unknown.test'""").fetchone()
+        check(named and named[0] == "Dana Whitfield", f"a kept sender's contact did not get the name Claude found: {named}")
     finally:
         conn.close()
     removed = a.get("/api/email/senders").get_json()["removed"]
