@@ -77,7 +77,7 @@
   function linkedinNext(s) {           // after the download: the next steps, one per line
     var downloaded = false;
     try { downloaded = s.key === 'linkedin' && sessionStorage.getItem('lkLinkedinDownloaded') === '1'; } catch (e) { /* storage blocked */ }
-    if (!downloaded || s.action === 'linkedin_approve') return null;
+    if (!downloaded || s.action !== 'linkedin') return null;          // only before the add-on is installed
     return h('ol', { class: 'gs-why gs-next' }, ['Open your Downloads folder.', 'Double-click "LyteKeepr LinkedIn.mcpb". The Claude app opens.',
       'In Claude, click Install.', 'Come back here and click Approve.', 'Log in to LinkedIn if a window asks.']
       .map(function (t) { return h('li', {}, t); }));

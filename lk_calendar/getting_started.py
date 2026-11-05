@@ -110,18 +110,20 @@ def status() -> dict:
              "why": "Click Tell Claude, then finish the sentence in your own words: what you sell, to whom, and how you find clients. Claude sets up your funnel.",
              "done": funnels > 0, "say": "In LyteKeepr, set up my funnel. My business: ", "chat": True},
             {"key": "email", "title": "Sort your email" + (f": {waiting} waiting" if waiting else ""),
-             "why": "Your last 3 months of email are coming in. This list updates by itself." if waiting is None else 'In Claude, say: "sort my email".',
-             "done": waiting == 0, "busy": waiting is None, "say": "sort my email" if waiting else ""},
+             "why": "Your last 3 months of email are coming in. This list updates by itself." if waiting is None
+                    else "Click Tell Claude: Claude suggests who to keep as contacts and who to remove, and asks you first.",
+             "done": waiting == 0, "busy": waiting is None, "say": "In LyteKeepr, sort my email." if waiting else "", "chat": True},
             {"key": "linkedin", "title": "Connect LinkedIn" if not linked else "Reading your LinkedIn" if reading
                                          else "Sort your LinkedIn" + (f": {li_waiting} waiting" if li_waiting else ""),
              "why": ("The add-on is installed. Click Approve to connect it to this account." if approve
                      else "Brings your LinkedIn messages into LyteKeepr, through the Claude app on this computer. Click Download to start." if not linked
                      else "LinkedIn wants you to log in: use the LinkedIn window on your computer, then close it." if reading and li.get("state") == "needs_login"
                      else "Bringing in your last 3 months of LinkedIn messages. This takes a few minutes; this list updates by itself." if reading
-                     else 'In Claude, say: "sort my LinkedIn".' if li_waiting else "Your LinkedIn messages are in and sorted."),
+                     else "Click Tell Claude: Claude suggests who to keep as contacts and who to remove, and asks you first." if li_waiting
+                     else "Your LinkedIn messages are in and sorted."),
              "done": linked and not reading and li_waiting == 0, "busy": reading,
              "action": "linkedin_approve" if approve else "linkedin" if not linked else "", "link": approve,
-             "say": "sort my LinkedIn" if linked and not reading and li_waiting else ""},
+             "say": "In LyteKeepr, sort my LinkedIn." if linked and not reading and li_waiting else "", "chat": True},
             {"key": "calendar", "title": "Your calendar",
              "why": "Synced from your Google Calendar." if cal.get("last_sync") and not cal.get("needs_reconnect") else "Connect Google to bring in your calendar.",
              "done": bool(cal.get("last_sync")) and not cal.get("needs_reconnect"), "action": "" if cal.get("last_sync") and not cal.get("needs_reconnect") else "gmail"},
