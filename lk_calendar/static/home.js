@@ -133,6 +133,8 @@
         h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ dismissed: true }); } }, 'Hide')]),
       h('div', { class: 'gs-list' }, d.steps.map(function (s) {
         var skip = s.skippable && !s.done && !s.skipped ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ skip: s.key }); } }, 'Skip') : null;
+        var again = s.start_over && !s.done && !s.skipped ? h('button', { class: 'hm-mini', type: 'button', title: 'Back to a new file',
+          onclick: function () { imp = null; send({ start_over: s.key }); } }, 'Start over') : null;
         var doit = s.done ? h('span', { class: 'gs-done' }, 'Done')
           : s.skipped ? h('button', { class: 'hm-mini', type: 'button', title: 'Undo skip', onclick: function () { send({ unskip: s.key }); } }, 'Skipped · undo')
           : s.busy ? h('span', { class: 'gs-busy' }, 'In progress…')
@@ -147,7 +149,7 @@
         return h('div', { class: 'gs-step' + (finished ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),
           h('div', { class: 'hm-main' }, [h('span', { class: 'hm-title' }, s.title),
             finished ? null : howTo(s) || linkedinNext(s) || h('div', { class: 'gs-why' }, s.why),
-            s.key === 'import' && (!finished || (imp && imp.stage === 'done')) ? importBox() : null]), skip, doit]);
+            s.key === 'import' && (!finished || (imp && imp.stage === 'done')) ? importBox() : null]), again, skip, doit]);
       }))])]);
   }
   loadStart();

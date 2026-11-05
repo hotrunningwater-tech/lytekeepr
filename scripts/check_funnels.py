@@ -223,6 +223,21 @@ def main():
         return next(x for x in a.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "import")
     def people_count():
         return len(a.get("/api/calendar/contacts").get_json().get("contacts") or [])
+    # a list imported by hand that nobody organized (the test account today): Start over stops it asking, the contacts stay
+    ran = a.post("/api/calendar/import/run", json={"token": drop("Name,Email\nCy Noor,cy@noor.test\n", "byhand.csv")["token"], "mapping": {"Name": "name", "Email": "email"},
+                                                    "options": {"brand": "lytekeepr", "duplicates": "skip", "batch": "by hand"}}).get_json()
+    step = import_step()
+    check(ran.get("added") == 1 and "organize the list I just imported" in step.get("say", "") and step.get("start_over"),
+          f"a list imported by hand doesn't ask to be organized, with Start over: {step}")
+    a.post("/api/calendar/getting-started", json={"start_over": "import"})
+    step = import_step()
+    check(step.get("action") == "import" and not step.get("say") and not step["done"], f"Start over doesn't bring back a plain 'Import a list': {step}")
+    check(any(c.get("name") == "Cy Noor" for c in a.get("/api/calendar/contacts?q=Cy").get_json()["contacts"]), "Start over removed imported contacts")
+    drop("Instagram,Bio\nhttps://instagram.com/wrongfile,Oops\n", "wrong.csv")
+    check(import_step().get("start_over"), "a dropped file can't be started over")
+    a.post("/api/calendar/getting-started", json={"start_over": "import"})
+    step = import_step()
+    check(step.get("action") == "import" and not step.get("start_over") and not step.get("say"), f"Start over doesn't bring back a plain 'Import a list': {step}")
     drop("Instagram,Bio\nhttps://instagram.com/coldone,Study abroad\nhttps://instagram.com/coldtwo,Tutors\n", "cold.csv")
     step = import_step()
     check(not step["done"] and step.get("chat") and step.get("say") == "In LyteKeepr, organize the list I just dropped.", f"after a drop, the step doesn't hand over to Claude: {step}")

@@ -64,6 +64,12 @@ def waiting() -> dict | None:
     return _row(r) if r else None
 
 
+def discard_waiting() -> None:
+    """Start over: the dropped files not imported yet are gone."""
+    with _conn() as conn:
+        conn.execute("DELETE FROM import_uploads WHERE imported_at = ''")
+
+
 def any_planned_import() -> bool:
     with _conn() as conn:
         return bool(conn.execute("SELECT 1 FROM import_uploads WHERE imported_at != '' AND plan != '' LIMIT 1").fetchone())

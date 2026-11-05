@@ -28,6 +28,7 @@ def _import_step(dropped, done: bool, unorganized: bool) -> dict:
             "done": done, "skippable": True, "action": "" if done else "import"}
     if done:
         return step
+    step["start_over"] = bool(dropped or unorganized)         # back to a plain "Import a list" with Start
     if dropped and dropped["plan"]:
         return {**step, "title": "Import a list: check and import", "action": "import_review",
                 "link": f"{os.getenv('LK_URL_PREFIX', '').rstrip('/')}/?import={dropped['token']}",
@@ -182,7 +183,7 @@ def status() -> dict:
             {"key": "calendar", "title": "Your calendar",
              "why": "Synced from your Google Calendar." if cal.get("last_sync") and not cal.get("needs_reconnect") else "Connect Google to bring in your calendar.",
              "done": bool(cal.get("last_sync")) and not cal.get("needs_reconnect"), "action": "" if cal.get("last_sync") and not cal.get("needs_reconnect") else "gmail"},
-            _import_step(dropped, list_done, imported and not organized),
+            _import_step(dropped, list_done, imported and not organized and contacts.latest_import()["key"] != state.get("import_set_aside")),
         ]
     else:
         steps = [_claude_step()]
@@ -196,8 +197,13 @@ def status() -> dict:
             "complete": finished, "show": not state.get("dismissed")}      # it never goes away by itself: "Setup complete" waits for USER's click
 
 
-def update(tick=None, untick=None, dismissed=None, skip=None, unskip=None) -> dict:
+def update(tick=None, untick=None, dismissed=None, skip=None, unskip=None, start_over=None) -> dict:
     state = _state()
+    if start_over == "import":                         # the dropped file goes; an imported list stops asking to be organized
+        from . import contacts, import_plans, users
+        if users.is_admin():
+            import_plans.discard_waiting()
+            state["import_set_aside"] = contacts.latest_import()["key"]
     if dismissed is not None:
         state["dismissed"] = bool(dismissed)
     skipped = set(state.get("skipped") or [])
@@ -220,4 +226,4 @@ def register(app):
     @app.post("/api/calendar/getting-started")
     def getting_started_update():
         x = request.get_json(silent=True) or {}
-        return jsonify(update(x.get("tick"), x.get("untick"), x.get("dismissed"), x.get("skip"), x.get("unskip")))
+        return jsonify(update(x.get("tick"), x.get("untick"), x.get("dismissed"), x.get("skip"), x.get("unskip"), x.get("start_over")))
