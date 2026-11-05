@@ -50,11 +50,25 @@ CREATE TABLE IF NOT EXISTS errors (
     count INTEGER NOT NULL DEFAULT 1,
     handled INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS ai_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    account_id INTEGER,
+    app TEXT NOT NULL DEFAULT '',              -- Claude or ChatGPT
+    tool TEXT NOT NULL,                        -- empty: the sentence USER sent with a Tell button on Home (in details)
+    details TEXT NOT NULL DEFAULT '',          -- what it sent, on test accounts only
+    error TEXT NOT NULL DEFAULT '',            -- empty = it worked
+    answer TEXT NOT NULL DEFAULT '',           -- what LyteKeepr answered, shortened, on test accounts only
+    ms INTEGER NOT NULL DEFAULT 0,
+    request_id INTEGER NOT NULL DEFAULT 0      -- calls close together make one request (the id of its first row)
+);
+CREATE INDEX IF NOT EXISTS ai_calls_account ON ai_calls (account_id, id);
 """
 ACCOUNT_COLUMNS = {"notes": "TEXT NOT NULL DEFAULT ''", "charge": "INTEGER NOT NULL DEFAULT 0", "card_required": "INTEGER NOT NULL DEFAULT 0",
                    "plan": "TEXT NOT NULL DEFAULT 'Team'", "monthly_price": "TEXT NOT NULL DEFAULT ''",
                    "is_test": "INTEGER NOT NULL DEFAULT 0",   # the owner's own test account: it can be reset (reset_account)
                    "work_pipelines": "INTEGER NOT NULL DEFAULT 0"}   # Work pipelines (a test feature): off unless the owner turns it on
+AI_CALL_COLUMNS = {"answer": "TEXT NOT NULL DEFAULT ''", "ms": "INTEGER NOT NULL DEFAULT 0", "request_id": "INTEGER NOT NULL DEFAULT 0"}
 CONSOLE_DEFAULTS = {"waive_all": "1", "card_for_new": "0", "trial_days": "14", "alert_errors": "1"}
 STATUSES = ("waiting", "active", "suspended")
 MAX_SIGNUPS_PER_HOUR = 20                 # a brake against someone creating workspaces in bulk
@@ -86,6 +100,10 @@ def _conn():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(SCHEMA + CONSOLE_SCHEMA)
+    have_ai = {r["name"] for r in conn.execute("PRAGMA table_info(ai_calls)")}
+    for column, ddl in AI_CALL_COLUMNS.items():
+        if column not in have_ai:
+            conn.execute(f"ALTER TABLE ai_calls ADD COLUMN {column} {ddl}")
     have = {r["name"] for r in conn.execute("PRAGMA table_info(accounts)")}
     for column, ddl in ACCOUNT_COLUMNS.items():
         if column not in have:
@@ -316,6 +334,85 @@ def run_in_each_workspace(job, label: str) -> dict:
 def log_activity(actor: str, action: str, account_id: int | None = None) -> None:
     with _conn() as conn:
         conn.execute("INSERT INTO activity (at, actor, account_id, action) VALUES (?, ?, ?, ?)", (_now(), actor, account_id, action[:300]))
+
+
+AI_CALLS_KEEP_DAYS = 90
+AI_REQUEST_GAP = 180          # seconds: a call this soon after the last one belongs to the same request
+AI_TOLD_WAIT = 900            # seconds: a Tell sentence waits this long for the AI's first call
+AI_SLOW_MS = 5000
+
+
+def _ai_request(conn, account_id, now: float, told: bool) -> int:
+    """The request a new row joins: the latest one if it was busy a moment ago, or a Tell sentence still waiting for its first call."""
+    if told or account_id is None:
+        return 0
+    last = conn.execute("SELECT at, tool, request_id FROM ai_calls WHERE account_id = ? ORDER BY id DESC LIMIT 1", (account_id,)).fetchone()
+    if not last:
+        return 0
+    ago = now - datetime.fromisoformat(last["at"]).timestamp()
+    return last["request_id"] if ago <= (AI_TOLD_WAIT if last["tool"] == "" else AI_REQUEST_GAP) else 0
+
+
+def log_ai_call(profile_id: str, app: str, tool: str, args: dict, error: str = "", answer: str = "", ms: int = 0) -> None:
+    """Every call Claude or ChatGPT makes to LyteKeepr, reads included, for the Owner console. What it sent and what LyteKeepr
+    answered are kept on test accounts only: on a real account they can hold the customer's contacts and emails."""
+    import json
+    account = account_for_profile(profile_id)
+    test = bool(account and account["is_test"])
+    _add_ai_row(account["id"] if account else None, app, tool[:80], json.dumps(args, ensure_ascii=False, default=str)[:2000] if test else "",
+                (error or "")[:500], (answer or "")[:2000] if test else "", int(ms))
+
+
+def log_ai_told(profile_id: str, app: str, sentence: str) -> None:
+    """USER sent one of Home's own sentences with a Tell button: it heads the request its calls make (our own words, so kept on every account)."""
+    account = account_for_profile(profile_id)
+    if account:
+        _add_ai_row(account["id"], app, "", sentence[:1000], "", "", 0)
+
+
+def _add_ai_row(account_id, app, tool, details, error, answer, ms) -> None:
+    now = datetime.now()
+    with _conn() as conn:
+        rid = _ai_request(conn, account_id, now.timestamp(), tool == "")
+        cur = conn.execute("INSERT INTO ai_calls (at, account_id, app, tool, details, error, answer, ms, request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                           (now.isoformat(timespec="seconds"), account_id, app, tool, details, error, answer, ms, rid))
+        if not rid:
+            conn.execute("UPDATE ai_calls SET request_id = id WHERE id = ?", (cur.lastrowid,))
+        if cur.lastrowid % 500 == 0:
+            cutoff = datetime.fromtimestamp(now.timestamp() - AI_CALLS_KEEP_DAYS * 86400).isoformat(timespec="seconds")
+            conn.execute("DELETE FROM ai_calls WHERE at < ?", (cutoff,))
+
+
+def ai_activity(account_id: int, requests: int = 50) -> dict:
+    """An account's AI requests, newest first, each with its Tell sentence (if any) and its calls in order; and today's numbers."""
+    today = datetime.now().date().isoformat()
+    with _conn() as conn:
+        ids = [r["request_id"] for r in conn.execute("SELECT DISTINCT request_id FROM ai_calls WHERE account_id = ? ORDER BY request_id DESC LIMIT ?",
+                                                     (account_id, requests))]
+        rows = [dict(r) for r in conn.execute(f"SELECT * FROM ai_calls WHERE request_id IN ({','.join('?' * len(ids))}) ORDER BY id", ids)] if ids else []
+        day = conn.execute("""SELECT SUM(tool != '') AS calls, SUM(tool != '' AND error != '') AS failed, SUM(tool != '' AND ms > ?) AS slow,
+                                     COUNT(DISTINCT request_id) AS reqs FROM ai_calls WHERE account_id = ? AND at >= ?""",
+                           (AI_SLOW_MS, account_id, today)).fetchone()
+        last = conn.execute("SELECT at, app FROM ai_calls WHERE account_id = ? AND tool != '' ORDER BY id DESC LIMIT 1", (account_id,)).fetchone()
+    out = []
+    for rid in ids:
+        mine = [r for r in rows if r["request_id"] == rid]
+        told = next((r for r in mine if r["tool"] == ""), None)
+        calls = [{k: r[k] for k in ("at", "tool", "details", "error", "answer", "ms")} for r in mine if r["tool"]]
+        out.append({"at": mine[0]["at"], "app": (calls and next(r["app"] for r in mine if r["tool"])) or mine[0]["app"],
+                    "asked": told["details"] if told else "", "calls": calls, "failed": sum(1 for c in calls if c["error"]),
+                    "ms": sum(c["ms"] for c in calls)})
+    return {"today": day["calls"] or 0, "failed_today": day["failed"] or 0, "slow_today": day["slow"] or 0, "requests_today": day["reqs"] or 0,
+            "last_at": last["at"] if last else "", "last_app": last["app"] if last else "", "slow_ms": AI_SLOW_MS, "requests": out}
+
+
+def ai_problems(hours: int = 24) -> list[dict]:
+    """Accounts with failed AI calls lately, for the Owner console's front page."""
+    since = datetime.fromtimestamp(datetime.now().timestamp() - hours * 3600).isoformat(timespec="seconds")
+    with _conn() as conn:
+        return [dict(r) for r in conn.execute("""SELECT c.account_id, a.name, a.owner_email, COUNT(*) AS failed, MAX(c.at) AS last_at
+                                                 FROM ai_calls c LEFT JOIN accounts a ON a.id = c.account_id
+                                                 WHERE c.error != '' AND c.at >= ? GROUP BY c.account_id ORDER BY failed DESC""", (since,))]
 
 
 def list_activity(limit: int = 200) -> list[dict]:

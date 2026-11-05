@@ -43,6 +43,29 @@
   .hide { display: none !important; }
   .cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; } @media (max-width: 1100px) { .cols { grid-template-columns: 1fr; } }
   .stack { display: flex; flex-direction: column; gap: 16px; }
+  .req { background: #fff; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .req.bad { box-shadow: inset 4px 0 0 #a3412b; }
+  .req-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+  .req-head .t { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .req-head .dur { margin-left: auto; color: var(--ink-soft); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .asked { font-size: 13.5px; line-height: 1.45; } .asked small { display: block; font-family: var(--font-heading); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 2px; }
+  .asked.none { color: var(--ink-soft); font-style: italic; font-size: 12.5px; }
+  .calls { display: flex; flex-direction: column; gap: 4px; border-left: 2px solid rgba(41,67,78,.1); margin-left: 4px; padding-left: 12px; }
+  details.call summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 18px 1fr auto auto; gap: 8px; align-items: center; font-size: 13px; padding: 5px 6px; border-radius: 8px; }
+  details.call summary::-webkit-details-marker { display: none; }
+  details.call summary:hover { background: rgba(230,237,240,.6); }
+  details.call summary .n { color: var(--ink-soft); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  details.call summary .ms { color: var(--ink-soft); font-size: 12px; font-variant-numeric: tabular-nums; }
+  details.call summary .ms.slow { color: #8a5a10; font-weight: 600; }
+  details.call.failed summary b { color: #a3412b; }
+  .io { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 6px 8px 32px; } @media (max-width: 900px) { .io { grid-template-columns: 1fr; } }
+  .io div { background: rgba(230,237,240,.55); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  .io small { display: block; font-family: var(--font-heading); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 4px; }
+  .io code { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); display: block; max-height: 220px; overflow-y: auto; }
+  .io .e code { color: #a3412b; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filters button { border: 1px solid rgba(41,67,78,.2); background: #fff; border-radius: 999px; padding: 5px 12px; font-family: var(--font-heading); font-size: 12px; font-weight: 600; color: var(--ink); cursor: pointer; }
+  .filters button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
   .toggle-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; background: #fff; border-radius: 14px; padding: 13px 16px; }
   .toggle-row b { display: block; font-size: 13.5px; } .toggle-row span { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
   .sw { width: 38px; height: 22px; border-radius: 999px; background: #c5d0d5; position: relative; flex: none; cursor: pointer; border: none; padding: 0; }
@@ -98,6 +121,12 @@
 
     <section data-s="detail" class="sa-main hide">
       <div class="sa-top"><div><button class="back" type="button" id="backBtn">← All accounts</button><h1 id="dName"></h1></div><div class="row" id="dPills"></div></div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between"><h2>AI activity</h2><div class="filters" id="aiFilters"><button class="on" data-f="all" type="button">All</button><button data-f="failed" type="button">Failed only</button><button data-f="Claude" type="button">Claude</button><button data-f="ChatGPT" type="button">ChatGPT</button></div></div>
+        <div class="kpis" id="aiKpis"></div>
+        <p id="aiNote"></p>
+        <div class="stack" id="aiReqs" style="gap:10px"></div>
+      </div>
       <div class="cols">
         <div class="stack">
           <div class="card"><h2>Billing for this account</h2>
@@ -121,6 +150,7 @@
             <div class="row"><button class="btn btn-soft" type="button" id="saveNotes">Save notes</button><span class="note" id="notesMsg"></span></div>
           </div>
           <div class="card"><h2>Recent changes for this account</h2><div id="dActivity" class="note"></div></div>
+
         </div>
       </div>
     </section>
@@ -189,8 +219,9 @@
        [o.people, 'People (admins + team)', o.active_7d + ' accounts active in the last 7 days'],
        [o.charged, 'Paying', o.waive_all ? 'charges waived for everyone' : 'charging is on'],
        [o.suspended, 'Suspended', ''],
-       [o.open_errors, 'Open errors', o.open_errors ? 'see Health & errors' : 'all clear']].forEach(function (x, i) {
-        var d = el('div', 'kpi' + (i === 4 && x[0] ? ' bad' : '')); d.append(el('b', null, String(x[0])), el('span', null, x[1])); if (x[2]) d.appendChild(el('em', null, x[2])); k.appendChild(d);
+       [o.open_errors, 'Open errors', o.open_errors ? 'see Health & errors' : 'all clear'],
+       [o.ai_failed, 'Failed AI calls, 24 hours', o.ai_failed ? 'see Needs your attention' : 'all clear']].forEach(function (x, i) {
+        var d = el('div', 'kpi' + (i >= 4 && x[0] ? ' bad' : '')); d.append(el('b', null, String(x[0])), el('span', null, x[1])); if (x[2]) d.appendChild(el('em', null, x[2])); k.appendChild(d);
       });
       var max = Math.max.apply(null, o.signups.map(function (s) { return s.count; }).concat([1])), sp = $('spark'); sp.replaceChildren();
       o.signups.forEach(function (s) { var i = el('i'); i.style.height = Math.round(100 * s.count / max) + '%'; i.title = s.day + ': ' + s.count; sp.appendChild(i); });
@@ -282,8 +313,52 @@
       var da = $('dActivity'); da.replaceChildren();
       if (!r.activity.length) da.textContent = 'No changes yet.';
       r.activity.forEach(function (x) { da.appendChild(el('div', null, when(x.at) + ' · ' + x.actor + ' · ' + x.action)); });
+      aiData = r.ai; aiTest = !!a.is_test; drawAi();
     }).catch(function (e) { $('dName').textContent = e.message; });
   }
+  // AI activity: one block per request (the Tell sentence, if any, then every call in order); sent and answered on test accounts only
+  var aiData = null, aiTest = false, aiFilter = 'all';
+  function secs(ms) { return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : ms + 'ms'; }
+  function drawAi() {
+    var ai = aiData, k = $('aiKpis'); k.replaceChildren();
+    [[ai.today, 'Calls today', ai.requests_today + ' requests', ''], [ai.failed_today, 'Failed today', '', ai.failed_today ? 'bad' : ''],
+     [ai.slow_today, 'Slow (over ' + ai.slow_ms / 1000 + 's)', '', ''], [ai.last_at ? when(ai.last_at) : 'Never', 'Last used' + (ai.last_app ? ' · ' + ai.last_app : ''), '', 'small']].forEach(function (x) {
+      var d = el('div', 'kpi' + (x[3] === 'bad' ? ' bad' : '')), b = el('b', null, String(x[0])); if (x[3] === 'small') b.style.fontSize = '20px';
+      d.append(b, el('span', null, x[1])); if (x[2]) d.appendChild(el('em', null, x[2])); k.appendChild(d);
+    });
+    $('aiNote').textContent = 'Newest first. Each block is one request: what was asked (when it came from a Tell button on Home), then every tool the AI used, in order. Click a tool to see '
+      + (aiTest ? 'what it sent and what LyteKeepr answered.' : 'its error. What it sent and what LyteKeepr answered are kept on test accounts only.') + ' Kept 90 days.';
+    var list = $('aiReqs'); list.replaceChildren();
+    var shown = ai.requests.filter(function (q) { return aiFilter === 'all' || (aiFilter === 'failed' ? q.failed : q.app === aiFilter); });
+    if (!shown.length) list.appendChild(el('div', 'empty', ai.requests.length ? 'Nothing matches this filter.' : 'No calls yet.'));
+    shown.forEach(function (q) {
+      var box = el('div', 'req' + (q.failed ? ' bad' : '')), head = el('div', 'req-head');
+      head.append(el('span', 't', when(q.at)), el('span', 'pill', q.app),
+        q.failed ? el('span', 'pill bad', q.failed + ' failed') : q.calls.length ? el('span', 'pill ok', 'Worked') : el('span', 'pill warn', 'No calls yet'),
+        el('span', 'dur', q.calls.length + (q.calls.length === 1 ? ' call' : ' calls') + ' · ' + secs(q.ms)));
+      box.appendChild(head);
+      if (q.asked) { var a = el('div', 'asked'); a.append(el('small', null, 'Asked with Tell ' + q.app), document.createTextNode(q.asked)); box.appendChild(a); }
+      else box.appendChild(el('div', 'asked none', 'Asked straight in ' + q.app + ': the question doesn\'t reach LyteKeepr, only its calls.'));
+      var calls = el('div', 'calls');
+      q.calls.forEach(function (c, i) {
+        var d = el('details', 'call' + (c.error ? ' failed' : '')), sm = el('summary');
+        sm.append(el('span', 'n', String(i + 1)), el('b', null, c.tool), el('span', 'ms' + (c.ms > ai.slow_ms ? ' slow' : ''), secs(c.ms)),
+                  c.error ? el('span', 'pill bad', 'Failed') : el('span', 'pill ok', 'OK'));
+        d.appendChild(sm);
+        var io = el('div', 'io');
+        if (c.details) { var s1 = el('div'); s1.append(el('small', null, 'Sent'), el('code', null, c.details)); io.appendChild(s1); }
+        var s2 = el('div', c.error ? 'e' : ''); s2.append(el('small', null, c.error ? 'Error' : 'LyteKeepr answered'), el('code', null, c.error || c.answer || (aiTest ? '(empty)' : 'Kept on test accounts only')));
+        io.appendChild(s2); d.appendChild(io); calls.appendChild(d);
+      });
+      if (q.calls.length) box.appendChild(calls);
+      list.appendChild(box);
+    });
+  }
+  document.querySelectorAll('#aiFilters button').forEach(function (b) { b.addEventListener('click', function () {
+    aiFilter = b.getAttribute('data-f');
+    document.querySelectorAll('#aiFilters button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    if (aiData) drawAi();
+  }); });
   $('backBtn').addEventListener('click', function () { show('accounts'); });
   $('swCharge').addEventListener('click', function () { api('POST', 'accounts/' + openAccount + '/billing', { charge: !$('swCharge').classList.contains('on') }).then(function () { openDetail(openAccount); }).catch(function (e) { alert(e.message); }); });
   $('swCard').addEventListener('click', function () { api('POST', 'accounts/' + openAccount + '/billing', { card_required: !$('swCard').classList.contains('on') }).then(function () { openDetail(openAccount); }).catch(function (e) { alert(e.message); }); });

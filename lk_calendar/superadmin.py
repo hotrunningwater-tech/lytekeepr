@@ -195,12 +195,15 @@ def register(app, app_dir):
         attention += [{"kind": "error", "text": f"{e['kind']}: {e['message'][:90]}", "account_id": e["account_id"]} for e in directory.list_errors()[:5]]
         attention += [{"kind": "google", "text": f"{a['name'] or a['owner_email']}: Google needs reconnecting", "account_id": a["id"]}
                       for a in accounts if counts[a["id"]]["google_reconnect"]]
+        ai_problems = directory.ai_problems()
+        attention += [{"kind": "ai", "text": f"{p['name'] or p['owner_email']}: {p['failed']} failed AI call{'s' if p['failed'] != 1 else ''} in the last 24 hours",
+                       "account_id": p["account_id"]} for p in ai_problems if p["account_id"]]
         return jsonify({
             "accounts": len(accounts), "active": sum(1 for a in accounts if a["status"] == "active"),
             "waiting": sum(1 for a in accounts if a["status"] == "waiting"), "suspended": sum(1 for a in accounts if a["status"] == "suspended"),
             "people": sum(c["team"] for c in counts.values()), "active_7d": sum(1 for c in counts.values() if c["last_active"] >= week),
             "charged": sum(1 for a in accounts if _effective_billing(a, settings) == "charged"), "waive_all": settings["waive_all"] == "1",
-            "open_errors": len(directory.list_errors()), "signups": signups, "attention": attention})
+            "open_errors": len(directory.list_errors()), "ai_failed": sum(p["failed"] for p in ai_problems), "signups": signups, "attention": attention})
 
     @app.get("/api/superadmin/accounts")
     def superadmin_accounts():
@@ -232,7 +235,8 @@ def register(app, app_dir):
         return jsonify({"account": {**account, "billing_effective": _effective_billing(account, directory.console_settings()),
                                     "is_home": account["profile_id"] == home_profile_id()},
                         "people": people, "usage": usage(account["profile_id"]),
-                        "activity": [x for x in directory.list_activity(500) if x["account_id"] == account_id][:30]})
+                        "activity": [x for x in directory.list_activity(500) if x["account_id"] == account_id][:30],
+                        "ai": directory.ai_activity(account_id)})
 
     @app.post("/api/superadmin/accounts/<int:account_id>/status")
     def superadmin_status(account_id):

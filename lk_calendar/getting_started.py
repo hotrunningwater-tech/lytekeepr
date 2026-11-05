@@ -247,3 +247,13 @@ def register(app):
     def getting_started_update():
         x = request.get_json(silent=True) or {}
         return jsonify(update(x.get("tick"), x.get("untick"), x.get("dismissed"), x.get("skip"), x.get("unskip"), x.get("start_over")))
+
+    @app.post("/api/calendar/getting-started/told")
+    def getting_started_told():
+        """USER clicked Tell Claude: the sentence heads Claude's calls in the Owner console. Only Home's own sentences."""
+        from profiles.store import get_active_profile_id
+        from . import directory
+        said = (request.get_json(silent=True) or {}).get("say") or ""
+        if said and any(s.get("say") == said for s in status()["steps"]):
+            directory.log_ai_told(get_active_profile_id(), "Claude", said)
+        return jsonify({"ok": True})
