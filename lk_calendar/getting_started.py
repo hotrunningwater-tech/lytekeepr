@@ -109,6 +109,20 @@ def status() -> dict:
         li = _linkedin_status() if linked else {}
         reading = linked and not li.get("first_done")             # linked, first read not finished yet: say so, never "done"
         cal = google_sync.status()
+        sorted_once = set(state.get("sorted") or [])         # setup is once: a sorted inbox stays done; new people wait in the inbox, day to day
+        if waiting == 0 and gmail:
+            sorted_once.add("email")
+        if linked and not reading and li_waiting == 0:
+            sorted_once.add("linkedin")
+        if sorted_once != set(state.get("sorted") or []):
+            state["sorted"] = sorted(sorted_once)
+            store.set_state(_state_key(), json.dumps(state))
+        email_done = gmail and "email" in sorted_once
+        li_done = linked and "linkedin" in sorted_once
+        if email_done:
+            waiting = 0
+        if li_done:
+            reading, li_waiting = False, 0
         steps = [
             {"key": "account", "title": "Create your account", "why": "Signed in with Google, with your Gmail connected.",
              "done": gmail, "action": "gmail"},
@@ -122,7 +136,7 @@ def status() -> dict:
             {"key": "email", "title": "Sort your email" + (f": {waiting} waiting" if waiting else ""),
              "why": "Your last 3 months of email are coming in. This list updates by itself." if waiting is None
                     else "Click Tell Claude: Claude suggests who to keep as contacts and who to remove, and asks you first.",
-             "done": waiting == 0, "busy": waiting is None, "say": "In LyteKeepr, sort my email." if waiting else "", "chat": True,
+             "done": email_done, "busy": waiting is None, "say": "In LyteKeepr, sort my email." if waiting else "", "chat": True,
              "how": _tell_claude("In LyteKeepr, sort my email.", "Send it.",
                                  "Claude shows who to keep as contacts and who to remove. Ask about anyone you're not sure of, then say yes.") if waiting else []},
             {"key": "linkedin", "title": "Connect LinkedIn" if not linked else "Reading your LinkedIn" if reading
@@ -133,7 +147,7 @@ def status() -> dict:
                      else "Bringing in your last 3 months of LinkedIn messages. This takes a few minutes; this list updates by itself." if reading
                      else "Click Tell Claude: Claude suggests who to keep as contacts and who to remove, and asks you first." if li_waiting
                      else "Your LinkedIn messages are in and sorted."),
-             "done": linked and not reading and li_waiting == 0, "busy": reading,
+             "done": li_done, "busy": reading,
              "action": "linkedin_approve" if approve else "linkedin" if not linked else "", "link": approve,
              "say": "In LyteKeepr, sort my LinkedIn." if linked and not reading and li_waiting else "", "chat": True,
              "how": _tell_claude("In LyteKeepr, sort my LinkedIn.", "Send it.",

@@ -209,6 +209,25 @@ def main():
           "a skipped step can't be undone")
     check(not next(x for x in a.post("/api/calendar/getting-started", json={"skip": "email"}).get_json()["steps"] if x["key"] == "email")["skipped"],
           "a required step could be skipped")
+    # setup is once: a sorted inbox stays done when new people arrive later (they wait in the inbox, day to day)
+    from lk_calendar import getting_started as _gs
+    real = (_gs._email_waiting, _gs._linkedin_waiting, _gs._linkedin_connected, _gs._linkedin_status)
+    _gs._linkedin_connected, _gs._linkedin_status = (lambda: True), (lambda: {"first_done": True})
+    gstore_had = gstore.has_refresh_token
+    gstore.has_refresh_token = lambda *x, **k: True
+    try:
+        def inbox_steps(email_waiting, li_waiting):
+            _gs._email_waiting, _gs._linkedin_waiting = (lambda: email_waiting), (lambda: li_waiting)
+            return {x["key"]: x for x in a.get("/api/calendar/getting-started").get_json()["steps"]}
+        before = inbox_steps(4, 2)
+        check(not before["email"]["done"] and not before["linkedin"]["done"], "an inbox with people waiting shows as sorted before the first sort")
+        inbox_steps(0, 0)
+        later = inbox_steps(3, 3)
+        check(later["email"]["done"] and later["linkedin"]["done"] and not later["email"].get("say") and not later["linkedin"].get("say"),
+              f"new people arriving after the first sort reopened a setup step: {later['email']} / {later['linkedin']}")
+    finally:
+        _gs._email_waiting, _gs._linkedin_waiting, _gs._linkedin_connected, _gs._linkedin_status = real
+        gstore.has_refresh_token = gstore_had
     check(a.post("/api/calendar/getting-started", json={"dismissed": True}).get_json()["show"] is False, "Hide hides it")
 
     # An unexpected failure: plain words, no raw error
