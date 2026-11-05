@@ -66,9 +66,9 @@
     if (s.action === 'gmail') location.href = (window.LK_PREFIX || '') + '/auth/google/start';
     else if (s.action === 'linkedin_approve') location.href = s.link;     // here, in the window and account the USER is signed in to
     else if (s.action === 'claude') window.open(s.link, '_blank', 'noopener');   // Claude's add-connector form, already filled in
-    else if (s.action === 'chatgpt') {                  // no filled-in form in ChatGPT: LyteKeepr's address copied, ChatGPT opened
-      try { navigator.clipboard.writeText(s.address).catch(function () {}); } catch (e) { /* no clipboard */ }
-      window.open(s.link, '_blank', 'noopener');
+    else if (s.action === 'chatgpt') {                  // no filled-in form in ChatGPT: LyteKeepr's address copied, then ChatGPT opened
+      var go = function () { window.open(s.link, '_blank', 'noopener'); };   // only after the copy: a new tab takes the focus and the copy fails
+      try { navigator.clipboard.writeText(s.address).then(go, go); } catch (e) { go(); }
     }
     else if (s.action === 'fathom') {                   // Fathom's key page in a new tab; the step here turns into the paste box
       window.open(s.link, '_blank', 'noopener');
