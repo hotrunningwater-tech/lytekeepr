@@ -12,7 +12,8 @@ FATHOM_KEY_PAGE = "https://fathom.video/api_settings/new"      # Fathom's "Gener
 
 FATHOM_SETTINGS = "https://fathom.video/customize"          # Fathom's Settings page
 RECORD_GUIDE = ["The app you use says Fully Enabled. If not, click Connect and allow it.",     # as Fathom's Settings page shows it
-                "Auto-capture unscheduled meetings is on."]
+                "Auto-capture unscheduled meetings is on.",
+                "Once it's set up, come back here and click It's set up."]
 
 
 def _record_step(state: dict, recorded: bool) -> dict:
