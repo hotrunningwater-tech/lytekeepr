@@ -17,6 +17,7 @@ Started 2026-11-05. Things to fix or decide later, grouped by how much they matt
 
 ## Important
 
+- **[LinkedIn] Install directly on the computer, for Claude and ChatGPT.** Today the LinkedIn helper installs into the Claude app, so ChatGPT users see "coming soon". Agreed: same Download → double-click → Approve, but installed on the Mac itself (then Windows). Next build on branch claude-plus-gpt. (added 2026-11-05)
 - **[Claude] New tools don't reach a connected Claude.** After we add a tool, a USER's already connected Claude keeps its old list (it couldn't find dropped_list and plan_import) until the connector is disconnected and connected again. Find how to make Claude pick up new tools by itself. (added 2026-11-05)
 - **[Claude] Allow asked twice.** Every change in Claude needs two Allows (show first, then do). Idea: each tool's description tells Claude to print the final input in the chat, wait for yes, then call once. Not decided. (added 2026-11-05)
 - **[LinkedIn] Login window stays open.** After Approve, the add-on opens LinkedIn to check the login; already logged in, it should close by itself but didn't, and the add-on waited until USER closed it. (added 2026-11-05)
