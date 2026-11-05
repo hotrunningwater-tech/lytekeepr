@@ -11,17 +11,14 @@ FATHOM_KEY_PAGE = "https://fathom.video/api_settings/new"      # Fathom's "Gener
 
 
 FATHOM_SETTINGS = "https://fathom.video/customize"          # Fathom's Settings page
-RECORD_GUIDE = {                                     # from Fathom's help pages (Settings: Video Conferencing, auto-record per meeting type)
-    "zoom": ["Click Open Fathom: its Settings page opens.", "Under Video Conferencing, click Connect next to Zoom. Sign in to Zoom and allow it.",
-             "On the same Settings page, turn on auto-record for your meetings, including impromptu Zoom meetings."],
-    "meet": ["Click Open Fathom: its Settings page opens.", "Turn on auto-record for your meetings, including impromptu Google Meet meetings.",
-             "Put your calls on your main Google Calendar, the one you signed up to Fathom with. Fathom only sees that one."],
-}
+RECORD_GUIDE = ["Click Open Fathom: its Settings page opens.",            # as Fathom's Settings page shows it (Video Conferencing)
+                "Under Video Conferencing, the one you use (Zoom, Google Meet or Teams) should say Fully Enabled. If not, click Connect and allow it.",
+                "Turn on Auto-capture unscheduled meetings for it."]
 
 
 def _record_step(state: dict, recorded: bool) -> dict:
-    """After Connect Fathom: Fathom set up to record Zoom and/or Google Meet calls. Done by the first recorded call, or by USER."""
-    return {"key": "fathom_record", "title": "Record your calls with Fathom", "why": "Which do you use for calls?",
+    """After Connect Fathom: Fathom set up to record the calls (Zoom, Google Meet or Teams). Done by the first recorded call, or by USER."""
+    return {"key": "fathom_record", "title": "Record your calls with Fathom", "why": "Fathom must record your calls for them to come in.",
             "done": recorded or bool(state.get("fathom_record_done")), "action": "", "link": FATHOM_SETTINGS, "guide": RECORD_GUIDE}
 
 

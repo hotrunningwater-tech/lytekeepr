@@ -94,27 +94,14 @@
       .map(function (t) { return h('li', {}, t); }));
   }
   var startTimer = null;
-  /* ---------- Record your calls with Fathom: Zoom, Google Meet or both, then the steps for that only ---------- */
-  var recordWith = '';                 // '' | 'zoom' | 'meet' | 'both'
-  try { recordWith = sessionStorage.getItem('lkRecordWith') || ''; } catch (e) { /* storage blocked */ }
+  /* ---------- Record your calls with Fathom: the steps as Fathom's Settings page shows them ---------- */
   function recordBox(s, send) {
-    function pick(v) { recordWith = v; try { sessionStorage.setItem('lkRecordWith', v); } catch (e) { /* storage blocked */ } loadStart(); }
-    if (!recordWith) return h('div', { class: 'gs-drop' }, [h('div', { class: 'lks-row' }, [
-      h('button', { class: 'hm-mini', type: 'button', onclick: function () { pick('zoom'); } }, 'Zoom'),
-      h('button', { class: 'hm-mini', type: 'button', onclick: function () { pick('meet'); } }, 'Google Meet'),
-      h('button', { class: 'hm-mini', type: 'button', onclick: function () { pick('both'); } }, 'Both')])]);
-    var parts = recordWith === 'both' ? [['Zoom', s.guide.zoom], ['Google Meet', s.guide.meet.slice(1)]] : [['', s.guide[recordWith]]];
-    var out = [];
-    parts.forEach(function (p) {
-      if (p[0]) out.push(h('p', {}, h('b', {}, p[0])));
-      out.push(h('ol', { class: 'gs-why' }, p[1].map(function (t) { return h('li', {}, t); })));
-    });
-    out.push(h('p', {}, 'Your next recorded call then shows up in LyteKeepr by itself.'));
-    out.push(h('div', { class: 'lks-row' }, [
-      h('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: function () { window.open(s.link, '_blank', 'noopener'); } }, 'Open Fathom'),
-      h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ tick: s.key }); } }, 'It\u2019s set up'),
-      h('button', { class: 'hm-mini', type: 'button', onclick: function () { pick(''); } }, 'Change')]));
-    return h('div', { class: 'gs-drop' }, out);
+    return h('div', { class: 'gs-drop' }, [
+      h('ol', { class: 'gs-why' }, s.guide.map(function (t) { return h('li', {}, t); })),
+      h('p', {}, 'Your next recorded call then shows up in LyteKeepr by itself.'),
+      h('div', { class: 'lks-row' }, [
+        h('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: function () { window.open(s.link, '_blank', 'noopener'); } }, 'Open Fathom'),
+        h('button', { class: 'hm-mini', type: 'button', onclick: function () { send({ tick: s.key }); } }, 'It\u2019s set up')])]);
   }
   /* ---------- Connect Fathom: after Log in to Fathom, the key is pasted right here ---------- */
   var fathom = null;                   // null: not opened yet; {error, busy}

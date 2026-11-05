@@ -211,7 +211,7 @@ def main():
     _calls.get_key, _calls.has_calls = (lambda: "k"), (lambda: False)
     try:
         rec = next((x for x in a.get("/api/calendar/getting-started").get_json()["steps"] if x["key"] == "fathom_record"), None)
-        check(rec and not rec["done"] and set(rec.get("guide") or {}) == {"zoom", "meet"}, f"'Record your calls with Fathom' doesn't follow Connect Fathom: {rec}")
+        check(rec and not rec["done"] and any("Auto-capture" in t for t in rec.get("guide") or []) and rec.get("link") == "https://fathom.video/customize", f"'Record your calls with Fathom' doesn't follow Connect Fathom: {rec}")
         rec = next(x for x in a.post("/api/calendar/getting-started", json={"tick": "fathom_record"}).get_json()["steps"] if x["key"] == "fathom_record")
         check(rec["done"], "'It's set up' doesn't finish 'Record your calls with Fathom'")
     finally:
