@@ -24,7 +24,7 @@ from crm import db as crm
 from . import brands, leads, store
 
 FIELDS = [   # key, label  (business_name becomes the company; status/dates feed the funnel entry)
-    ("name", "Name"), ("url", "URL (profile link)"), ("business_name", "Business name"), ("job_title", "Job title"),
+    ("name", "Name"), ("url", "Instagram or LinkedIn profile"), ("business_name", "Business name"), ("job_title", "Job title"),
     ("headline", "Headline / bio"), ("location", "Location"), ("industry", "Industry / type"), ("audience", "Audience size"),
     ("phone", "Phone / WhatsApp"), ("telegram", "Telegram"), ("email", "Email"), ("website", "Website"), ("verified", "Verified"),
     ("date_found", "Date found"), ("notes", "Notes"), ("status", "Status"), ("status_date", "Status date"), ("follow_up_date", "Follow-up date"),

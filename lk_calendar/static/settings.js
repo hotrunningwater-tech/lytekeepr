@@ -504,7 +504,7 @@
       h('div', { class: 'lks-row' }, [
         h('button', { class: 'btn btn-primary', type: 'button', disabled: im.busy, onclick: function () {
           var mapped = Object.keys(im.mapping).map(function (k) { return im.mapping[k]; });
-          if (!['url', 'name', 'business_name'].some(function (k) { return mapped.indexOf(k) >= 0; })) { im.error = 'Match at least one column to URL, Name or Business name, so each person can be identified.'; importRender(); return; }
+          if (!['url', 'name', 'business_name'].some(function (k) { return mapped.indexOf(k) >= 0; })) { im.error = 'Match at least one column to Instagram or LinkedIn profile, Name or Business name, so each person can be identified.'; importRender(); return; }
           if (!o.brand) { im.error = 'Choose the brand of the new contacts.'; importRender(); return; }
           var p = im.plan, plan = null;
           if (p) {
