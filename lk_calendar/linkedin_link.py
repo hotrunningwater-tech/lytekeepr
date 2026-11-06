@@ -215,6 +215,12 @@ def finish(key_hash: str, report: dict) -> None:
     state_name = report.get("state") if report.get("state") in ("ok", "needs_login", "error") else "error"
     with _db() as conn:
         conn.execute("UPDATE linkedin_links SET last_seen = ?, last_state = ?, sync_requested = 0 WHERE key_hash = ?", (_now(), state_name, key_hash))
+    read = int(report.get("conversations") or 0)
+    if not ok and state_name == "error" and read > int(report.get("failed") or 0):
+        state = storage.load()                         # the first read brought most in: it's done (Home moves on); the few that
+        if not state.get("backfilled"):                # failed are read again next time, and "last synced" stays where it was
+            state["backfilled"], state["backfilled_at"] = True, datetime.now().isoformat()
+            storage.save(state)
     if ok:
         state = storage.load()
         now = datetime.now().isoformat()

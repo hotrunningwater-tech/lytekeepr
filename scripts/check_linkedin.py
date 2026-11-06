@@ -220,6 +220,17 @@ def main():
     check(status["state"] == "error", f"a failed read is not shown: {status}")
     with use_profile(ws_a):
         check(storage.load()["last_synced_at"] == before, "a failed read moved last synced")
+    # a first read where a few conversations failed still counts as done (Home moves on); a read that got nothing does not
+    from lk_calendar import linkedin_link as _ll
+    with use_profile(ws_b):
+        kept = storage.load()
+        storage.save({})
+        _ll.finish("no-such-key", {"ok": False, "state": "error", "conversations": 0, "failed": 3})
+        check(not storage.load().get("backfilled"), "a first read that brought nothing in counted as done")
+        _ll.finish("no-such-key", {"ok": False, "state": "error", "conversations": 25, "failed": 1})
+        got = storage.load()
+        check(got.get("backfilled") and not got.get("last_synced_at"), f"a first read with one failed conversation never counts as done: {got}")
+        storage.save(kept)
     make_read_due()
     messages["c1"].append(message("m5", "the retry", "incoming", "10:00 AM"))
     fake(conversations=changed, messages=messages)
