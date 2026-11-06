@@ -233,6 +233,26 @@ def main():
         def inbox_steps(email_waiting, li_waiting):
             _gs._email_waiting, _gs._linkedin_waiting = (lambda: email_waiting), (lambda: li_waiting)
             return {x["key"]: x for x in a.get("/api/calendar/getting-started").get_json()["steps"]}
+        # the first email read starts only when USER clicks Start: before it, Start (not "in progress"); while it runs, reading, no button
+        real_reading = _gs._email_reading
+        try:
+            unread = inbox_steps(None, 2)["email"]
+            check(unread.get("action") == "email_read" and not unread.get("busy") and not unread.get("say"),
+                  f"before the first read, the email step doesn't offer Start: {unread}")
+            _gs._email_reading = lambda: True
+            running = inbox_steps(None, 2)["email"]
+            check(running.get("busy") and not running.get("action") and "Reading" in running["why"], f"while reading, the email step is wrong: {running}")
+        finally:
+            _gs._email_reading = real_reading
+        import server as _srv
+        from lk_calendar import store as _st
+        had_acc = _srv.get_active_account_id
+        _srv.get_active_account_id = lambda: "never-read@t.test"
+        try:
+            check(_srv._gmail_daily_tick() == "skipped" and not _st.get_state("gmail_last_daily_scan"),
+                  "the 15-minute email read ran before USER clicked Start")
+        finally:
+            _srv.get_active_account_id = had_acc
         before = inbox_steps(4, 2)
         check(not before["email"]["done"] and not before["linkedin"]["done"], "an inbox with people waiting shows as sorted before the first sort")
         inbox_steps(0, 0)

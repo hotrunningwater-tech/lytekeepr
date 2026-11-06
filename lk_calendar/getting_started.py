@@ -1,6 +1,7 @@
 """The short "Get started" list on Home for someone new. Steps tick themselves when done. It goes away when every required step is done, or when dismissed. Kept per person."""
 
 import json
+import time
 import os
 import urllib.parse
 
@@ -112,11 +113,24 @@ def _email_waiting():
         from gmail import storage
         from gmail.sync import get_active_account_id
         account = get_active_account_id()
-        if not account or not storage.load_scan_state(account):
-            return None
+        if not account or not (storage.load_scan_state(account) or storage.load_sync_state(account).get("lastScanAt")):
+            return None                                # an empty mailbox read once counts as read
         return len(storage.get_pending_review_ids(account))
     except Exception:
         return None
+
+
+def _email_reading() -> bool:
+    """The first email read is running now (USER clicked Start): its progress was written in the last few minutes."""
+    try:
+        from gmail import storage
+        from gmail.sync import get_active_account_id
+        account = get_active_account_id()
+        path = storage.scan_progress_path(account) if account else None
+        return bool(path and path.is_file() and time.time() - path.stat().st_mtime < 180
+                    and storage.load_scan_progress(account).get("phase") not in (None, "idle", "done"))
+    except Exception:
+        return False
 
 
 def _linkedin_waiting() -> int:
@@ -164,6 +178,7 @@ def status() -> dict:
         li_done = linked and "linkedin" in sorted_once
         if email_done:
             waiting = 0
+        email_reading = waiting is None and gmail and _email_reading()    # the first read starts when USER clicks Start, never by itself
         if li_done:
             reading, li_waiting = False, 0
         steps = [
@@ -177,9 +192,11 @@ def status() -> dict:
                                  "Finish the sentence in your own words: what you sell, to whom, and how you find clients. Then send it.",
                                  "Claude shows you the funnel it will create. Say yes, or tell it what to change.")},
             {"key": "email", "title": "Sort your email" + (f": {waiting} waiting" if waiting else ""),
-             "why": "Your last 3 months of email are coming in. This list updates by itself." if waiting is None
-                    else "Click Tell Claude: Claude suggests who to keep as contacts and who to remove, and asks you first.",
-             "done": email_done, "busy": waiting is None, "say": "In LyteKeepr, sort my email." if waiting else "", "chat": True,
+             "why": ("Reading your last 3 months of email. It takes about a minute; this list updates by itself." if email_reading
+                     else "Click Start: LyteKeepr reads your last 3 months of email. It takes about a minute." if waiting is None
+                     else "Click Tell Claude: Claude suggests who to keep as contacts and who to remove, and asks you first."),
+             "done": email_done, "busy": email_reading, "action": "email_read" if waiting is None and gmail and not email_reading else "",
+             "say": "In LyteKeepr, sort my email." if waiting else "", "chat": True,
              "how": _tell_claude("In LyteKeepr, sort my email.", "Send it.",
                                  "Claude shows who to keep as contacts and who to remove. Ask about anyone you're not sure of, then say yes.") if waiting else []},
             {"key": "linkedin", "title": "Connect LinkedIn" if not linked else "Reading your LinkedIn" if reading

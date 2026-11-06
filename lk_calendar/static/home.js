@@ -66,6 +66,10 @@
     if (s.action === 'gmail') location.href = (window.LK_PREFIX || '') + '/auth/google/start';
     else if (s.action === 'linkedin_approve') location.href = s.link;     // here, in the window and account the USER is signed in to
     else if (s.action === 'claude') window.open(s.link, '_blank', 'noopener');   // Claude's add-connector form, already filled in
+    else if (s.action === 'email_read') {              // the first email read, now: Home shows it reading, then Tell Claude
+      api('POST', '/api/gmail/scan', {}).then(loadStart, loadStart);
+      setTimeout(loadStart, 1500);
+    }
     else if (s.action === 'fathom') {                   // Fathom's key page in a new tab; the step here turns into the paste box
       window.open(s.link, '_blank', 'noopener');
       fathom = { error: '' };
@@ -153,7 +157,7 @@
     box.hidden = !d.show;
     if (!d.show) { box.replaceChildren(); return; }
     function send(body) { api('POST', '/api/calendar/getting-started', body).then(renderStart).catch(fail); }
-    if (d.steps.some(function (s) { return s.busy; })) startTimer = setTimeout(loadStart, 20000);   // something is coming in: check again by itself
+    if (d.steps.some(function (s) { return s.busy; })) startTimer = setTimeout(loadStart, 5000);   // something is coming in: check again by itself
     if (d.complete) {                                  // every step done or skipped: it stays until USER closes it
       fill(box, [h('div', { class: 'gs-card gs-complete' }, [h('div', { class: 'gs-head' }, [h('span', { class: 'gs-title' }, 'Setup complete'),
         h('span', { class: 'gs-count' }, 'Everything is connected. LyteKeepr is ready.'),
@@ -175,7 +179,7 @@
               try { navigator.clipboard.writeText(s.say).then(function () { b.textContent = 'Copied'; }, function () {}); } catch (e) { /* no clipboard */ }
               if (s.chat) window.open('https://claude.ai/new?q=' + encodeURIComponent(s.say), '_blank', 'noopener');   // a new chat with it filled in; if not, it's copied
             } }, s.chat ? 'Tell Claude' : 'Copy')
-          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : s.action === 'import' ? (imp ? 'Cancel' : 'Start') : s.action === 'import_review' ? 'Review' : s.action === 'fathom' ? 'Log in to Fathom' : 'Open')
+          : s.action ? h('button', { class: 'hm-mini', type: 'button', onclick: function () { startAction(s); } }, s.action === 'linkedin' ? 'Download' : s.action === 'linkedin_approve' ? 'Approve' : s.action === 'claude' ? 'Connect' : s.action === 'import' ? (imp ? 'Cancel' : 'Start') : s.action === 'import_review' ? 'Review' : s.action === 'fathom' ? 'Log in to Fathom' : s.action === 'email_read' ? 'Start' : 'Open')
           : null;
         var finished = s.done || s.skipped;
         return h('div', { class: 'gs-step' + (finished ? ' done' : '') }, [h('span', { class: 'hm-check ro' + (s.done ? ' on' : '') }, s.done ? '✓' : ''),

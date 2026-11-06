@@ -1578,8 +1578,9 @@ GMAIL_SYNC_MINUTES = 15
 def _gmail_daily_tick() -> str:
     from datetime import datetime, timedelta
     from lk_calendar import store as _store
-    if not get_active_account_id():
-        return "skipped"
+    account_id = get_active_account_id()
+    if not account_id or not (gmail_storage.load_scan_state(account_id) or gmail_storage.load_sync_state(account_id).get("lastScanAt")):
+        return "skipped"           # the first read waits for USER's Start on Home (setup); after that, every 15 minutes
     now = _store.now_local()
     last = _store.get_state("gmail_last_daily_scan") or ""
     try:
